@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +19,8 @@ const Auth = () => {
     role: 'employee' as 'employee' | 'admin' 
   });
   const { login, signup, isLoading } = useAuth();
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -173,12 +174,21 @@ const Auth = () => {
                     <Label htmlFor="login-password">Password</Label>
                     <Input
                       id="login-password"
-                      type="password"
+                      type={showLoginPassword ? "text" : "password"}
                       placeholder="Enter your password"
                       value={loginData.password}
                       onChange={(e) => setLoginData(prev => ({ ...prev, password: e.target.value }))}
                       className="h-11"
                     />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="show-login-password"
+                      type="checkbox"
+                      checked={showLoginPassword}
+                      onChange={() => setShowLoginPassword(v => !v)}
+                    />
+                    <label htmlFor="show-login-password" className="text-sm text-gray-700 select-none cursor-pointer">Show Password</label>
                   </div>
                   <Button 
                     type="submit" 
@@ -238,7 +248,7 @@ const Auth = () => {
                     <Label htmlFor="signup-password">Password</Label>
                     <Input
                       id="signup-password"
-                      type="password"
+                      type={showSignupPassword ? "text" : "password"}
                       placeholder="Create a password"
                       value={signupData.password}
                       onChange={(e) => setSignupData(prev => ({ ...prev, password: e.target.value }))}
@@ -249,12 +259,21 @@ const Auth = () => {
                     <Label htmlFor="signup-confirm-password">Confirm Password</Label>
                     <Input
                       id="signup-confirm-password"
-                      type="password"
+                      type={showSignupPassword ? "text" : "password"}
                       placeholder="Confirm your password"
                       value={signupData.confirmPassword}
                       onChange={(e) => setSignupData(prev => ({ ...prev, confirmPassword: e.target.value }))}
                       className="h-11"
                     />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="show-signup-password"
+                      type="checkbox"
+                      checked={showSignupPassword}
+                      onChange={() => setShowSignupPassword(v => !v)}
+                    />
+                    <label htmlFor="show-signup-password" className="text-sm text-gray-700 select-none cursor-pointer">Show Password</label>
                   </div>
                   <Button 
                     type="submit" 
