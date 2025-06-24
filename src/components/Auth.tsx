@@ -114,35 +114,9 @@ const Auth = () => {
           </p>
         </div>
 
-        {/* Demo Credentials */}
-        <Card className="border-2 border-blue-200 bg-blue-50">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm text-blue-800">Demo Credentials</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-xs">
-            <div>
-              <strong className="text-blue-900">Super Admin:</strong>
-              <div className="text-blue-700">Email: rahul@nytp.com</div>
-            </div>
-            <div>
-              <strong className="text-blue-900">Admin:</strong>
-              <div className="text-blue-700">Email: admin@company.com</div>
-            </div>
-            <div>
-              <strong className="text-blue-900">Employee:</strong>
-              <div className="text-blue-700">Email: employee@company.com</div>
-            </div>
-            <div className="text-blue-600 mt-2">Password: password123</div>
-          </CardContent>
-        </Card>
-
         {/* Auth Forms */}
         <Card className="card-hover border-0 shadow-xl glass-effect">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl text-center">Welcome</CardTitle>
-            <CardDescription className="text-center">
-              Sign in to your account or create a new one
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="login" className="w-full">
@@ -292,6 +266,27 @@ const Auth = () => {
                 </form>
               </TabsContent>
             </Tabs>
+            {/* Demo Credentials (moved here, compact) */}
+            <div className="mt-4">
+              <div className="text-sm font-semibold mb-2 text-gray-700">Demo Credentials</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="p-2 bg-gray-50 rounded border text-xs flex flex-col gap-0.5">
+                  <span className="font-medium text-gray-800">Super Admin</span>
+                  <span>Email: rahul@nytp.com</span>
+                  <span>Password: password123</span>
+                </div>
+                <div className="p-2 bg-gray-50 rounded border text-xs flex flex-col gap-0.5">
+                  <span className="font-medium text-gray-800">Admin</span>
+                  <span>Email: admin@company.com</span>
+                  <span>Password: password123</span>
+                </div>
+                <div className="p-2 bg-gray-50 rounded border text-xs flex flex-col gap-0.5">
+                  <span className="font-medium text-gray-800">Employee</span>
+                  <span>Email: employee@company.com</span>
+                  <span>Password: password123</span>
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
