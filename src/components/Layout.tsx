@@ -170,6 +170,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
 
   const handleLogout = async () => {
     await logout();
+    // Wait for user to become null (max 1s)
+    for (let i = 0; i < 10; i++) {
+      if (!user) break;
+      await new Promise(res => setTimeout(res, 100));
+    }
+    // Explicitly clear Supabase auth keys
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('sb-')) localStorage.removeItem(key);
+    });
     window.location.href = '/';
   };
 
