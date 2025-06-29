@@ -1,7 +1,7 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCompany } from '@/contexts/CompanyContext';
 
 interface LeaveRequest {
   id: string;
@@ -14,11 +14,14 @@ interface LeaveRequest {
   status: 'pending' | 'approved' | 'rejected';
   approved_by?: string;
   approved_at?: string;
+  updated_at?: string;
   leave_types: {
     name: string;
   };
   employees: {
     name: string;
+    department: string;
+    reporting_manager_id?: string;
   };
 }
 
@@ -31,15 +34,16 @@ interface LeaveBalance {
   };
 }
 
-export const useLeave = () => {
+export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
   const { user } = useAuth();
+  const { currentCompany } = useCompany();
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([]);
   const [pendingRequests, setPendingRequests] = useState<LeaveRequest[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchLeaveRequests = async () => {
-    if (!user) return;
+    if (!user || !currentCompany) return;
 
     try {
       let query = supabase
@@ -55,24 +59,34 @@ export const useLeave = () => {
           status,
           approved_by,
           approved_at,
+          updated_at,
           created_at,
           leave_types (
             name
-          ),
-          profiles!leave_requests_employee_id_fkey (
-            name
           )
         `)
+        .eq('company_id', currentCompany.id)
         .order('created_at', { ascending: false });
 
-      // Show requests based on role hierarchy
-      if (user.role === 'employee') {
+      if (mode === 'employee') {
         query = query.eq('employee_id', user.id);
-      } else if (user.role === 'reporting_manager') {
-        // Reporting managers see their own requests and their team's requests
-        query = query.or(`employee_id.eq.${user.id},profiles.reporting_manager_id.eq.${user.id}`);
+      } else if (mode === 'manager') {
+        if (user.role === 'employee') {
+          query = query.eq('employee_id', user.id);
+        } else if (user.role === 'reporting_manager') {
+          // Fetch employees who report to this manager
+          const { data: teamMembers, error: teamError } = await supabase
+            .from('employees')
+            .select('id')
+            .eq('company_id', currentCompany.id)
+            .eq('reporting_manager_id', user.id)
+            .eq('is_active', true);
+          const teamIds = teamMembers ? teamMembers.map(e => e.id) : [];
+          // Show requests for self and team
+          query = query.in('employee_id', [user.id, ...teamIds]);
+        }
+        // Admins and super_admins see all requests (already filtered by company_id)
       }
-      // Admins and super_admins see all requests
 
       const { data, error } = await query;
 
@@ -81,34 +95,48 @@ export const useLeave = () => {
         return;
       }
 
-      // Format the data and handle the profiles join
-      const formattedData = data
-        ?.filter(req => req.leave_types && req.profiles)
+      // Get employee data separately to avoid complex joins
+      const employeeIds = [...new Set((data as any[])?.map(req => req.employee_id) || [])];
+      const { data: employeeData, error: employeeError } = await supabase
+        .from('employees')
+        .select('id, name, department, reporting_manager_id')
+        .in('id', employeeIds);
+
+      if (employeeError) {
+        console.error('Error fetching employee data:', employeeError);
+        return;
+      }
+
+      const employeeMap = new Map();
+      (employeeData as any[])?.forEach(emp => {
+        employeeMap.set(emp.id, emp);
+      });
+
+      // Format the data and combine with employee data
+      const formattedData = (data as any[])
+        ?.filter(req => req.leave_types)
         ?.map(req => ({
           ...req,
           status: req.status as 'pending' | 'approved' | 'rejected',
           leave_types: req.leave_types as { name: string },
-          employees: { name: (req.profiles as any)?.name || 'Unknown' }
+          employees: {
+            name: employeeMap.get(req.employee_id)?.name || 'Unknown',
+            department: employeeMap.get(req.employee_id)?.department || 'N/A',
+            reporting_manager_id: employeeMap.get(req.employee_id)?.reporting_manager_id || null
+          }
         })) || [];
       
       setLeaveRequests(formattedData);
 
-      // Set pending requests based on role
-      if (user.role === 'reporting_manager') {
-        // Reporting managers see pending requests from their team (excluding their own)
-        setPendingRequests(formattedData.filter(req => 
-          req.status === 'pending' && req.employee_id !== user.id
-        ));
-      } else if (user.role === 'admin') {
-        // Admins see pending requests from employees and reporting managers
-        setPendingRequests(formattedData.filter(req => 
-          req.status === 'pending' && req.employee_id !== user.id
-        ));
-      } else if (user.role === 'super_admin') {
-        // Super admins see all pending requests (including admin requests)
-        setPendingRequests(formattedData.filter(req => 
-          req.status === 'pending' && req.employee_id !== user.id
-        ));
+      // Set pending requests based on role and mode
+      if (mode === 'manager') {
+        if (user.role === 'reporting_manager') {
+          setPendingRequests(formattedData.filter(req => req.status === 'pending' && req.employee_id !== user.id));
+        } else if (user.role === 'admin' || user.role === 'super_admin') {
+          setPendingRequests(formattedData.filter(req => req.status === 'pending' && req.employee_id !== user.id));
+        }
+      } else {
+        setPendingRequests([]);
       }
     } catch (error) {
       console.error('Error fetching leave requests:', error);
@@ -138,7 +166,7 @@ export const useLeave = () => {
       }
 
       // Filter and format the data
-      const formattedData = data
+      const formattedData = (data as any[])
         ?.filter(balance => balance.leave_types)
         ?.map(balance => ({
           ...balance,
@@ -157,7 +185,7 @@ export const useLeave = () => {
     endDate: string,
     reason: string
   ) => {
-    if (!user) return false;
+    if (!user || !currentCompany) return false;
 
     setIsLoading(true);
     try {
@@ -175,6 +203,7 @@ export const useLeave = () => {
         .from('leave_requests')
         .insert({
           employee_id: user.id,
+          company_id: currentCompany.id,
           leave_type_id: leaveTypeId,
           start_date: startDate,
           end_date: endDate,

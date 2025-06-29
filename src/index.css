@@ -204,4 +204,59 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+
+  /* Professional Compact Spacing */
+  .compact-spacing {
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 0.75rem;
+    --spacing-lg: 1rem;
+    --spacing-xl: 1.25rem;
+  }
+
+  /* Professional Card Styling */
+  .card-compact {
+    @apply border-0 shadow-md rounded-lg;
+  }
+
+  .card-compact .card-header {
+    @apply pb-2;
+  }
+
+  .card-compact .card-content {
+    @apply p-3;
+  }
+
+  /* Professional Button Spacing */
+  .btn-group-compact {
+    @apply gap-2;
+  }
+
+  /* Professional Form Spacing */
+  .form-compact {
+    @apply space-y-3;
+  }
+
+  .form-compact .form-group {
+    @apply mb-3;
+  }
+
+  /* Professional Table Styling */
+  .table-compact {
+    @apply text-sm;
+  }
+
+  .table-compact th,
+  .table-compact td {
+    @apply px-3 py-2;
+  }
+
+  /* Professional Navigation Spacing */
+  .nav-compact {
+    @apply space-y-1;
+  }
+
+  .nav-compact .nav-item {
+    @apply px-2 py-1.5;
+  }
 }

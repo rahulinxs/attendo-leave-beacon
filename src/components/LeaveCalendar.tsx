@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,15 +30,7 @@ const LeaveCalendar: React.FC = () => {
     try {
       const { data, error } = await supabase
         .from('leave_requests')
-        .select(`
-          id,
-          start_date,
-          end_date,
-          status,
-          leave_types (
-            name
-          )
-        `)
+        .select(`*, leave_types ( name )`)
         .eq('employee_id', user.id)
         .order('start_date', { ascending: false });
 

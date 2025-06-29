@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCompany } from '@/contexts/CompanyContext';
 
 interface AttendanceRecord {
   id: string;
@@ -14,12 +15,14 @@ interface AttendanceRecord {
 
 export const useAttendance = () => {
   const { user } = useAuth();
+  const { currentCompany } = useCompany();
+  
   const [todayAttendance, setTodayAttendance] = useState<AttendanceRecord | null>(null);
   const [recentAttendance, setRecentAttendance] = useState<AttendanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchTodayAttendance = async () => {
-    if (!user) return;
+    if (!user || !currentCompany) return;
 
     try {
       const today = new Date().toISOString().split('T')[0];
@@ -27,6 +30,7 @@ export const useAttendance = () => {
         .from('attendance')
         .select('*')
         .eq('employee_id', user.id)
+        .eq('company_id', currentCompany.id)
         .eq('date', today)
         .maybeSingle();
 
@@ -49,13 +53,14 @@ export const useAttendance = () => {
   };
 
   const fetchRecentAttendance = async () => {
-    if (!user) return;
+    if (!user || !currentCompany) return;
 
     try {
       const { data, error } = await supabase
         .from('attendance')
         .select('*')
         .eq('employee_id', user.id)
+        .eq('company_id', currentCompany.id)
         .order('date', { ascending: false })
         .limit(30);
 
@@ -76,7 +81,7 @@ export const useAttendance = () => {
   };
 
   const checkIn = async (customTime?: Date) => {
-    if (!user) return false;
+    if (!user || !currentCompany) return false;
 
     setIsLoading(true);
     try {
@@ -84,20 +89,46 @@ export const useAttendance = () => {
       const today = timestamp.toISOString().split('T')[0];
       const timeString = timestamp.toISOString();
 
-      const { error } = await supabase
+      // Try to update first
+      const { data: existing, error: fetchError } = await supabase
         .from('attendance')
-        .upsert({
+        .select('id')
+        .eq('employee_id', user.id)
+        .eq('company_id', currentCompany.id)
+        .eq('date', today)
+        .maybeSingle();
+
+      if (fetchError) {
+        console.error('Check-in fetch error:', fetchError);
+        return false;
+      }
+
+      if (existing) {
+        // Update existing record
+        const { error } = await supabase
+          .from('attendance')
+          .update({ check_in_time: timeString, status: 'present' })
+          .eq('id', existing.id);
+        if (error) {
+          console.error('Check-in update error:', error);
+          return false;
+        }
+      } else {
+        // Insert new record
+        const { error } = await supabase
+          .from('attendance')
+          .insert({
           employee_id: user.id,
+          company_id: currentCompany.id,
           date: today,
           check_in_time: timeString,
           status: 'present'
         });
-
       if (error) {
-        console.error('Check-in error:', error);
+          console.error('Check-in insert error:', error);
         return false;
+        }
       }
-      
       await fetchTodayAttendance();
       return true;
     } catch (error) {
@@ -136,12 +167,95 @@ export const useAttendance = () => {
     }
   };
 
+  const markAttendanceForEmployee = async (employeeId: string, status: 'present' | 'absent' | 'late' | 'half_day', date?: Date) => {
+    if (!currentCompany) return false;
+
+    try {
+      const dateStr = (date || new Date()).toISOString().split('T')[0];
+      const now = new Date().toISOString();
+      let updateObj: any = { status };
+      
+      if (status === 'present' || status === 'late' || status === 'half_day') {
+        updateObj.check_in_time = now;
+      } else {
+        updateObj.check_in_time = null;
+        updateObj.check_out_time = null;
+      }
+
+      const { error } = await supabase
+        .from('attendance')
+        .upsert({
+          employee_id: employeeId,
+          company_id: currentCompany.id,
+          date: dateStr,
+          ...updateObj,
+        });
+
+      if (error) {
+        console.error('Error marking attendance:', error);
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error marking attendance:', error);
+      return false;
+    }
+  };
+
+  const handleBackdateSubmit = async (backdateForm: {
+    employeeId: string;
+    date: string;
+    status: string;
+    reason?: string;
+    type?: 'attendance' | 'leave';
+  }) => {
+    if (!currentCompany) return false;
+
+    try {
+      if (!backdateForm.employeeId || !backdateForm.date || !backdateForm.status) {
+        console.error('Missing required fields for backdate submission');
+        return false;
+      }
+
+      if (backdateForm.type === 'attendance' || !backdateForm.type) {
+        const { error } = await supabase.from('attendance').upsert({
+          employee_id: backdateForm.employeeId,
+          company_id: currentCompany.id,
+          date: backdateForm.date,
+          status: backdateForm.status,
+          notes: backdateForm.reason,
+          pending_approval: true,
+          requestor_role: user?.role,
+        });
+
+        if (error) {
+          console.error('Error submitting backdate attendance:', error);
+          return false;
+        }
+      } else {
+        // For leave requests, you would insert into a leave_requests table
+        // This is a placeholder for future implementation
+        console.log('Leave request backdate not yet implemented');
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error submitting backdate:', error);
+      return false;
+    }
+  };
+
   useEffect(() => {
-    if (user) {
+    if (user && currentCompany) {
       fetchTodayAttendance();
       fetchRecentAttendance();
+    } else {
+      setTodayAttendance(null);
+      setRecentAttendance([]);
     }
-  }, [user]);
+  }, [user, currentCompany]);
 
   return {
     todayAttendance,
@@ -150,6 +264,8 @@ export const useAttendance = () => {
     checkIn,
     checkOut,
     fetchTodayAttendance,
-    fetchRecentAttendance
+    fetchRecentAttendance,
+    markAttendanceForEmployee,
+    handleBackdateSubmit
   };
 };

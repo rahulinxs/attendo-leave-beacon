@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { Calendar, Send, X } from 'lucide-react';
+import { useCompany } from '@/contexts/CompanyContext';
 
 interface LeaveType {
   id: string;
@@ -23,6 +24,7 @@ interface LeaveRequestFormProps {
 
 const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSuccess, onCancel }) => {
   const { user } = useAuth();
+  const { currentCompany } = useCompany();
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -68,7 +70,7 @@ const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSuccess, onCancel
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!user) {
+    if (!user || !currentCompany) {
       toast({
         title: "Error",
         description: "You must be logged in to submit a leave request",
@@ -101,6 +103,7 @@ const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSuccess, onCancel
         .from('leave_requests')
         .insert({
           employee_id: user.id,
+          company_id: currentCompany.id,
           leave_type_id: formData.leaveTypeId,
           start_date: formData.startDate,
           end_date: formData.endDate,

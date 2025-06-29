@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { useCompany } from '@/contexts/CompanyContext';
 
 interface Employee {
   id: string;
@@ -28,6 +29,9 @@ interface Employee {
   position?: string;
   hire_date?: string;
   is_active: boolean;
+  team_id?: string;
+  reporting_manager_id?: string;
+  company_id?: string;
 }
 
 interface EmployeeListProps {
@@ -37,27 +41,34 @@ interface EmployeeListProps {
 
 const EmployeeList: React.FC<EmployeeListProps> = ({ onAddEmployee, refreshTrigger }) => {
   const { user } = useAuth();
+  const { currentCompany } = useCompany();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
 
   const fetchEmployees = async () => {
+    if (!currentCompany) {
+      setEmployees([]);
+      setIsLoading(false);
+      return;
+    }
     try {
-      console.log('Fetching employees...');
-      const { data, error } = await supabase
-        .from('profiles')
+      console.log('Fetching employees for company:', currentCompany.id);
+      const { data: employees, error } = await supabase
+        .from('employees')
         .select('*')
+        .eq('company_id', currentCompany.id)
         .eq('is_active', true)
-        .order('created_at', { ascending: false });
+        .order('name');
 
       if (error) {
         console.error('Error fetching employees:', error);
         return;
       }
 
-      console.log('Employees fetched:', data);
-      setEmployees(data || []);
+      console.log('Employees fetched:', employees);
+      setEmployees((employees as any[]) || []);
     } catch (error) {
       console.error('Error fetching employees:', error);
     } finally {
@@ -95,7 +106,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onAddEmployee, refreshTrigg
     try {
       // Mark employee as inactive instead of deleting
       const { error } = await supabase
-        .from('profiles')
+        .from('employees')
         .update({ is_active: false })
         .eq('id', employeeId);
 
@@ -135,9 +146,17 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onAddEmployee, refreshTrigg
 
   useEffect(() => {
     fetchEmployees();
-  }, [refreshTrigger]);
+  }, [refreshTrigger, currentCompany]);
 
   const canAddEmployee = user && ['admin', 'super_admin'].includes(user.role);
+
+  if (!currentCompany) {
+    return (
+      <div className="p-8 text-center text-gray-500">
+        No company selected. Please select a company to view employees.
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -149,7 +168,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onAddEmployee, refreshTrigg
 
   if (editingEmployee) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         <div className="flex items-center space-x-3">
           <Button
             variant="ghost"
@@ -158,11 +177,11 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onAddEmployee, refreshTrigg
           >
             ← Back
           </Button>
-          <h1 className="text-2xl font-bold">Edit Employee</h1>
+          <h1 className="text-xl font-bold">Edit Employee</h1>
         </div>
 
         <Card className="border-0 shadow-lg">
-          <CardHeader>
+          <CardHeader className="pb-3">
             <CardTitle>Employee Information</CardTitle>
           </CardHeader>
           <CardContent>
@@ -178,11 +197,11 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onAddEmployee, refreshTrigg
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <Users className="w-6 h-6 text-blue-600" />
-          <h2 className="text-2xl font-bold">Employees ({employees.length})</h2>
+          <Users className="w-5 h-5 text-blue-600" />
+          <h2 className="text-xl font-bold">Employees ({employees.length})</h2>
         </div>
         {canAddEmployee && (
           <Button 
@@ -197,10 +216,10 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onAddEmployee, refreshTrigg
 
       {employees.length === 0 ? (
         <Card className="border-0 shadow-lg">
-          <CardContent className="p-8 text-center">
-            <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <CardContent className="p-6 text-center">
+            <Users className="w-10 h-10 text-gray-400 mx-auto mb-3" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No employees found</h3>
-            <p className="text-gray-500 mb-4">Get started by adding your first employee</p>
+            <p className="text-gray-500 mb-3">Get started by adding your first employee</p>
             {canAddEmployee && (
               <Button 
                 onClick={onAddEmployee}
@@ -213,12 +232,12 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onAddEmployee, refreshTrigg
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {employees.map((employee) => (
             <Card key={employee.id} className="border-0 shadow-lg card-hover">
-              <CardHeader className="pb-3">
+              <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">{employee.name}</CardTitle>
+                  <CardTitle className="text-base">{employee.name}</CardTitle>
                   <div className="flex items-center space-x-2">
                     <Badge variant={employee.role === 'admin' || employee.role === 'super_admin' ? 'default' : 'secondary'}>
                       {employee.role.replace('_', ' ')}
@@ -228,10 +247,10 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onAddEmployee, refreshTrigg
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                          className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                           onClick={() => setEditingEmployee(employee)}
                         >
-                          <Edit className="w-4 h-4" />
+                          <Edit className="w-3 h-3" />
                         </Button>
                       )}
                       {canRemoveEmployee(employee) && (
@@ -240,10 +259,10 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onAddEmployee, refreshTrigg
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                               disabled={removingId === employee.id}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3 h-3" />
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
@@ -269,28 +288,28 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onAddEmployee, refreshTrigg
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-2">
                 <div className="flex items-center space-x-2 text-gray-600">
-                  <Mail className="w-4 h-4" />
+                  <Mail className="w-3 h-3" />
                   <span className="text-sm">{employee.email}</span>
                 </div>
                 
                 {employee.department && (
                   <div className="flex items-center space-x-2 text-gray-600">
-                    <Building className="w-4 h-4" />
+                    <Building className="w-3 h-3" />
                     <span className="text-sm">{employee.department}</span>
                   </div>
                 )}
                 
                 {employee.position && (
                   <div className="flex items-center space-x-2 text-gray-600">
-                    <Briefcase className="w-4 h-4" />
+                    <Briefcase className="w-3 h-3" />
                     <span className="text-sm">{employee.position}</span>
                   </div>
                 )}
 
                 {employee.hire_date && (
-                  <div className="text-xs text-gray-500 pt-2">
+                  <div className="text-xs text-gray-500 pt-1">
                     Joined: {new Date(employee.hire_date).toLocaleDateString()}
                   </div>
                 )}

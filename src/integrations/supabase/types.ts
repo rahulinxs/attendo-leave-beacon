@@ -13,40 +13,56 @@ export type Database = {
         Row: {
           check_in_time: string | null
           check_out_time: string | null
+          company_id: string
           created_at: string | null
           date: string
           employee_id: string | null
           id: string
           location: Json | null
           notes: string | null
+          pending_approval: boolean | null
+          requestor_role: string | null
           status: string | null
           updated_at: string | null
         }
         Insert: {
           check_in_time?: string | null
           check_out_time?: string | null
+          company_id: string
           created_at?: string | null
           date: string
           employee_id?: string | null
           id?: string
           location?: Json | null
           notes?: string | null
+          pending_approval?: boolean | null
+          requestor_role?: string | null
           status?: string | null
           updated_at?: string | null
         }
         Update: {
           check_in_time?: string | null
           check_out_time?: string | null
+          company_id?: string
           created_at?: string | null
           date?: string
           employee_id?: string | null
           id?: string
           location?: Json | null
           notes?: string | null
+          pending_approval?: boolean | null
+          requestor_role?: string | null
           status?: string | null
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "attendance_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "attendance_employee_id_fkey"
             columns: ["employee_id"]
@@ -56,8 +72,33 @@ export type Database = {
           },
         ]
       }
+      companies: {
+        Row: {
+          created_at: string | null
+          domain: string | null
+          id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          domain?: string | null
+          id?: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          domain?: string | null
+          id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       departments: {
         Row: {
+          company_id: string
           created_at: string | null
           description: string | null
           head_employee_id: string | null
@@ -67,6 +108,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          company_id: string
           created_at?: string | null
           description?: string | null
           head_employee_id?: string | null
@@ -76,6 +118,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          company_id?: string
           created_at?: string | null
           description?: string | null
           head_employee_id?: string | null
@@ -85,6 +128,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "departments_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "departments_head_employee_id_fkey"
             columns: ["head_employee_id"]
@@ -96,6 +146,7 @@ export type Database = {
       }
       employees: {
         Row: {
+          company_id: string | null
           created_at: string | null
           department: string | null
           email: string
@@ -104,10 +155,14 @@ export type Database = {
           is_active: boolean | null
           name: string
           position: string | null
+          reporting_manager_id: string | null
           role: string | null
+          role_id: string | null
+          team_id: string | null
           updated_at: string | null
         }
         Insert: {
+          company_id?: string | null
           created_at?: string | null
           department?: string | null
           email: string
@@ -116,10 +171,14 @@ export type Database = {
           is_active?: boolean | null
           name: string
           position?: string | null
+          reporting_manager_id?: string | null
           role?: string | null
+          role_id?: string | null
+          team_id?: string | null
           updated_at?: string | null
         }
         Update: {
+          company_id?: string | null
           created_at?: string | null
           department?: string | null
           email?: string
@@ -128,13 +187,46 @@ export type Database = {
           is_active?: boolean | null
           name?: string
           position?: string | null
+          reporting_manager_id?: string | null
           role?: string | null
+          role_id?: string | null
+          team_id?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "employees_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employees_reporting_manager_id_fkey"
+            columns: ["reporting_manager_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employees_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employees_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       holidays: {
         Row: {
+          company_id: string | null
           created_at: string
           date: string
           description: string | null
@@ -144,6 +236,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          company_id?: string | null
           created_at?: string
           date: string
           description?: string | null
@@ -153,6 +246,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          company_id?: string | null
           created_at?: string
           date?: string
           description?: string | null
@@ -161,11 +255,20 @@ export type Database = {
           name?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "holidays_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       leave_balances: {
         Row: {
           allocated_days: number | null
+          company_id: string
           created_at: string | null
           employee_id: string | null
           id: string
@@ -177,6 +280,7 @@ export type Database = {
         }
         Insert: {
           allocated_days?: number | null
+          company_id: string
           created_at?: string | null
           employee_id?: string | null
           id?: string
@@ -188,6 +292,7 @@ export type Database = {
         }
         Update: {
           allocated_days?: number | null
+          company_id?: string
           created_at?: string | null
           employee_id?: string | null
           id?: string
@@ -198,6 +303,13 @@ export type Database = {
           year?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "leave_balances_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "leave_balances_employee_id_fkey"
             columns: ["employee_id"]
@@ -219,6 +331,7 @@ export type Database = {
           admin_comments: string | null
           approved_at: string | null
           approved_by: string | null
+          company_id: string
           created_at: string | null
           employee_id: string | null
           end_date: string
@@ -234,6 +347,7 @@ export type Database = {
           admin_comments?: string | null
           approved_at?: string | null
           approved_by?: string | null
+          company_id: string
           created_at?: string | null
           employee_id?: string | null
           end_date: string
@@ -249,6 +363,7 @@ export type Database = {
           admin_comments?: string | null
           approved_at?: string | null
           approved_by?: string | null
+          company_id?: string
           created_at?: string | null
           employee_id?: string | null
           end_date?: string
@@ -269,6 +384,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "leave_requests_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "leave_requests_employee_id_fkey"
             columns: ["employee_id"]
             isOneToOne: false
@@ -286,6 +408,7 @@ export type Database = {
       }
       leave_types: {
         Row: {
+          company_id: string
           created_at: string | null
           description: string | null
           id: string
@@ -294,6 +417,7 @@ export type Database = {
           name: string
         }
         Insert: {
+          company_id: string
           created_at?: string | null
           description?: string | null
           id?: string
@@ -302,6 +426,7 @@ export type Database = {
           name: string
         }
         Update: {
+          company_id?: string
           created_at?: string | null
           description?: string | null
           id?: string
@@ -309,28 +434,19 @@ export type Database = {
           max_days_per_year?: number | null
           name?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "leave_types_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
-      system_settings: {
-        Row: {
-          key: string;
-          value: string;
-          description: string | null;
-        };
-        Insert: {
-          key: string;
-          value: string;
-          description?: string | null;
-        };
-        Update: {
-          key?: string;
-          value?: string;
-          description?: string | null;
-        };
-        Relationships: [];
-      },
       profiles: {
         Row: {
+          company_id: string
           created_at: string | null
           department: string | null
           email: string
@@ -341,9 +457,12 @@ export type Database = {
           position: string | null
           reporting_manager_id: string | null
           role: string | null
+          role_id: string | null
+          team_id: string | null
           updated_at: string | null
         }
         Insert: {
+          company_id: string
           created_at?: string | null
           department?: string | null
           email: string
@@ -354,9 +473,12 @@ export type Database = {
           position?: string | null
           reporting_manager_id?: string | null
           role?: string | null
+          role_id?: string | null
+          team_id?: string | null
           updated_at?: string | null
         }
         Update: {
+          company_id?: string
           created_at?: string | null
           department?: string | null
           email?: string
@@ -367,14 +489,141 @@ export type Database = {
           position?: string | null
           reporting_manager_id?: string | null
           role?: string | null
+          role_id?: string | null
+          team_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "profiles_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "profiles_reporting_manager_id_fkey"
             columns: ["reporting_manager_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roles: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roles_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      system_settings: {
+        Row: {
+          description: string | null
+          key: string
+          value: string
+        }
+        Insert: {
+          description?: string | null
+          key: string
+          value: string
+        }
+        Update: {
+          description?: string | null
+          key?: string
+          value?: string
+        }
+        Relationships: []
+      }
+      teams: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          manager_id: string | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          manager_id?: string | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          manager_id?: string | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teams_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teams_manager_id_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
             referencedColumns: ["id"]
           },
         ]
@@ -384,8 +633,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      current_user_has_role: {
+        Args: { role_name: string }
+        Returns: boolean
+      }
+      get_current_user_company_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      get_user_company_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       get_user_role: {
-        Args: { user_id: string }
+        Args: Record<PropertyKey, never> | { user_id: string }
         Returns: string
       }
       is_admin: {
@@ -393,7 +654,19 @@ export type Database = {
         Returns: boolean
       }
       is_admin_or_super_admin: {
-        Args: { user_id: string }
+        Args: Record<PropertyKey, never> | { user_id: string }
+        Returns: boolean
+      }
+      is_reporting_manager: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      is_super_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      is_team_member: {
+        Args: { manager_id: string; employee_id: string }
         Returns: boolean
       }
     }
@@ -516,28 +789,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-
-export interface DatabaseLeaveRequest {
-  id: string;
-  employee_id: string;
-  leave_type_id: string;
-  start_date: string;
-  end_date: string;
-  total_days: number;
-  status: string;
-  reason: string;
-  admin_comments?: string;
-  approved_at?: string;
-  approved_by?: string;
-  created_at: string;
-  updated_at: string;
-  leave_types?: {
-    id: string;
-    name: string;
-  };
-  profiles?: {
-    id: string;
-    full_name: string;
-    department: string;
-  };
-}

@@ -9,6 +9,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCompany } from '@/contexts/CompanyContext';
+import { Switch } from '@/components/ui/switch';
 
 const addEmployeeSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -17,6 +19,10 @@ const addEmployeeSchema = z.object({
   department: z.string().optional(),
   position: z.string().optional(),
   password: z.string().min(6, 'Password must be at least 6 characters'),
+  team_id: z.string().optional(),
+  reporting_manager_id: z.string().optional(),
+  hire_date: z.string().optional(),
+  is_active: z.boolean(),
 });
 
 type AddEmployeeForm = z.infer<typeof addEmployeeSchema>;
@@ -28,7 +34,35 @@ interface AddEmployeeFormProps {
 
 const AddEmployeeForm: React.FC<AddEmployeeFormProps> = ({ onSuccess, onCancel }) => {
   const { user } = useAuth();
-  
+  const { currentCompany } = useCompany();
+  const [teams, setTeams] = React.useState<{ id: string; name: string }[]>([]);
+  const [reportingManagers, setReportingManagers] = React.useState<{ id: string; name: string; department: string }[]>([]);
+  const [isLoading, setIsLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    const fetchData = async () => {
+      if (!currentCompany) return;
+      try {
+        const { data: teamsData } = await supabase
+          .from('teams')
+          .select('id, name')
+          .eq('company_id', currentCompany.id)
+          .eq('is_active', true);
+        if (teamsData) setTeams(teamsData);
+        const { data: managersData } = await supabase
+          .from('employees')
+          .select('id, name, department')
+          .eq('company_id', currentCompany.id)
+          .eq('role', 'reporting_manager')
+          .eq('is_active', true);
+        if (managersData) setReportingManagers(managersData);
+      } catch (error) {
+        console.error('Error fetching teams/managers:', error);
+      }
+    };
+    fetchData();
+  }, [currentCompany]);
+
   const form = useForm<AddEmployeeForm>({
     resolver: zodResolver(addEmployeeSchema),
     defaultValues: {
@@ -38,10 +72,15 @@ const AddEmployeeForm: React.FC<AddEmployeeFormProps> = ({ onSuccess, onCancel }
       department: '',
       position: '',
       password: '',
+      team_id: '',
+      reporting_manager_id: '',
+      hire_date: '',
+      is_active: true,
     },
   });
 
-  const onSubmit = async (data: AddEmployeeForm) => {
+  const onSubmit = async (data: any) => {
+    setIsLoading(true);
     try {
       console.log('Creating new employee via edge function:', data.email);
       
@@ -57,16 +96,18 @@ const AddEmployeeForm: React.FC<AddEmployeeFormProps> = ({ onSuccess, onCancel }
         return;
       }
 
+      // Add team, manager, hire_date, is_active to the payload
+      const payload = {
+        ...data,
+        team_id: data.team_id === 'no_team' ? null : data.team_id || null,
+        reporting_manager_id: data.reporting_manager_id === 'no_manager' ? null : data.reporting_manager_id || null,
+        hire_date: data.hire_date || null,
+        is_active: data.is_active,
+      };
+
       // Call the edge function
       const { data: result, error } = await supabase.functions.invoke('create-employee', {
-        body: {
-          name: data.name,
-          email: data.email,
-          role: data.role,
-          department: data.department,
-          position: data.position,
-          password: data.password,
-        },
+        body: payload,
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
@@ -100,6 +141,8 @@ const AddEmployeeForm: React.FC<AddEmployeeFormProps> = ({ onSuccess, onCancel }
         description: "Failed to create employee",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -134,41 +177,98 @@ const AddEmployeeForm: React.FC<AddEmployeeFormProps> = ({ onSuccess, onCancel }
           )}
         />
 
-        <FormField
-          control={form.control}
-          name="password"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Temporary Password</FormLabel>
-              <FormControl>
-                <Input type="password" placeholder="Enter temporary password" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="role"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Role</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="employee">Employee</SelectItem>
+                    <SelectItem value="reporting_manager">Reporting Manager</SelectItem>
+                    {user?.role === 'super_admin' && (
+                      <>
+                        <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="super_admin">Super Admin</SelectItem>
+                      </>
+                    )}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
+          <FormField
+            control={form.control}
+            name="department"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Department (Optional)</FormLabel>
+                <FormControl>
+                  <Input placeholder="Enter department" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="position"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Position (Optional)</FormLabel>
+                <FormControl>
+                  <Input placeholder="Enter position" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Temporary Password</FormLabel>
+                <FormControl>
+                  <Input type="password" placeholder="Enter temporary password" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* Team Assignment */}
         <FormField
           control={form.control}
-          name="role"
+          name="team_id"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Role</FormLabel>
+              <FormLabel>Team Assignment</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select role" />
+                    <SelectValue placeholder="Select team (optional)" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="employee">Employee</SelectItem>
-                  <SelectItem value="reporting_manager">Reporting Manager</SelectItem>
-                  {user?.role === 'super_admin' && (
-                    <>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="super_admin">Super Admin</SelectItem>
-                    </>
-                  )}
+                  <SelectItem value="no_team">No Team</SelectItem>
+                  {teams.map(team => (
+                    <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -176,39 +276,72 @@ const AddEmployeeForm: React.FC<AddEmployeeFormProps> = ({ onSuccess, onCancel }
           )}
         />
 
+        {/* Reporting Manager Assignment */}
         <FormField
           control={form.control}
-          name="department"
+          name="reporting_manager_id"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Department (Optional)</FormLabel>
+              <FormLabel>Reporting Manager</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select reporting manager (optional)" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="no_manager">No Manager</SelectItem>
+                  {reportingManagers.map(manager => (
+                    <SelectItem key={manager.id} value={manager.id}>{manager.name} ({manager.department})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Hire Date */}
+        <FormField
+          control={form.control}
+          name="hire_date"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Hire Date</FormLabel>
               <FormControl>
-                <Input placeholder="Enter department" {...field} />
+                <Input type="date" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        <FormField
-          control={form.control}
-          name="position"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Position (Optional)</FormLabel>
-              <FormControl>
-                <Input placeholder="Enter position" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {/* Active Status */}
+        {user && ['admin', 'super_admin'].includes(user.role) && (
+          <FormField
+            control={form.control}
+            name="is_active"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">Active Status</FormLabel>
+                  <div className="text-sm text-muted-foreground">
+                    Enable or disable this employee account
+                  </div>
+                </div>
+                <FormControl>
+                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+        )}
 
-        <div className="flex space-x-2 pt-4">
-          <Button type="submit" className="gradient-primary text-white border-0">
-            Create Employee & Send Welcome Email
+        <div className="flex gap-2">
+          <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={isLoading}>
+            {isLoading ? 'Adding...' : 'Add Employee'}
           </Button>
-          <Button type="button" variant="outline" onClick={onCancel}>
+          <Button type="button" variant="secondary" className="bg-secondary text-secondary-foreground hover:bg-secondary/90" onClick={onCancel}>
             Cancel
           </Button>
         </div>

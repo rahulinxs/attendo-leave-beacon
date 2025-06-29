@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { User as SupabaseUser, Session } from '@supabase/supabase-js';
@@ -82,10 +81,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('Fetching profile for user:', userId);
       
       const { data: profile, error } = await supabase
-        .from('profiles')
+        .from('employees')
         .select('*')
         .eq('id', userId)
-        .maybeSingle();
+        .single();
 
       if (error) {
         console.error('Error fetching user profile:', error);
@@ -105,6 +104,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       } else {
         console.log('No profile found for user:', userId);
+        await supabase.auth.signOut();
+        setUser(null);
+        setSession(null);
       }
     } catch (error) {
       console.error('Error fetching user profile:', error);
@@ -194,6 +196,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);
+    // Clear all localStorage and sessionStorage data related to the app
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('sb-') || key === 'selectedCompany') localStorage.removeItem(key);
+    });
+    sessionStorage.clear();
   };
 
   return (

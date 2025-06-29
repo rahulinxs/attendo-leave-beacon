@@ -99,19 +99,21 @@ const AttendanceMarking: React.FC = () => {
   const isCheckedOut = todayAttendance?.check_in_time && todayAttendance?.check_out_time;
 
   return (
-    <Card className="w-full max-w-md mx-auto">
-      <CardHeader className="text-center">
-        <CardTitle className="flex items-center justify-center space-x-2">
-          <Clock className="w-6 h-6" />
-          <span>Attendance</span>
+    <Card className="w-full max-w-md mx-auto border-0 shadow-lg">
+      <CardHeader className="text-center pb-3">
+        <CardTitle className="flex items-center justify-center space-x-2 text-lg">
+          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+            <Clock className="w-4 h-4 text-blue-600" />
+          </div>
+          <span>Attendance Tracking</span>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-4">
         {/* Manual Entry Toggle */}
-        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+        <div className="flex items-center justify-between p-3 bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg border border-gray-100">
           <div className="flex items-center space-x-2">
-            <Settings className="w-4 h-4 text-gray-600" />
-            <Label htmlFor="manual-entry" className="text-sm font-medium">Manual Entry</Label>
+            <Settings className="w-4 h-4 text-blue-600" />
+            <Label htmlFor="manual-entry" className="text-sm font-medium text-gray-700">Manual Entry</Label>
           </div>
           <Switch
             id="manual-entry"
@@ -122,61 +124,73 @@ const AttendanceMarking: React.FC = () => {
 
         {/* Manual Entry Fields */}
         {manualEntry && (
-          <div className="space-y-3 p-3 bg-blue-50 rounded-lg">
-            <div>
-              <Label htmlFor="manual-date">Date</Label>
-              <Input
-                id="manual-date"
-                type="date"
-                value={manualDate}
-                onChange={(e) => setManualDate(e.target.value)}
-              />
+          <div className="space-y-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100 animate-in slide-in-from-top-2 duration-300">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="manual-date" className="text-sm font-medium text-gray-700">Date</Label>
+                <Input
+                  id="manual-date"
+                  type="date"
+                  value={manualDate}
+                  onChange={(e) => setManualDate(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="manual-time" className="text-sm font-medium text-gray-700">Time</Label>
+                <Input
+                  id="manual-time"
+                  type="time"
+                  value={manualTime}
+                  onChange={(e) => setManualTime(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
             </div>
-            <div>
-              <Label htmlFor="manual-time">Time</Label>
-              <Input
-                id="manual-time"
-                type="time"
-                value={manualTime}
-                onChange={(e) => setManualTime(e.target.value)}
-              />
+            <div className="flex items-center space-x-2 text-xs text-blue-700 bg-blue-100 p-2 rounded">
+              <span className="w-4 h-4 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs">!</span>
+              <span>Manual entries are logged for audit purposes</span>
             </div>
-            <p className="text-xs text-blue-600">
-              ⚠️ Manual entries are logged for audit purposes
-            </p>
           </div>
         )}
 
         {/* Status Display */}
         <div className="text-center">
           {!todayAttendance?.check_in_time ? (
-            <div className="flex flex-col items-center space-y-2">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-                <Clock className="w-8 h-8 text-gray-400" />
+            <div className="flex flex-col items-center space-y-3 p-4 bg-gray-50 rounded-lg">
+              <div className="w-14 h-14 bg-gray-200 rounded-full flex items-center justify-center animate-pulse">
+                <Clock className="w-6 h-6 text-gray-500" />
               </div>
-              <p className="text-gray-600">Not checked in today</p>
+              <div>
+                <p className="text-gray-700 font-medium">Ready to Check In</p>
+                <p className="text-sm text-gray-500">Start your workday</p>
+              </div>
             </div>
           ) : isCheckedIn ? (
-            <div className="flex flex-col items-center space-y-2">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-                <CheckCircle className="w-8 h-8 text-green-600" />
+            <div className="flex flex-col items-center space-y-3 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-100">
+              <div className="w-14 h-14 bg-green-200 rounded-full flex items-center justify-center animate-pulse">
+                <CheckCircle className="w-6 h-6 text-green-600" />
               </div>
-              <p className="text-green-600 font-semibold">Checked In</p>
-              <p className="text-sm text-gray-600">
-                Since {format(new Date(todayAttendance.check_in_time), 'HH:mm')}
-              </p>
-              <p className="text-sm font-medium">Working: {getWorkingHours()}</p>
+              <div>
+                <p className="text-green-700 font-semibold">Currently Working</p>
+                <p className="text-sm text-green-600">
+                  Since {format(new Date(todayAttendance.check_in_time), 'HH:mm')}
+                </p>
+                <p className="text-sm font-medium text-green-700 mt-1">Working: {getWorkingHours()}</p>
+              </div>
             </div>
           ) : isCheckedOut ? (
-            <div className="flex flex-col items-center space-y-2">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-                <XCircle className="w-8 h-8 text-blue-600" />
+            <div className="flex flex-col items-center space-y-3 p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg border border-blue-100">
+              <div className="w-14 h-14 bg-blue-200 rounded-full flex items-center justify-center">
+                <XCircle className="w-6 h-6 text-blue-600" />
               </div>
-              <p className="text-blue-600 font-semibold">Day Completed</p>
-              <p className="text-sm text-gray-600">
-                {format(new Date(todayAttendance.check_in_time), 'HH:mm')} - {format(new Date(todayAttendance.check_out_time), 'HH:mm')}
-              </p>
-              <p className="text-sm font-medium">Total: {getWorkingHours()}</p>
+              <div>
+                <p className="text-blue-700 font-semibold">Day Completed</p>
+                <p className="text-sm text-blue-600">
+                  {format(new Date(todayAttendance.check_in_time), 'HH:mm')} - {format(new Date(todayAttendance.check_out_time), 'HH:mm')}
+                </p>
+                <p className="text-sm font-medium text-blue-700 mt-1">Total: {getWorkingHours()}</p>
+              </div>
             </div>
           ) : null}
         </div>
@@ -187,7 +201,7 @@ const AttendanceMarking: React.FC = () => {
             <Button
               onClick={handleCheckIn}
               disabled={isLoading}
-              className="w-full gradient-primary text-white"
+              className="w-full gradient-primary text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
               size="lg"
             >
               <CheckCircle className="w-5 h-5 mr-2" />
@@ -197,24 +211,27 @@ const AttendanceMarking: React.FC = () => {
             <Button
               onClick={handleCheckOut}
               disabled={isLoading}
-              className="w-full bg-red-600 hover:bg-red-700 text-white"
+              className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
               size="lg"
             >
               <XCircle className="w-5 h-5 mr-2" />
               {manualEntry ? 'Check Out (Manual)' : 'Check Out'}
             </Button>
           ) : (
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-gray-600 text-sm">You have completed your day</p>
+            <div className="p-4 bg-gradient-to-r from-gray-50 to-slate-50 rounded-lg border border-gray-200">
+              <div className="flex items-center justify-center space-x-2">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <p className="text-gray-700 font-medium">Day Completed Successfully</p>
+              </div>
             </div>
           )}
         </div>
 
         {/* Location Info */}
         {location && (
-          <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
-            <MapPin className="w-4 h-4" />
-            <span>Location recorded</span>
+          <div className="flex items-center justify-center space-x-2 text-sm text-gray-500 bg-gray-50 p-2 rounded-lg">
+            <MapPin className="w-4 h-4 text-green-600" />
+            <span>Location recorded successfully</span>
           </div>
         )}
       </CardContent>

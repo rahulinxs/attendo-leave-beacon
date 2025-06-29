@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AddEmployeeForm from './AddEmployeeForm';
@@ -25,7 +24,7 @@ const EmployeeManagement = () => {
 
   if (showAddForm) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         <div className="flex items-center space-x-3">
           <Button
             variant="ghost"
@@ -34,11 +33,11 @@ const EmployeeManagement = () => {
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
-          <h1 className="text-2xl font-bold">Add New Employee</h1>
+          <h1 className="text-xl font-bold">Add New Employee</h1>
         </div>
 
         <Card className="border-0 shadow-lg">
-          <CardHeader>
+          <CardHeader className="pb-3">
             <CardTitle>Employee Information</CardTitle>
           </CardHeader>
           <CardContent>

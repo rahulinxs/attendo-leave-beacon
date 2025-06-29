@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCompany } from '@/contexts/CompanyContext';
 import { useLeave } from '@/hooks/useLeave';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -72,6 +73,7 @@ interface NotificationSettings {
 
 const LeaveRequestManagement: React.FC = () => {
   const { user } = useAuth();
+  const { currentCompany } = useCompany();
   const { 
     leaveRequests, 
     pendingRequests, 
@@ -79,7 +81,7 @@ const LeaveRequestManagement: React.FC = () => {
     rejectLeaveRequest, 
     isLoading,
     fetchLeaveRequests 
-  } = useLeave();
+  } = useLeave('manager');
 
   const [selectedRequests, setSelectedRequests] = useState<string[]>([]);
   const [activeView, setActiveView] = useState('dashboard');
@@ -108,16 +110,21 @@ const LeaveRequestManagement: React.FC = () => {
   const canManageRequests = ['reporting_manager', 'admin', 'super_admin'].includes(user?.role || '');
 
   useEffect(() => {
-    if (canManageRequests) {
+    if (canManageRequests && currentCompany) {
       fetchTeamData();
     }
-  }, [canManageRequests]);
+  }, [canManageRequests, currentCompany]);
 
   const fetchTeamData = async () => {
-    // Fetch team members and their stats
-    const { data: employees } = await supabase
+    if (!currentCompany) return;
+
+    // Fetch team members and their stats for the current company
+    const { data: employees, error: employeesError } = await supabase
       .from('employees')
-      .select('id, name, department, email');
+      .select('id, name, email, department')
+      .eq('company_id', currentCompany.id)
+      .eq('is_active', true)
+      .order('name');
 
     if (employees) {
       const teamData = employees.map(emp => ({
@@ -172,22 +179,23 @@ const LeaveRequestManagement: React.FC = () => {
 
   const exportRequests = (format: 'xlsx' | 'csv') => {
     const data = filteredRequests.map(req => ({
+      'Company': currentCompany?.name || 'Unknown',
       'Employee': req.employees?.name,
-      'Department': req.employees?.department,
+      'Department': req.employees?.department || 'N/A',
       'Leave Type': req.leave_types?.name,
       'Start Date': req.start_date,
       'End Date': req.end_date,
       'Total Days': req.total_days,
       'Status': req.status,
       'Reason': req.reason,
-      'Requested On': req.created_at
+      'Requested On': req.updated_at || 'N/A'
     }));
 
     if (format === 'xlsx') {
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'LeaveRequests');
-      XLSX.writeFile(wb, 'team_leave_requests.xlsx');
+      XLSX.writeFile(wb, `${currentCompany?.name || 'company'}_leave_requests.xlsx`);
     }
   };
 
@@ -231,7 +239,7 @@ const LeaveRequestManagement: React.FC = () => {
     let match = true;
     if (filters.status !== 'all') match = match && req.status === filters.status;
     if (filters.leaveType !== 'all') match = match && req.leave_types?.name === filters.leaveType;
-    if (filters.department !== 'all') match = match && req.employees?.department === filters.department;
+    if (filters.department !== 'all') match = match && (req.employees?.department || 'N/A') === filters.department;
     if (filters.dateRange.start) match = match && req.start_date >= filters.dateRange.start;
     if (filters.dateRange.end) match = match && req.end_date <= filters.dateRange.end;
     if (filters.search) match = match && req.employees?.name?.toLowerCase().includes(filters.search.toLowerCase());
@@ -257,6 +265,16 @@ const LeaveRequestManagement: React.FC = () => {
     );
   }
 
+  if (!currentCompany) {
+    return (
+      <div className="glass-effect rounded-2xl p-8 border text-center">
+        <Building className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+        <h2 className="text-2xl font-bold mb-4">Company Not Found</h2>
+        <p className="text-gray-600">Unable to load company information</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Enhanced Header */}
@@ -266,7 +284,13 @@ const LeaveRequestManagement: React.FC = () => {
             <Crown className="w-8 h-8 text-purple-600" />
             Team Leave Management
           </h1>
-          <p className="text-gray-600 mt-1">Manage and approve leave requests from your entire team</p>
+          <p className="text-gray-600 mt-1 flex items-center gap-2">
+            Managing leave requests for 
+            <span className="font-medium text-blue-600 flex items-center gap-1">
+              <Building className="w-4 h-4" />
+              {currentCompany.name}
+            </span>
+          </p>
         </div>
         <div className="flex gap-3">
           <Button variant="outline" onClick={handleRefresh} disabled={isLoading}>
@@ -731,7 +755,7 @@ const LeaveRequestManagement: React.FC = () => {
                           />
                         </td>
                         <td className="p-3 font-medium">{request.employees?.name}</td>
-                        <td className="p-3 text-gray-600">{request.employees?.department}</td>
+                        <td className="p-3 text-gray-600">{request.employees?.department || 'N/A'}</td>
                         <td className="p-3">{request.leave_types?.name}</td>
                         <td className="p-3">
                           {format(new Date(request.start_date), 'MMM dd')} - {format(new Date(request.end_date), 'MMM dd')}
@@ -891,7 +915,7 @@ const LeaveRequestManagement: React.FC = () => {
                       <div className="flex-1">
                         <p className="text-sm font-medium">{request.employees?.name}</p>
                         <p className="text-xs text-gray-500">
-                          {request.leave_types?.name} • {format(new Date(request.created_at), 'MMM dd, yyyy')}
+                          {request.leave_types?.name} • {format(new Date(request.updated_at), 'MMM dd, yyyy')}
                         </p>
                       </div>
                       <Badge variant={getStatusColor(request.status)} className="text-xs">

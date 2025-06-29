@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCompany } from '@/contexts/CompanyContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +22,10 @@ import {
   UserCog,
   Lock,
   Eye,
-  EyeOff
+  EyeOff,
+  Building,
+  Network,
+  FlaskConical
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -48,6 +52,7 @@ interface NavigationItem {
 
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => {
   const { user, logout } = useAuth();
+  const { currentCompany } = useCompany();
   const { sidebarPosition } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -78,6 +83,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       icon: CalendarDays,
       roles: ['employee', 'reporting_manager', 'admin', 'super_admin']
     },
+    {
+      id: 'manage-attendance',
+      label: 'Manage Attendance',
+      icon: UserCheck,
+      roles: ['admin', 'super_admin'],
+      requiresPermission: true
+    },
     
     // Management features - for managers and above
     {
@@ -90,6 +102,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
     
     // Admin features - for admins and super admins
     {
+      id: 'teams',
+      label: 'Team Management',
+      icon: Network,
+      roles: ['admin', 'super_admin', 'reporting_manager'],
+      requiresPermission: true
+    },
+    {
       id: 'employees',
       label: 'Employee Management',
       icon: Users,
@@ -100,7 +119,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       id: 'reports',
       label: 'Reports & Analytics',
       icon: BarChart3,
-      roles: ['admin', 'super_admin'],
+      roles: ['admin', 'super_admin', 'reporting_manager'],
       requiresPermission: true
     },
     
@@ -119,7 +138,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       roles: ['employee', 'reporting_manager', 'admin', 'super_admin'],
       requiresPermission: true
     }
-  ];
+  ].filter(item => item.id !== 'dummy-attendance');
 
   // Filter navigation items based on user role and enforce order for leave/leave-management
   const getFilteredNavigationItems = () => {
@@ -189,7 +208,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center space-x-3">
             <CompanyLogo size="md" />
+            <div className="flex flex-col">
             <span className="font-bold text-lg">AttendEase</span>
+              {currentCompany && (
+                <span className="text-xs text-gray-500 flex items-center gap-1">
+                  <Building className="w-3 h-3" />
+                  {currentCompany.name}
+                </span>
+              )}
+            </div>
           </div>
           <Button
             variant="ghost"
@@ -202,95 +229,104 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
         </div>
       </div>
 
-      <div className={`flex ${sidebarPosition === 'right' ? 'flex-row-reverse' : 'flex-row'}`}>
+      <div className="flex">
         {/* Sidebar */}
         <div className={`
-          fixed lg:static inset-y-0 z-50 w-64 bg-white shadow-xl transform transition-transform duration-300 ease-in-out
+          fixed inset-y-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out
           ${sidebarPosition === 'right' ? 'right-0' : 'left-0'}
-          ${sidebarOpen ? 'translate-x-0' : sidebarPosition === 'right' ? 'translate-x-full lg:translate-x-0' : '-translate-x-full lg:translate-x-0'}
+          ${sidebarOpen ? 'translate-x-0' : 'translate-x-full'}
+          lg:relative lg:translate-x-0 lg:shadow-none
         `}>
           <div className="flex flex-col h-full">
-            {/* Logo */}
-            <div className="hidden lg:flex items-center p-6 border-b">
-              <CompanyLogo size="lg" showText={true} />
+            {/* Sidebar Header */}
+            <div className="flex items-center justify-between p-3 border-b">
+              <div className="flex items-center space-x-2">
+                <CompanyLogo size="md" />
+                <div className="flex flex-col">
+                  <span className="font-bold text-base">AttendEase</span>
+                  {currentCompany && (
+                    <span className="text-xs text-gray-500 flex items-center gap-1">
+                      <Building className="w-3 h-3" />
+                      {currentCompany.name}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSidebarOpen(false)}
+                className="lg:hidden"
+              >
+                <Menu className="w-4 h-4" />
+              </Button>
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 p-4 space-y-2">
+            <nav className="flex-1 p-3 space-y-1">
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
-                const hasPermission = !item.requiresPermission || 
-                  (user && ['reporting_manager', 'admin', 'super_admin'].includes(user.role || 'employee'));
                 
                 return (
                   <button
                     key={item.id}
-                    onClick={() => {
-                      if (hasPermission) {
-                        onTabChange(item.id);
-                        setSidebarOpen(false);
-                      }
-                    }}
-                    disabled={!hasPermission}
+                    onClick={() => onTabChange(item.id)}
                     className={`
-                      w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left transition-all duration-200 relative
+                      w-full flex items-center space-x-2 px-2 py-1.5 rounded-md text-left transition-colors text-sm
                       ${isActive 
-                        ? 'gradient-primary text-white shadow-lg' 
-                        : hasPermission
-                          ? 'text-gray-600 hover:bg-blue-50 hover:text-blue-600'
-                          : 'text-gray-400 cursor-not-allowed bg-gray-50'
+                        ? 'bg-blue-100 text-blue-700 border border-blue-200' 
+                        : 'text-gray-700 hover:bg-gray-100'
                       }
                     `}
                   >
-                    <Icon className="w-5 h-5" />
-                    <div className="flex-1 text-left">
-                      <span className="font-medium">{item.label}</span>
-                    </div>
-                    {!hasPermission && (
-                      <Lock className="w-4 h-4 text-gray-400" />
+                    <Icon className="w-4 h-4" />
+                    <span className="flex-1">{item.label}</span>
+                    {item.requiresPermission && (
+                      <Lock className="w-3 h-3 text-gray-400" />
                     )}
                   </button>
                 );
               })}
             </nav>
 
-            {/* User Profile */}
-            <div className="p-4 border-t">
+            {/* User Profile Section */}
+            <div className="p-3 border-t">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="w-full justify-start space-x-3 h-auto p-3">
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                      {(() => {
-                        const RoleIcon = getRoleIcon(user?.role || 'employee');
-                        return <RoleIcon className="w-4 h-4 text-blue-600" />;
-                      })()}
+                  <Button variant="ghost" className="w-full justify-between">
+                    <div className="flex items-center space-x-2">
+                    <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                        <User className="w-3 h-3 text-blue-600" />
                     </div>
-                    <div className="flex-1 text-left">
-                      <p className="font-medium text-sm">{user?.name}</p>
-                      <div className="flex items-center space-x-2">
-                        <p className="text-xs text-gray-500">{getRoleDisplayName(user?.role || 'employee')}</p>
-                        <Badge variant={getRoleBadgeVariant(user?.role || 'employee')} className="text-xs">
-                          {user?.role || 'employee'}
-                        </Badge>
+                      <div className="text-left">
+                        <div className="font-medium text-xs">{user?.name || 'User'}</div>
+                        <div className="text-xs text-gray-500">{user?.email}</div>
                       </div>
                     </div>
-                    <ChevronDown className="w-4 h-4" />
+                    <ChevronDown className="w-3 h-3" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56">
-                  <DropdownMenuItem onClick={() => onTabChange('profile')}>
-                    <User className="mr-2 h-4 w-4" />
-                    Profile
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onTabChange('settings')}>
-                    <Settings className="mr-2 h-4 w-4" />
-                    System Settings
-                  </DropdownMenuItem>
+                <DropdownMenuContent align="end" className="w-56">
+                  <div className="px-3 py-2">
+                    <div className="font-medium">{user?.name || 'User'}</div>
+                    <div className="text-sm text-gray-500">{user?.email}</div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <Badge variant={getRoleBadgeVariant(user?.role || 'employee')}>
+                        {getRoleDisplayName(user?.role || 'employee')}
+                      </Badge>
+                    </div>
+                    {currentCompany && (
+                      <div className="flex items-center gap-2 mt-2 text-sm text-gray-500">
+                        <Building className="w-3 h-3" />
+                        {currentCompany.name}
+                      </div>
+                    )}
+                  </div>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout} className="text-red-600">
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Log out
+                  <DropdownMenuItem onClick={handleLogout}>
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Logout
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -298,21 +334,21 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
           </div>
         </div>
 
-        {/* Overlay for mobile */}
-        {sidebarOpen && (
-          <div 
-            className={`fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden ${sidebarPosition === 'right' ? 'right-0' : 'left-0'}`}
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-
         {/* Main Content */}
-        <div className="flex-1 lg:ml-0 lg:mr-0 h-screen overflow-y-auto">
-          <main className="p-4 lg:p-8">
+        <div className="flex-1 lg:ml-0">
+          <div className="p-3 lg:p-4">
             {children}
-          </main>
+          </div>
         </div>
       </div>
+
+      {/* Mobile Overlay */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
     </div>
   );
 };

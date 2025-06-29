@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCompany } from '@/contexts/CompanyContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -25,7 +26,6 @@ import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
-import { DatabaseLeaveRequest } from '../integrations/supabase/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 
@@ -38,7 +38,7 @@ interface DatabaseAttendanceRecord {
   check_out_time: string | null;
   profiles: {
     name: string;
-    department: string;
+    team_id: string | null;
   } | null;
 }
 
@@ -62,7 +62,7 @@ interface DatabaseLeaveRequest {
   };
   profiles?: {
     name: string;
-    department: string;
+    team_id: string | null;
   };
 }
 
@@ -70,8 +70,9 @@ interface DatabaseProfile {
   id: string;
   name: string;
   email: string;
-  department: string;
+  team_id: string | null;
   role: string;
+  position: string;
 }
 
 interface RawData {
@@ -96,7 +97,7 @@ interface LeaveStats {
 }
 
 interface DepartmentStats {
-  department: string;
+  team_id: string | null;
   attendance_rate: number;
   leave_rate: number;
 }
@@ -105,7 +106,7 @@ interface DailyAttendanceRecord {
   employeeId: string;
   date: string;
   employeeName: string;
-  department: string;
+  team_id: string | null;
   status: string;
   checkIn: string | null;
   checkOut: string | null;
@@ -116,7 +117,7 @@ interface EmployeeDetail {
   id: string;
   name: string;
   email: string;
-  department: string;
+  team_id: string | null;
   position: string;
   attendanceHistory: {
     date: string;
@@ -128,10 +129,12 @@ interface EmployeeDetail {
 }
 
 const ReportsAnalytics = () => {
+  const { currentCompany } = useCompany();
+  console.log('[DEBUG] ReportsAnalytics render, currentCompany:', currentCompany);
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('attendance');
   const [timeRange, setTimeRange] = useState('month');
-  const [department, setDepartment] = useState('all');
+  const [team, setTeam] = useState('all');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [attendanceStats, setAttendanceStats] = useState<AttendanceStats | null>(null);
   const [leaveStats, setLeaveStats] = useState<LeaveStats | null>(null);
@@ -147,33 +150,68 @@ const ReportsAnalytics = () => {
   const [leaveDateRange, setLeaveDateRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
   const [leaveSearch, setLeaveSearch] = useState('');
   const [lateMarkTime, setLateMarkTime] = useState('09:30');
+  const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
+
+  const filteredEmployees = team === 'all'
+    ? rawData.employees
+    : rawData.employees.filter(emp => emp.team_id === team);
+
+  console.log('[DEBUG] Selected team:', team);
+  console.log('[DEBUG] rawData.employees:', rawData.employees, rawData.employees.length);
+  console.log('[DEBUG] Available team IDs:', teams.map(t => t.id));
 
   useEffect(() => {
+    if (!currentCompany || !currentCompany.id) return;
     fetchData();
     fetchDailyAttendance();
-    // Fetch late mark time from system_settings
     const fetchLateMarkTime = async () => {
-      const { data, error } = await supabase
-        .from('system_settings')
-        .select('value')
-        .eq('key', 'late_mark_time')
-        .single();
-      if (!error && data && data.value) {
-        setLateMarkTime(data.value);
-      } else {
-        setLateMarkTime('09:30'); // fallback default
+      try {
+        const { data, error } = await supabase
+          .from('system_settings')
+          .select('value')
+          .eq('key', 'late_mark_time')
+          .single();
+        if (!error && data?.value) {
+          setLateMarkTime(data.value);
+        }
+      } catch (error) {
+        console.log('Using default late mark time: 09:30');
       }
     };
     fetchLateMarkTime();
-  }, [activeTab, timeRange, department, selectedDate]);
+  }, [activeTab, timeRange, team, selectedDate, currentCompany]);
 
   useEffect(() => {
     const fetchLeaveTypes = async () => {
-      const { data, error } = await supabase.from('leave_types').select('id, name');
-      if (!error && data) setLeaveTypes(data);
+      try {
+        const { data, error } = await supabase
+          .from('leave_types')
+          .select('*')
+          .eq('company_id', currentCompany?.id);
+
+        if (!error && data) {
+          setLeaveTypes(data);
+        }
+      } catch (error) {
+        console.error('Error fetching leave types:', error);
+      }
     };
     fetchLeaveTypes();
-  }, []);
+  }, [currentCompany]);
+
+  useEffect(() => {
+    if (!currentCompany) return;
+    const fetchTeams = async () => {
+      const { data, error } = await supabase
+        .from('teams')
+        .select('id, name')
+        .eq('company_id', currentCompany.id)
+        .eq('is_active', true)
+        .order('name');
+      if (!error && data) setTeams(data);
+    };
+    fetchTeams();
+  }, [currentCompany]);
 
   const fetchData = async () => {
     try {
@@ -197,6 +235,12 @@ const ReportsAnalytics = () => {
   };
 
   const fetchRawData = async () => {
+    console.log('[DEBUG] fetchRawData called', currentCompany);
+    if (!currentCompany || !currentCompany.id) {
+      console.log('[DEBUG] fetchRawData: currentCompany not set', currentCompany);
+      return;
+    }
+    
     try {
       const dateRange = getDateRange(timeRange);
       
@@ -204,17 +248,10 @@ const ReportsAnalytics = () => {
       const { data: attendanceData, error: attendanceError } = await supabase
         .from('attendance')
         .select(`
-          id,
-          employee_id,
-          date,
-          status,
-          check_in_time,
-          check_out_time,
-          profiles!attendance_employee_id_fkey (
-            name,
-            department
-          )
+          *,
+          profiles!employee_id(name, team_id, role)
         `)
+        .eq('company_id', currentCompany.id)
         .gte('date', dateRange.start)
         .lte('date', dateRange.end);
 
@@ -227,23 +264,11 @@ const ReportsAnalytics = () => {
       const { data: leavesData, error: leavesError } = await supabase
         .from('leave_requests')
         .select(`
-          id,
-          employee_id,
-          leave_type_id,
-          start_date,
-          end_date,
-          total_days,
-          status,
-          reason,
-          leave_types!leave_requests_leave_type_id_fkey (
-            id,
-            name
-          ),
-          profiles!leave_requests_employee_id_fkey (
-            name,
-            department
-          )
+          *,
+          leave_types!leave_type_id(id, name),
+          profiles!employee_id(name, team_id, role)
         `)
+        .eq('company_id', currentCompany.id)
         .gte('start_date', dateRange.start)
         .lte('end_date', dateRange.end);
 
@@ -254,28 +279,34 @@ const ReportsAnalytics = () => {
 
       // Fetch employees
       const { data: employeesData, error: employeesError } = await supabase
-        .from('profiles')
-        .select('id, name, email, department, role');
+        .from('employees')
+        .select('id, name, email, team_id, position, role')
+        .eq('company_id', currentCompany.id)
+        .eq('is_active', true)
+        .order('name');
+
+      console.log('[DEBUG] fetchRawData: employeesData', employeesData, employeesError);
 
       if (employeesError) {
         console.error('Error fetching employees:', employeesError);
         throw employeesError;
       }
 
-      // Filter by department if needed
+      // Filter by team if needed
       const filteredData: RawData = {
         attendance: (attendanceData || []).filter(record => 
-          department === 'all' || record.profiles?.department === department
+          team === 'all' || record.profiles?.team_id === team
         ),
         leaves: (leavesData || []).filter(record =>
-          department === 'all' || record.profiles?.department === department
+          team === 'all' || record.profiles?.team_id === team
         ),
         employees: (employeesData || []).filter(employee =>
-          department === 'all' || employee.department === department
+          team === 'all' || employee.team_id === team
         )
       };
 
       setRawData(filteredData);
+      console.log('[DEBUG] fetchRawData: setRawData', filteredData);
     } catch (error) {
       console.error('Error in fetchRawData:', error);
       toast({
@@ -287,27 +318,26 @@ const ReportsAnalytics = () => {
   };
 
   const fetchAttendanceStats = async () => {
+    if (!currentCompany) return;
+    
     try {
       const { data, error } = await supabase
         .from('attendance')
         .select(`
-          id,
-          status,
-          profiles!attendance_employee_id_fkey (
-            department
-          )
+          *,
+          profiles!employee_id(team_id, role)
         `)
-        .gte('date', getDateRange(timeRange).start)
-        .lte('date', getDateRange(timeRange).end);
+        .eq('company_id', currentCompany.id)
+        .eq('date', selectedDate.toISOString().split('T')[0]);
 
       if (error) {
         console.error('Error fetching attendance stats:', error);
         throw error;
       }
 
-      // Filter by department first
+      // Filter by team first
       const filteredData = (data || []).filter(record => 
-        department === 'all' || record.profiles?.department === department
+        team === 'all' || record.profiles?.team_id === team
       );
 
       const stats = {
@@ -329,30 +359,27 @@ const ReportsAnalytics = () => {
   };
 
   const fetchLeaveStats = async () => {
+    if (!currentCompany) return;
+    
     try {
       const { data, error } = await supabase
         .from('leave_requests')
         .select(`
-          id,
-          status,
-          leave_types!leave_requests_leave_type_id_fkey (
-            name
-          ),
-          profiles!leave_requests_employee_id_fkey (
-            department
-          )
+          *,
+          leave_types!leave_type_id(id, name),
+          profiles!employee_id(team_id, role)
         `)
-        .gte('start_date', getDateRange(timeRange).start)
-        .lte('end_date', getDateRange(timeRange).end);
+        .eq('company_id', currentCompany.id)
+        .eq('start_date', selectedDate.toISOString().split('T')[0]);
 
       if (error) {
         console.error('Error fetching leave stats:', error);
         throw error;
       }
 
-      // Filter by department first
+      // Filter by team first
       const filteredData = (data || []).filter(record => 
-        department === 'all' || record.profiles?.department === department
+        team === 'all' || record.profiles?.team_id === team
       );
 
       const stats = {
@@ -378,57 +405,63 @@ const ReportsAnalytics = () => {
   };
 
   const fetchDepartmentStats = async () => {
+    if (!currentCompany) return;
+    
     try {
-      // Get unique departments
-      const { data: deptData, error: deptError } = await supabase
-        .from('profiles')
-        .select('department')
-        .not('department', 'is', null);
+      // Get unique teams and all employees
+      const { data: employeesData, error: employeesError } = await supabase
+        .from('employees')
+        .select('id, team_id')
+        .eq('company_id', currentCompany.id)
+        .not('team_id', 'is', null);
+      if (employeesError) throw employeesError;
+      const teams = [...new Set(employeesData.map(d => d.team_id))];
 
-      if (deptError) throw deptError;
+      // Fetch all attendance and leave records for the company and date
+      const { data: attendanceData, error: attendanceError } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('company_id', currentCompany.id)
+        .eq('date', selectedDate.toISOString().split('T')[0]);
+      if (attendanceError) throw attendanceError;
 
-      const departments = [...new Set(deptData.map(d => d.department))];
+      const { data: leaveData, error: leaveError } = await supabase
+        .from('leave_requests')
+        .select('*')
+        .eq('company_id', currentCompany.id)
+        .eq('start_date', selectedDate.toISOString().split('T')[0]);
+      if (leaveError) throw leaveError;
+
       const stats: DepartmentStats[] = [];
-
-      for (const dept of departments) {
-        const { data: attendanceData } = await supabase
-          .from('attendance')
-          .select(`
-            id,
-            status,
-            profiles!attendance_employee_id_fkey (
-              department
-            )
-          `)
-          .eq('profiles.department', dept)
-          .gte('date', getDateRange(timeRange).start)
-          .lte('date', getDateRange(timeRange).end);
-
-        const { data: leaveData } = await supabase
-          .from('leave_requests')
-          .select(`
-            id,
-            status,
-            profiles!leave_requests_employee_id_fkey (
-              department
-            )
-          `)
-          .eq('profiles.department', dept)
-          .gte('start_date', getDateRange(timeRange).start)
-          .lte('end_date', getDateRange(timeRange).end);
-
-        const totalDays = attendanceData?.length || 0;
-        const presentDays = attendanceData?.filter(a => a.status === 'present' || a.status === 'late').length || 0;
-        const approvedLeaves = leaveData?.filter(l => l.status === 'approved').length || 0;
-
-        stats.push({
-          department: dept,
+      for (const team of teams) {
+        // Employees in this team
+        const teamEmployees = employeesData.filter(emp => emp.team_id === team);
+        const teamEmployeeIds = teamEmployees.map(emp => emp.id);
+        // Attendance for this team
+        const teamAttendance = (attendanceData || []).filter(record =>
+          teamEmployeeIds.includes(record.employee_id)
+        );
+        // Leaves for this team
+        const teamLeaves = (leaveData || []).filter(record =>
+          teamEmployeeIds.includes(record.employee_id)
+        );
+        // Debug logs for fetched data
+        console.log(`[DEBUG][Teams] Team: ${team}`);
+        console.log('[DEBUG][Teams] teamAttendance:', teamAttendance);
+        console.log('[DEBUG][Teams] teamLeaves:', teamLeaves);
+        const totalDays = teamAttendance.length;
+        const presentDays = teamAttendance.filter(a => a.status === 'present' || a.status === 'late').length;
+        const approvedLeaves = teamLeaves.filter(l => l.status === 'approved').length;
+        const stat = {
+          team_id: team,
           attendance_rate: totalDays ? (presentDays / totalDays) * 100 : 0,
           leave_rate: totalDays ? (approvedLeaves / totalDays) * 100 : 0
-        });
+        };
+        console.log('[DEBUG][Teams] computed stat:', stat);
+        stats.push(stat);
       }
-
       setDepartmentStats(stats);
+      console.log('[DEBUG] setDepartmentStats:', stats);
     } catch (error) {
       console.error('Error in fetchDepartmentStats:', error);
       toast({
@@ -440,14 +473,15 @@ const ReportsAnalytics = () => {
   };
 
   const fetchDailyAttendance = async () => {
-    if (!user) return;
+    if (!currentCompany || !currentCompany.id || !user || !user.id) return;
     setIsLoading(true);
 
     try {
-      // First, let's fetch all employees
+      // Fetch all employees for the company and selected team
       const { data: employees, error: employeesError } = await supabase
-        .from('profiles')
-        .select('id, name, email, department, position')
+        .from('employees')
+        .select('id, name, email, team_id, position, role')
+        .eq('company_id', currentCompany.id)
         .eq('is_active', true)
         .order('name');
 
@@ -455,28 +489,24 @@ const ReportsAnalytics = () => {
         console.error('Error fetching employees:', employeesError);
         return;
       }
-
       if (!employees) {
         console.error('No employees found');
         return;
       }
 
-      // Filter by department if selected
-      const filteredEmployees = department === 'all' 
+      // Filter by team if selected
+      const localFilteredEmployees = team === 'all' 
         ? employees 
-        : employees.filter(emp => emp.department === department);
+        : employees.filter(emp => emp.team_id === team);
 
-      // Fetch attendance records for the selected date
-      const startOfDay = new Date(selectedDate);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(selectedDate);
-      endOfDay.setHours(23, 59, 59, 999);
-
+      // Fetch attendance records for the selected date (no join)
       const { data: attendanceRecords } = await supabase
         .from('attendance')
-        .select('*, profiles:employee_id(*)')
-        .gte('date', startOfDay.toISOString().split('T')[0])
-        .lte('date', startOfDay.toISOString().split('T')[0]);
+        .select('*')
+        .eq('company_id', currentCompany.id)
+        .eq('date', selectedDate.toISOString().split('T')[0]);
+
+      console.log('[DEBUG] Attendance records fetched:', attendanceRecords, attendanceRecords ? attendanceRecords.length : 0);
 
       // Fetch leave requests for the selected date
       const { data: leaveRequests } = await supabase
@@ -489,8 +519,8 @@ const ReportsAnalytics = () => {
       // Parse lateMarkTime (HH:mm)
       const [lateHour, lateMinute] = lateMarkTime.split(':').map(Number);
 
-      // Process data to create daily attendance records
-      const records: DailyAttendanceRecord[] = filteredEmployees.map(employee => {
+      // Map over all employees, show status based on attendance/leave
+      const records: DailyAttendanceRecord[] = localFilteredEmployees.map(employee => {
         const attendance = attendanceRecords?.find(record => record.employee_id === employee.id);
         const leave = leaveRequests?.find(request => request.employee_id === employee.id);
 
@@ -512,11 +542,12 @@ const ReportsAnalytics = () => {
         return {
           employeeId: employee.id,
           employeeName: employee.name,
-          department: employee.department || 'Unassigned',
+          team_id: employee.team_id,
           status,
           leaveType: leave?.leave_types?.name,
           checkIn: attendance?.check_in_time,
           checkOut: attendance?.check_out_time,
+          date: selectedDate.toISOString().split('T')[0]
         };
       });
 
@@ -530,6 +561,10 @@ const ReportsAnalytics = () => {
 
       setDailyAttendance(records);
       setAttendanceStats(stats);
+
+      console.log('[DEBUG] Employees fetched:', employees, employees?.length);
+      console.log('[DEBUG] Filtered employees for team', team, ':', localFilteredEmployees, localFilteredEmployees.length);
+      console.log('[DEBUG] Final attendance records for table:', records, records.length);
     } catch (error) {
       console.error('Error fetching attendance data:', error);
     } finally {
@@ -575,7 +610,7 @@ const ReportsAnalytics = () => {
             data = dailyAttendance.map(record => ({
               Date: record.date,
               'Employee Name': record.employeeName,
-              Department: record.department,
+              Team: record.team_id,
               Status: record.status,
               'Leave Type': record.leaveType || '',
               'Check In': record.checkIn ? new Date(record.checkIn).toLocaleTimeString() : '',
@@ -588,7 +623,7 @@ const ReportsAnalytics = () => {
         case 'leave':
           data = filteredLeaves.map(record => ({
             'Employee Name': record.profiles?.name,
-            Department: record.profiles?.department,
+            Team: record.profiles?.team_id,
             'Leave Type': record.leave_types?.name,
             'Start Date': record.start_date,
             'End Date': record.end_date,
@@ -599,13 +634,13 @@ const ReportsAnalytics = () => {
           filename = `leave_report_${timeRange}`;
           break;
 
-        case 'department':
+        case 'teams':
           data = departmentStats.map(stat => ({
-            Department: stat.department,
+            Team: stat.team_id,
             'Attendance Rate (%)': stat.attendance_rate.toFixed(2),
             'Leave Rate (%)': stat.leave_rate.toFixed(2)
           }));
-          filename = `department_report_${timeRange}`;
+          filename = `team_report_${timeRange}`;
           break;
       }
 
@@ -668,8 +703,8 @@ const ReportsAnalytics = () => {
     try {
       // Fetch employee details
       const { data: employee } = await supabase
-        .from('profiles')
-        .select('id, name, email, department, position')
+        .from('employees')
+        .select('id, name, email, team_id, position, role')
         .eq('id', employeeId)
         .single();
 
@@ -685,6 +720,7 @@ const ReportsAnalytics = () => {
       const { data: attendanceHistory } = await supabase
         .from('attendance')
         .select('date, check_in_time, check_out_time, status')
+        .eq('company_id', currentCompany.id)
         .eq('employee_id', employeeId)
         .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
         .order('date', { ascending: false });
@@ -693,6 +729,7 @@ const ReportsAnalytics = () => {
       const { data: leaveHistory } = await supabase
         .from('leave_requests')
         .select('*, leave_types(*)')
+        .eq('company_id', currentCompany.id)
         .eq('employee_id', employeeId)
         .gte('start_date', thirtyDaysAgo.toISOString().split('T')[0])
         .eq('status', 'approved');
@@ -770,16 +807,15 @@ const ReportsAnalytics = () => {
             </PopoverContent>
           </Popover>
 
-          <Select value={department} onValueChange={setDepartment}>
+          <Select value={team} onValueChange={setTeam}>
             <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Select Department" />
+              <SelectValue placeholder="Select Team" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Departments</SelectItem>
-              <SelectItem value="Engineering">Engineering</SelectItem>
-              <SelectItem value="Marketing">Marketing</SelectItem>
-              <SelectItem value="Sales">Sales</SelectItem>
-              <SelectItem value="Human Resources">Human Resources</SelectItem>
+              <SelectItem value="all">All Teams</SelectItem>
+              {teams.map(team => (
+                <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -795,9 +831,9 @@ const ReportsAnalytics = () => {
             <CalendarIcon className="w-4 h-4 mr-2" />
             Leave
           </TabsTrigger>
-          <TabsTrigger value="department">
+          <TabsTrigger value="teams">
             <Users className="w-4 h-4 mr-2" />
-            Department
+            Teams
           </TabsTrigger>
         </TabsList>
 
@@ -957,54 +993,59 @@ const ReportsAnalytics = () => {
                       <p>Loading...</p>
                     </div>
                   ) : (
-                    <div className="rounded-md border">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Leave Type</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check In</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check Out</th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {filteredAttendance.map((record, index) => (
-                            <tr key={record.employeeId} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                              <td 
-                                className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 hover:text-blue-800 cursor-pointer"
-                                onClick={() => handleEmployeeClick(record.employeeId)}
-                              >
-                                {record.employeeName}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {record.department}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                <Badge variant={
-                                  record.status === 'present' ? 'default' :
-                                  record.status === 'late' ? 'secondary' :
-                                  record.status === 'leave' ? 'secondary' :
-                                  'destructive'
-                                }>
-                                  {record.status}
-                                </Badge>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {record.leaveType || '-'}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {record.checkIn ? new Date(record.checkIn).toLocaleTimeString() : '-'}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {record.checkOut ? new Date(record.checkOut).toLocaleTimeString() : '-'}
-                              </td>
+                    <>
+                      {filteredEmployees.length === 0 && (
+                        <div className="text-red-500 font-bold">[DEBUG] No employees found for this team.</div>
+                      )}
+                      <div className="rounded-md border">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Leave Type</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check In</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check Out</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {filteredAttendance.map((record, index) => (
+                              <tr key={record.employeeId} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                <td 
+                                  className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 hover:text-blue-800 cursor-pointer"
+                                  onClick={() => handleEmployeeClick(record.employeeId)}
+                                >
+                                  {record.employeeName}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  {teams.find(t => t.id === record.team_id)?.name || 'Unassigned'}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  <Badge variant={
+                                    record.status === 'present' ? 'default' :
+                                    record.status === 'late' ? 'secondary' :
+                                    record.status === 'leave' ? 'secondary' :
+                                    'destructive'
+                                  }>
+                                    {record.status}
+                                  </Badge>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  {record.leaveType || '-'}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  {record.checkIn ? new Date(record.checkIn).toLocaleTimeString() : '-'}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  {record.checkOut ? new Date(record.checkOut).toLocaleTimeString() : '-'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
                   )}
                 </CardContent>
               </Card>
@@ -1171,7 +1212,7 @@ const ReportsAnalytics = () => {
                         <thead className="bg-gray-50">
                           <tr>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Leave Type</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Date</th>
@@ -1187,7 +1228,7 @@ const ReportsAnalytics = () => {
                                 {record.profiles?.name || 'Unknown'}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {record.profiles?.department || 'Unassigned'}
+                                {teams.find(t => t.id === record.profiles?.team_id)?.name || 'Unassigned'}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                 {record.leave_types?.name || 'Unknown'}
@@ -1231,23 +1272,26 @@ const ReportsAnalytics = () => {
           )}
         </TabsContent>
 
-        <TabsContent value="department" className="space-y-6">
+        <TabsContent value="teams" className="space-y-6">
           {isLoading ? (
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
           ) : (
             <>
-              {departmentStats.length > 0 && (
+              {departmentStats.length > 0 ? (
                 <Card>
                   <CardHeader>
-                    <CardTitle>Department Performance</CardTitle>
+                    <CardTitle>Team Performance</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="h-[400px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart
-                          data={departmentStats}
+                          data={departmentStats.map(stat => ({
+                            ...stat,
+                            teamName: teams.find(t => t.id === stat.team_id)?.name || 'Unassigned',
+                          }))}
                           margin={{
                             top: 20,
                             right: 30,
@@ -1256,7 +1300,7 @@ const ReportsAnalytics = () => {
                           }}
                         >
                           <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="department" />
+                          <XAxis dataKey="teamName" />
                           <YAxis />
                           <Tooltip />
                           <Legend />
@@ -1267,6 +1311,12 @@ const ReportsAnalytics = () => {
                     </div>
                   </CardContent>
                 </Card>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <Users className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                  <p>No team performance data found for the selected date.</p>
+                  <p className="text-sm mt-2">Try adjusting your date or ensure teams have attendance/leave data.</p>
+                </div>
               )}
             </>
           )}
@@ -1290,8 +1340,8 @@ const ReportsAnalytics = () => {
                   <p className="mt-1">{selectedEmployee.email}</p>
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500">Department</h3>
-                  <p className="mt-1">{selectedEmployee.department}</p>
+                  <h3 className="text-sm font-medium text-gray-500">Team</h3>
+                  <p className="mt-1">{teams.find(t => t.id === selectedEmployee.team_id)?.name || 'Unassigned'}</p>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-gray-500">Position</h3>

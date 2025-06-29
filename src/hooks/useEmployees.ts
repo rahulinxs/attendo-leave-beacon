@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCompany } from '@/contexts/CompanyContext';
 
 interface Employee {
   id: string;
@@ -13,10 +14,14 @@ interface Employee {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  company_id?: string;
+  team_id?: string;
+  reporting_manager_id?: string;
 }
 
 export const useEmployees = () => {
   const { user } = useAuth();
+  const { currentCompany } = useCompany();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -25,11 +30,13 @@ export const useEmployees = () => {
 
     try {
       setIsLoading(true);
+      
       const { data, error } = await supabase
-        .from('profiles')
+        .from('employees')
         .select('*')
+        .eq('company_id', currentCompany.id)
         .eq('is_active', true)
-        .order('created_at', { ascending: false });
+        .order('name');
 
       if (error) {
         console.error('Error fetching employees:', error);
@@ -51,11 +58,11 @@ export const useEmployees = () => {
 
     setIsLoading(true);
     try {
-      // Mark employee as inactive instead of deleting
-      const { error } = await supabase
-        .from('profiles')
-        .update({ is_active: false })
-        .eq('id', employeeId);
+      const { data, error } = await supabase
+        .from('employees')
+        .select('*')
+        .eq('id', employeeId)
+        .single();
 
       if (error) {
         console.error('Error removing employee:', error);
@@ -76,7 +83,7 @@ export const useEmployees = () => {
     if (user && (user.role === 'admin' || user.role === 'super_admin')) {
       fetchEmployees();
     }
-  }, [user]);
+  }, [user, currentCompany]);
 
   return {
     employees,

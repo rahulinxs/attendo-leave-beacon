@@ -51,6 +51,8 @@ import {
 import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
 import LeaveCalendar from './LeaveCalendar';
+import { useCompany } from '@/contexts/CompanyContext';
+import BackdatedLeave from './BackdatedLeave';
 
 interface LeaveType {
   id: string;
@@ -86,7 +88,7 @@ const LeaveManagement: React.FC = () => {
     rejectLeaveRequest, 
     isLoading,
     fetchLeaveRequests 
-  } = useLeave();
+  } = useLeave('employee');
 
   const [showRequestForm, setShowRequestForm] = useState(false);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
@@ -202,14 +204,14 @@ const LeaveManagement: React.FC = () => {
 
   // Manager/Admin Enhanced View
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Enhanced Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Team Leave Management</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Team Leave Management</h1>
           <p className="text-gray-600 mt-1">Manage and approve leave requests from your team</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-2">
           <Button variant="outline" onClick={handleRefresh} disabled={isLoading}>
             <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
@@ -235,8 +237,8 @@ const LeaveManagement: React.FC = () => {
                   Notification Settings
                 </DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-3">
+              <div className="space-y-3">
+                <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Mail className="w-4 h-4 text-blue-600" />
@@ -271,9 +273,9 @@ const LeaveManagement: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="border-t pt-4">
-                  <h4 className="font-medium mb-3">Alert Types</h4>
-                  <div className="space-y-3">
+                <div className="border-t pt-3">
+                  <h4 className="font-medium mb-2">Alert Types</h4>
+                  <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-sm">Pending Request Alerts</span>
                       <Switch 
@@ -300,7 +302,7 @@ const LeaveManagement: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="flex gap-2 pt-4 border-t">
+                <div className="flex gap-2 pt-3 border-t">
                   <Button onClick={sendTestNotification} className="flex-1">
                     Send Test Notification
                   </Button>
@@ -327,8 +329,8 @@ const LeaveManagement: React.FC = () => {
                   Leave Management Settings
                 </DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-3">
+              <div className="space-y-3">
+                <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">Auto-refresh every 5 minutes</span>
                     <Switch defaultChecked />
@@ -350,8 +352,8 @@ const LeaveManagement: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="border-t pt-4">
-                  <h4 className="font-medium mb-3">Display Options</h4>
+                <div className="border-t pt-3">
+                  <h4 className="font-medium mb-2">Display Options</h4>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-sm">Show department filters</span>
@@ -370,7 +372,7 @@ const LeaveManagement: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="flex gap-2 pt-4 border-t">
+                <div className="flex gap-2 pt-3 border-t">
                   <Button onClick={() => setShowSettings(false)} className="flex-1">
                     Save Settings
                   </Button>
@@ -385,56 +387,56 @@ const LeaveManagement: React.FC = () => {
       </div>
 
       {/* Quick Stats Dashboard */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <Card className="border-l-4 border-blue-500">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Pending Requests</p>
-                <p className="text-2xl font-bold text-blue-600">{pendingRequests.length}</p>
+                <p className="text-xl font-bold text-blue-600">{pendingRequests.length}</p>
               </div>
-              <AlertTriangle className="w-8 h-8 text-blue-500" />
+              <AlertTriangle className="w-6 h-6 text-blue-500" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="border-l-4 border-green-500">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Team Members</p>
-                <p className="text-2xl font-bold text-green-600">{leaveRequests.length}</p>
+                <p className="text-xl font-bold text-green-600">{leaveRequests.length}</p>
               </div>
-              <Users className="w-8 h-8 text-green-500" />
+              <Users className="w-6 h-6 text-green-500" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="border-l-4 border-purple-500">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Approved This Month</p>
-                <p className="text-2xl font-bold text-purple-600">
+                <p className="text-xl font-bold text-purple-600">
                   {leaveRequests.filter(r => r.status === 'approved' && 
                     new Date(r.approved_at || '').getMonth() === new Date().getMonth()).length}
                 </p>
               </div>
-              <CheckCircle className="w-8 h-8 text-purple-500" />
+              <CheckCircle className="w-6 h-6 text-purple-500" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="border-l-4 border-orange-500">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Leave Days</p>
-                <p className="text-2xl font-bold text-orange-600">
+                <p className="text-xl font-bold text-orange-600">
                   {leaveRequests.filter(r => r.status === 'approved').reduce((sum, r) => sum + r.total_days, 0)}
                 </p>
               </div>
-              <Calendar className="w-8 h-8 text-orange-500" />
+              <Calendar className="w-6 h-6 text-orange-500" />
             </div>
           </CardContent>
         </Card>
@@ -442,10 +444,11 @@ const LeaveManagement: React.FC = () => {
 
       {/* Enhanced Tabs */}
       <Tabs value={managerView} onValueChange={setManagerView} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="requests">All Requests</TabsTrigger>
           <TabsTrigger value="calendar">Calendar</TabsTrigger>
+          <TabsTrigger value="backdated">Backdated Leave</TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -692,6 +695,11 @@ const LeaveManagement: React.FC = () => {
         <TabsContent value="calendar">
           <LeaveCalendar />
         </TabsContent>
+
+        {/* Backdated Leave Tab */}
+        <TabsContent value="backdated">
+          <BackdatedLeave />
+        </TabsContent>
       </Tabs>
     </div>
   );
@@ -706,8 +714,9 @@ const EmployeeLeaveView: React.FC = () => {
     pendingRequests, 
     isLoading,
     fetchLeaveRequests 
-  } = useLeave();
+  } = useLeave('employee'); // Explicitly use employee mode to get only own requests
   const { recentAttendance } = useAttendance();
+  const { currentCompany } = useCompany();
 
   const [showRequestForm, setShowRequestForm] = useState(false);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
@@ -733,7 +742,7 @@ const EmployeeLeaveView: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.leaveTypeId || !formData.startDate || !formData.endDate || !formData.reason) {
+    if (!formData.leaveTypeId || !formData.startDate || !formData.endDate || !formData.reason || !currentCompany) {
       toast({
         title: "Error",
         description: "Please fill in all fields",
@@ -748,6 +757,7 @@ const EmployeeLeaveView: React.FC = () => {
 
     const { error } = await supabase.from('leave_requests').insert({
       employee_id: user?.id,
+      company_id: currentCompany.id,
           leave_type_id: formData.leaveTypeId,
           start_date: formData.startDate,
           end_date: formData.endDate,
@@ -870,10 +880,11 @@ const EmployeeLeaveView: React.FC = () => {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="requests">Leave Requests</TabsTrigger>
           <TabsTrigger value="calendar">Calendar</TabsTrigger>
           <TabsTrigger value="attendance">Attendance</TabsTrigger>
+          <TabsTrigger value="backdated">Backdated Leave</TabsTrigger>
         </TabsList>
 
         {/* Leave Requests Tab */}
@@ -1073,6 +1084,11 @@ const EmployeeLeaveView: React.FC = () => {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Backdated Leave Tab */}
+        <TabsContent value="backdated">
+          <BackdatedLeave />
         </TabsContent>
       </Tabs>
     </div>

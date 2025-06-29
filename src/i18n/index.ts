@@ -100,7 +100,6 @@ const en = {
     accessDeniedDesc: "You don't have permission to access this section",
     
     // System messages
-    systemSettings: 'System Settings',
     managementSystem: 'Management System',
   }
 };
@@ -204,7 +203,6 @@ const es = {
     accessDeniedDesc: 'No tienes permiso para acceder a esta sección',
     
     // System messages
-    systemSettings: 'Configuración del Sistema',
     managementSystem: 'Sistema de Gestión',
   }
 };
@@ -308,7 +306,6 @@ const fr = {
     accessDeniedDesc: 'Vous n\'avez pas la permission d\'accéder à cette section',
     
     // System messages
-    systemSettings: 'Paramètres Système',
     managementSystem: 'Système de Gestion',
   }
 };

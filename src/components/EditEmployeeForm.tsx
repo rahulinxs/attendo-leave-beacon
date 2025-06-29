@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -9,6 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCompany } from '@/contexts/CompanyContext';
 import { Switch } from '@/components/ui/switch';
 import { format } from 'date-fns';
 
@@ -20,6 +21,8 @@ const editEmployeeSchema = z.object({
   position: z.string().optional(),
   hire_date: z.string().optional(),
   is_active: z.boolean().optional(),
+  team_id: z.string().optional(),
+  reporting_manager_id: z.string().optional(),
 });
 
 type EditEmployeeForm = z.infer<typeof editEmployeeSchema>;
@@ -33,6 +36,14 @@ interface Employee {
   position?: string;
   hire_date?: string;
   is_active: boolean;
+  team_id?: string;
+  reporting_manager_id?: string;
+}
+
+interface Team {
+  id: string;
+  name: string;
+  description: string;
 }
 
 interface EditEmployeeFormProps {
@@ -43,6 +54,10 @@ interface EditEmployeeFormProps {
 
 const EditEmployeeForm: React.FC<EditEmployeeFormProps> = ({ employee, onSuccess, onCancel }) => {
   const { user } = useAuth();
+  const { currentCompany } = useCompany();
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [reportingManagers, setReportingManagers] = useState<Employee[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   
   const form = useForm<EditEmployeeForm>({
     resolver: zodResolver(editEmployeeSchema),
@@ -54,10 +69,58 @@ const EditEmployeeForm: React.FC<EditEmployeeFormProps> = ({ employee, onSuccess
       position: employee.position || '',
       hire_date: employee.hire_date || '',
       is_active: employee.is_active,
+      team_id: employee.team_id || '',
+      reporting_manager_id: employee.reporting_manager_id || '',
     },
   });
 
+  // Fetch teams and reporting managers
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!currentCompany) return;
+
+      try {
+        // Fetch teams filtered by company_id
+        const { data: teamsData } = await supabase
+          .from('teams')
+          .select('*')
+          .eq('company_id', currentCompany.id)
+          .eq('is_active', true);
+
+        if (teamsData) {
+          setTeams(teamsData);
+        }
+
+        // Fetch reporting managers filtered by company_id
+        const { data: managersData } = await supabase
+          .from('employees')
+          .select('id, name, email, department')
+          .eq('company_id', currentCompany.id)
+          .eq('role', 'reporting_manager')
+          .eq('is_active', true);
+
+        if (managersData) {
+          setReportingManagers(managersData);
+        }
+      } catch (error) {
+        console.error('Error fetching teams and managers:', error);
+      }
+    };
+
+    fetchData();
+  }, [currentCompany]);
+
   const onSubmit = async (data: EditEmployeeForm) => {
+    if (!currentCompany) {
+      toast({
+        title: "Error",
+        description: "Company information not available",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
     try {
       // Check if user can edit this employee
       if (!user || !['admin', 'super_admin'].includes(user.role)) {
@@ -107,13 +170,16 @@ const EditEmployeeForm: React.FC<EditEmployeeFormProps> = ({ employee, onSuccess
           role: data.role,
           department: data.department || null,
           position: data.position || null,
+          team_id: data.team_id === 'no_team' ? null : data.team_id || null,
+          reporting_manager_id: data.reporting_manager_id === 'no_manager' ? null : data.reporting_manager_id || null,
       };
       if (user && ['admin', 'super_admin'].includes(user.role)) {
         updateObj.hire_date = data.hire_date || null;
         updateObj.is_active = data.is_active;
       }
+
       const { error } = await supabase
-        .from('profiles')
+        .from('employees')
         .update(updateObj)
         .eq('id', employee.id);
 
@@ -140,6 +206,8 @@ const EditEmployeeForm: React.FC<EditEmployeeFormProps> = ({ employee, onSuccess
         description: "Failed to update employee",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -174,13 +242,14 @@ const EditEmployeeForm: React.FC<EditEmployeeFormProps> = ({ employee, onSuccess
           )}
         />
 
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <FormField
           control={form.control}
           name="role"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Role</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select onValueChange={field.onChange} defaultValue={field.value} placeholder="Select role">
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Select role" />
@@ -207,7 +276,7 @@ const EditEmployeeForm: React.FC<EditEmployeeFormProps> = ({ employee, onSuccess
           name="department"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Department (Optional)</FormLabel>
+                <FormLabel>Department</FormLabel>
               <FormControl>
                 <Input placeholder="Enter department" {...field} />
               </FormControl>
@@ -215,13 +284,15 @@ const EditEmployeeForm: React.FC<EditEmployeeFormProps> = ({ employee, onSuccess
             </FormItem>
           )}
         />
+        </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <FormField
           control={form.control}
           name="position"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Position (Optional)</FormLabel>
+                <FormLabel>Position</FormLabel>
               <FormControl>
                 <Input placeholder="Enter position" {...field} />
               </FormControl>
@@ -230,9 +301,6 @@ const EditEmployeeForm: React.FC<EditEmployeeFormProps> = ({ employee, onSuccess
           )}
         />
 
-        {/* Hire Date and Active Status for Admins/Super Admins */}
-        {user && ['admin', 'super_admin'].includes(user.role) && (
-          <>
             <FormField
               control={form.control}
               name="hire_date"
@@ -240,33 +308,96 @@ const EditEmployeeForm: React.FC<EditEmployeeFormProps> = ({ employee, onSuccess
                 <FormItem>
                   <FormLabel>Hire Date</FormLabel>
                   <FormControl>
-                    <Input type="date" {...field} value={field.value ? field.value.substring(0, 10) : ''} />
+                  <Input type="date" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
+        </div>
+
+        {/* Team Assignment */}
+        <FormField
+          control={form.control}
+          name="team_id"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Team Assignment</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select team (optional)" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="no_team">No Team</SelectItem>
+                  {teams.map(team => (
+                    <SelectItem key={team.id} value={team.id}>
+                      {team.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Reporting Manager Assignment */}
+        <FormField
+          control={form.control}
+          name="reporting_manager_id"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Reporting Manager</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select reporting manager (optional)" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="no_manager">No Manager</SelectItem>
+                  {reportingManagers.map(manager => (
+                    <SelectItem key={manager.id} value={manager.id}>
+                      {manager.name} ({manager.department})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {user && ['admin', 'super_admin'].includes(user.role) && (
             <FormField
               control={form.control}
               name="is_active"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Active Status</FormLabel>
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">Active Status</FormLabel>
+                  <div className="text-sm text-muted-foreground">
+                    Enable or disable this employee account
+                  </div>
+                </div>
                   <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
                   </FormControl>
-                  <FormMessage />
                 </FormItem>
               )}
             />
-          </>
         )}
 
-        <div className="flex space-x-2 pt-4">
-          <Button type="submit" className="gradient-primary text-white border-0">
-            Update Employee
+        <div className="flex gap-2">
+          <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={isLoading}>
+            {isLoading ? 'Updating...' : 'Update Employee'}
           </Button>
-          <Button type="button" variant="outline" onClick={onCancel}>
+          <Button type="button" variant="secondary" className="bg-secondary text-secondary-foreground hover:bg-secondary/90" onClick={onCancel}>
             Cancel
           </Button>
         </div>

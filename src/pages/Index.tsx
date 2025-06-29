@@ -7,9 +7,11 @@ import EmployeeManagement from '@/components/EmployeeManagement';
 import AttendanceManagement from '@/components/AttendanceManagement';
 import LeaveManagement, { EmployeeLeaveView } from '@/components/LeaveManagement';
 import LeaveRequestManagement from '@/components/LeaveRequestManagement';
+import TeamManagement from '@/components/TeamManagement';
 import ReportsAnalytics from '@/components/ReportsAnalytics';
 import HolidayManagement from '@/components/HolidayManagement';
 import SystemSettings from '@/components/SystemSettings';
+import EmployeeAttendance from '@/components/EmployeeAttendance';
 
 const Index = () => {
   const { user, isLoading } = useAuth();
@@ -38,6 +40,8 @@ const Index = () => {
         return <Dashboard onNavigate={setActiveTab} />;
       
       case 'attendance':
+        return <EmployeeAttendance />;
+      case 'manage-attendance':
         return <AttendanceManagement />;
       
       case 'leave':
@@ -70,9 +74,21 @@ const Index = () => {
           </div>
         );
       
+      case 'teams':
+        // Admins, super admins, and reporting managers can access team management
+        if (['admin', 'super_admin', 'reporting_manager'].includes(user.role)) {
+          return <TeamManagement />;
+        }
+        return (
+          <div className="glass-effect rounded-2xl p-8 border text-center">
+            <h2 className="text-2xl font-bold mb-4">Access Denied</h2>
+            <p className="text-gray-600">You don't have permission to access this section</p>
+          </div>
+        );
+      
       case 'reports':
-        // Only admins and super admins can access reports
-        if (['admin', 'super_admin'].includes(user.role)) {
+        // Admins, super admins, and reporting managers can access reports
+        if (['admin', 'super_admin', 'reporting_manager'].includes(user.role)) {
           return <ReportsAnalytics />;
         }
         return (

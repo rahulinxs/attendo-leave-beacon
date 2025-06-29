@@ -16,11 +16,14 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 import { Calendar as DatePicker } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
+import * as XLSX from 'xlsx';
+import { useCompany } from '@/contexts/CompanyContext';
 
 const AttendanceManagement: React.FC = () => {
   const { user } = useAuth();
   const { todayAttendance, recentAttendance, checkIn, checkOut, isLoading } = useAttendance();
   const { employees, isLoading: isEmployeesLoading, fetchEmployees } = useEmployees();
+  const { currentCompany } = useCompany();
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [marking, setMarking] = useState<string | null>(null);
   const [todayAttendanceMap, setTodayAttendanceMap] = useState<Record<string, string>>({});
@@ -140,6 +143,7 @@ const AttendanceManagement: React.FC = () => {
   const isCheckedOut = todayAttendance?.check_in_time && todayAttendance?.check_out_time;
 
   const markAttendanceForEmployee = async (employeeId: string, status: 'present' | 'absent' | 'late' | 'half_day') => {
+    if (!currentCompany) return;
     setMarking(employeeId + status);
     try {
       const dateStr = selectedDate.toISOString().split('T')[0];
@@ -155,6 +159,7 @@ const AttendanceManagement: React.FC = () => {
         .from('attendance')
         .upsert({
           employee_id: employeeId,
+          company_id: currentCompany.id,
           date: dateStr,
           ...updateObj,
         });
@@ -174,12 +179,13 @@ const AttendanceManagement: React.FC = () => {
   // Fetch today's attendance for all employees (for admin view)
   useEffect(() => {
     const fetchAllTodayAttendance = async () => {
-      if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) return;
+      if (!user || (user.role !== 'admin' && user.role !== 'super_admin') || !currentCompany) return;
       const today = new Date().toISOString().split('T')[0];
       const { data, error } = await supabase
         .from('attendance')
         .select('employee_id, status, date')
-        .eq('date', today);
+        .eq('date', today)
+        .eq('company_id', currentCompany.id);
       if (!error && data) {
         const map: Record<string, string> = {};
         data.forEach((rec: any) => {
@@ -189,20 +195,43 @@ const AttendanceManagement: React.FC = () => {
       }
     };
     fetchAllTodayAttendance();
-  }, [user, employees]);
+  }, [user, employees, currentCompany]);
 
   // Fetch pending approvals (for admins/super admins)
   useEffect(() => {
     const fetchPending = async () => {
-      if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) return;
+      if (!user || (user.role !== 'admin' && user.role !== 'super_admin') || !currentCompany) return;
       const { data, error } = await supabase
         .from('attendance')
         .select('*')
-        .eq('pending_approval', true);
+        .eq('pending_approval', true)
+        .eq('company_id', currentCompany.id);
       if (!error && data) setPendingEntries(data);
     };
     fetchPending();
-  }, [user, showBackdateModal]);
+  }, [user, showBackdateModal, currentCompany]);
+
+  // Helper to determine if the current user can approve a request
+  const canApproveRequest = (requestorRole) => {
+    if (!user) return false;
+    if (requestorRole === 'super_admin') return false; // auto-approved
+    if (['admin', 'reporting_manager', 'employee'].includes(requestorRole)) {
+      if (user.role === 'super_admin') return true;
+      if (requestorRole === 'employee' && (user.role === 'admin' || user.role === 'reporting_manager')) return true;
+    }
+    return false;
+  };
+
+  // Auto-approve if requestor is super_admin
+  useEffect(() => {
+    if (pendingEntries && pendingEntries.length > 0 && user?.role === 'super_admin') {
+      pendingEntries.forEach(async (entry) => {
+        if (entry.requestor_role === 'super_admin' && entry.pending_approval) {
+          await supabase.from('attendance').update({ pending_approval: false }).eq('id', entry.id);
+        }
+      });
+    }
+  }, [pendingEntries, user]);
 
   // Approve/reject handlers
   const handleApprove = async (id: string) => {
@@ -220,11 +249,11 @@ const AttendanceManagement: React.FC = () => {
   const handleBackdateSubmit = async () => {
     setSubmittingBackdate(true);
     try {
-      // For now, just upsert with a pending_approval flag
-      if (!backdateForm.employeeId || !backdateForm.date || !backdateForm.status) return;
+      if (!backdateForm.employeeId || !backdateForm.date || !backdateForm.status || !currentCompany) return;
       if (backdateForm.type === 'attendance') {
         await supabase.from('attendance').upsert({
           employee_id: backdateForm.employeeId,
+          company_id: currentCompany.id,
           date: backdateForm.date,
           status: backdateForm.status,
           pending_approval: true,
@@ -250,12 +279,13 @@ const AttendanceManagement: React.FC = () => {
   // Fetch attendance for selected date for all employees
   useEffect(() => {
     const fetchAllAttendance = async () => {
-      if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) return;
+      if (!user || (user.role !== 'admin' && user.role !== 'super_admin') || !currentCompany) return;
       const dateStr = selectedDate.toISOString().split('T')[0];
       const { data, error } = await supabase
         .from('attendance')
         .select('employee_id, status, date')
-        .eq('date', dateStr);
+        .eq('date', dateStr)
+        .eq('company_id', currentCompany.id);
       if (!error && data) {
         const map: Record<string, string> = {};
         data.forEach((rec: any) => {
@@ -265,7 +295,7 @@ const AttendanceManagement: React.FC = () => {
       }
     };
     fetchAllAttendance();
-  }, [user, employees, selectedDate]);
+  }, [user, employees, selectedDate, currentCompany]);
 
   const handleStatusChange = async () => {
     if (!statusChangeForm.employeeId || !statusChangeForm.newStatus || !statusChangeForm.date) {
@@ -368,7 +398,7 @@ const AttendanceManagement: React.FC = () => {
 
   // Fetch last 30 days attendance for employee
   useEffect(() => {
-    if (user?.role === 'employee') {
+    if (user?.role === 'employee' && currentCompany) {
       const fetchEmployeeAttendance = async () => {
         const fromDate = new Date();
         fromDate.setDate(fromDate.getDate() - 29);
@@ -376,465 +406,89 @@ const AttendanceManagement: React.FC = () => {
           .from('attendance')
           .select('*')
           .eq('employee_id', user.id)
+          .eq('company_id', currentCompany.id)
           .gte('date', fromDate.toISOString().split('T')[0])
           .order('date', { ascending: false });
         if (!error && data) setEmployeeAttendance(data);
       };
       fetchEmployeeAttendance();
     }
-  }, [user, todayAttendance]);
+  }, [user, todayAttendance, currentCompany]);
+
+  const exportAttendanceReport = async () => {
+    try {
+      const { data: attendanceData, error } = await supabase
+        .from('attendance')
+        .select(`*, employees ( name, email, department, position )`)
+        .gte('date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+        .eq('company_id', currentCompany.id)
+        .order('date', { ascending: false });
+
+      if (error) {
+        toast({
+          title: "Export Failed",
+          description: "Failed to fetch attendance data",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const exportData = attendanceData.map(record => ({
+        'Date': record.date,
+        'Employee Name': record.employees?.name || 'Unknown',
+        'Email': record.employees?.email || 'Unknown',
+        'Department': record.employees?.department || 'Unknown',
+        'Position': record.employees?.position || 'Unknown',
+        'Status': record.status,
+        'Check In': record.check_in_time ? format(new Date(record.check_in_time), 'HH:mm') : '-',
+        'Check Out': record.check_out_time ? format(new Date(record.check_out_time), 'HH:mm') : '-',
+        'Working Hours': record.check_in_time && record.check_out_time 
+          ? calculateWorkingHours(record.check_in_time, record.check_out_time) 
+          : '-',
+        'Notes': record.notes || '-'
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'AttendanceReport');
+      XLSX.writeFile(wb, `attendance_report_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+
+      toast({
+        title: "Export Successful",
+        description: "Attendance report has been downloaded",
+      });
+    } catch (error) {
+      toast({
+        title: "Export Failed",
+        description: "An error occurred while exporting the report",
+        variant: "destructive"
+      });
+    }
+  };
 
   return (
     <div className="space-y-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">
-          {user?.role === 'employee' ? 'My Attendance' : 'Attendance Management'}
-        </h1>
-        <Button variant="outline">
+      {(!user || (user.role !== 'admin' && user.role !== 'super_admin')) ? (
+        <div className="p-8 text-center text-gray-500">
+          Attendance management is only available to admins and super admins.
+        </div>
+      ) : (
+        <>
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold">Attendance Management</h1>
+            <Button variant="outline" onClick={exportAttendanceReport}>
           <Download className="w-4 h-4 mr-2" />
           Export Report
         </Button>
       </div>
 
-      {/* Employee Tabs */}
-      {user?.role === 'employee' && (
-        <Tabs value={employeeTab} onValueChange={setEmployeeTab} className="w-full mb-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="today">Today</TabsTrigger>
-            <TabsTrigger value="calendar">Calendar</TabsTrigger>
-            <TabsTrigger value="history">History</TabsTrigger>
-            <TabsTrigger value="backdate">Backdate</TabsTrigger>
-          </TabsList>
-
-          {/* Today Tab */}
-          <TabsContent value="today">
-            {/* Quick Attendance Widget (existing) */}
-            <div>
-              <h2 className="text-xl font-semibold mb-2">Your Attendance</h2>
-              <Card className="border-2 border-blue-200 bg-blue-50">
-                <CardHeader className="text-center">
-                  <CardTitle className="flex items-center justify-center space-x-2 text-blue-800">
-                    <Clock className="w-6 h-6" />
-                    <span>Quick Attendance</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  {/* Status Display (existing) */}
-                  <div className="text-center">
-                    {!todayAttendance?.check_in_time ? (
-                      <div className="flex flex-col items-center space-y-2">
-                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-                          <Clock className="w-8 h-8 text-gray-400" />
-                        </div>
-                        <p className="text-gray-600">Not checked in today</p>
-                      </div>
-                    ) : isCheckedIn ? (
-                      <div className="flex flex-col items-center space-y-2">
-                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-                          <CheckCircle className="w-8 h-8 text-green-600" />
-                        </div>
-                        <p className="text-green-600 font-semibold">Checked In</p>
-                        <p className="text-sm text-gray-600">
-                          Since {format(new Date(todayAttendance.check_in_time), 'HH:mm')}
-                        </p>
-                        <p className="text-sm font-medium">Working: {getWorkingHours()}</p>
-                      </div>
-                    ) : isCheckedOut ? (
-                      <div className="flex flex-col items-center space-y-2">
-                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-                          <XCircle className="w-8 h-8 text-blue-600" />
-                        </div>
-                        <p className="text-blue-600 font-semibold">Day Completed</p>
-                        <p className="text-sm text-gray-600">
-                          {format(new Date(todayAttendance.check_in_time), 'HH:mm')} - {format(new Date(todayAttendance.check_out_time), 'HH:mm')}
-                        </p>
-                        <p className="text-sm font-medium">Total: {getWorkingHours()}</p>
-                      </div>
-                    ) : null}
-                  </div>
-                  {/* Action Button (existing) */}
-                  <div className="text-center">
-                    {!todayAttendance?.check_in_time ? (
-                      <Button
-                        onClick={handleCheckIn}
-                        disabled={isLoading}
-                        className="w-full gradient-primary text-white"
-                        size="lg"
-                      >
-                        <CheckCircle className="w-5 h-5 mr-2" />
-                        Check In
-                      </Button>
-                    ) : isCheckedIn ? (
-                      <Button
-                        onClick={handleCheckOut}
-                        disabled={isLoading}
-                        className="w-full bg-red-600 hover:bg-red-700 text-white"
-                        size="lg"
-                      >
-                        <XCircle className="w-5 h-5 mr-2" />
-                        Check Out
-                      </Button>
-                    ) : (
-                      <div className="p-4 bg-gray-50 rounded-lg">
-                        <p className="text-gray-600 text-sm">You have completed your day</p>
-                      </div>
-                    )}
-                  </div>
-                  {/* Location Info (existing) */}
-                  {location && (
-                    <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
-                      <MapPin className="w-4 h-4" />
-                      <span>Location recorded</span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          {/* Calendar Tab */}
-          <TabsContent value="calendar">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CalendarIcon className="w-5 h-5" />
-                  Attendance Calendar (Last 30 Days)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <AttendanceCalendar attendanceData={employeeAttendance} />
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* History Tab */}
-          <TabsContent value="history">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5" />
-                  Attendance History (Last 30 Days)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead>
-                      <tr>
-                        <th className="px-4 py-2 text-left">Date</th>
-                        <th className="px-4 py-2 text-left">Status</th>
-                        <th className="px-4 py-2 text-left">Check In</th>
-                        <th className="px-4 py-2 text-left">Check Out</th>
-                        <th className="px-4 py-2 text-left">Notes</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {employeeAttendance.map((rec) => (
-                        <tr key={rec.date} className="border-b">
-                          <td className="px-4 py-2">{format(new Date(rec.date), 'MMM dd, yyyy')}</td>
-                          <td className="px-4 py-2">{getStatusBadge(rec.status)}</td>
-                          <td className="px-4 py-2">{rec.check_in_time ? format(new Date(rec.check_in_time), 'HH:mm') : '-'}</td>
-                          <td className="px-4 py-2">{rec.check_out_time ? format(new Date(rec.check_out_time), 'HH:mm') : '-'}</td>
-                          <td className="px-4 py-2">{rec.notes || '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Backdate Tab */}
-          <TabsContent value="backdate">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Edit className="w-5 h-5" />
-                  Request Backdated Attendance
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    setSubmittingBackdateRequest(true);
-                    try {
-                      if (!backdateRequest.date || !backdateRequest.status) {
-                        toast({ title: 'Error', description: 'Date and status are required', variant: 'destructive' });
-                        return;
-                      }
-                      await supabase.from('attendance').upsert({
-                        employee_id: user.id,
-                        date: backdateRequest.date,
-                        status: backdateRequest.status,
-                        notes: backdateRequest.reason,
-                        pending_approval: true,
-                      });
-                      toast({ title: 'Request Submitted', description: 'Your backdated attendance request has been submitted for approval.' });
-                      setBackdateRequest({ date: '', status: '', reason: '' });
-                    } finally {
-                      setSubmittingBackdateRequest(false);
-                    }
-                  }}
-                  className="space-y-4"
-                >
-                  <div>
-                    <Label>Date</Label>
-                    <Input type="date" value={backdateRequest.date} onChange={e => setBackdateRequest(r => ({ ...r, date: e.target.value }))} />
-                  </div>
-                  <div>
-                    <Label>Status</Label>
-                    <Select value={backdateRequest.status} onValueChange={v => setBackdateRequest(r => ({ ...r, status: v }))}>
-                      <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="present">Present</SelectItem>
-                        <SelectItem value="absent">Absent</SelectItem>
-                        <SelectItem value="late">Late</SelectItem>
-                        <SelectItem value="half_day">Half Day</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Reason (optional)</Label>
-                    <Input type="text" value={backdateRequest.reason} onChange={e => setBackdateRequest(r => ({ ...r, reason: e.target.value }))} placeholder="Reason for backdated entry" />
-                  </div>
-                  <Button type="submit" disabled={submittingBackdateRequest || !backdateRequest.date || !backdateRequest.status} className="w-full">
-                    {submittingBackdateRequest ? 'Submitting...' : 'Submit Request'}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      )}
-
-      {/* Quick Attendance Widget (for admins/managers, fallback for employees) */}
-      {user?.role !== 'employee' && (
-        <div>
-          <h2 className="text-xl font-semibold mb-2">Your Attendance</h2>
-          <Card className="border-2 border-blue-200 bg-blue-50">
-            <CardHeader className="text-center">
-              <CardTitle className="flex items-center justify-center space-x-2 text-blue-800">
-                <Clock className="w-6 h-6" />
-                <span>Quick Attendance</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Status Display */}
-              <div className="text-center">
-                {!todayAttendance?.check_in_time ? (
-                  <div className="flex flex-col items-center space-y-2">
-                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-                      <Clock className="w-8 h-8 text-gray-400" />
-                    </div>
-                    <p className="text-gray-600">Not checked in today</p>
-                  </div>
-                ) : isCheckedIn ? (
-                  <div className="flex flex-col items-center space-y-2">
-                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-                      <CheckCircle className="w-8 h-8 text-green-600" />
-                    </div>
-                    <p className="text-green-600 font-semibold">Checked In</p>
-                    <p className="text-sm text-gray-600">
-                      Since {format(new Date(todayAttendance.check_in_time), 'HH:mm')}
-                    </p>
-                    <p className="text-sm font-medium">Working: {getWorkingHours()}</p>
-                  </div>
-                ) : isCheckedOut ? (
-                  <div className="flex flex-col items-center space-y-2">
-                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-                      <XCircle className="w-8 h-8 text-blue-600" />
-                    </div>
-                    <p className="text-blue-600 font-semibold">Day Completed</p>
-                    <p className="text-sm text-gray-600">
-                      {format(new Date(todayAttendance.check_in_time), 'HH:mm')} - {format(new Date(todayAttendance.check_out_time), 'HH:mm')}
-                    </p>
-                    <p className="text-sm font-medium">Total: {getWorkingHours()}</p>
-                  </div>
-                ) : null}
-              </div>
-
-              {/* Action Button */}
-              <div className="text-center">
-                {!todayAttendance?.check_in_time ? (
-                  <Button
-                    onClick={handleCheckIn}
-                    disabled={isLoading}
-                    className="w-full gradient-primary text-white"
-                    size="lg"
-                  >
-                    <CheckCircle className="w-5 h-5 mr-2" />
-                    Check In
-                  </Button>
-                ) : isCheckedIn ? (
-                  <Button
-                    onClick={handleCheckOut}
-                    disabled={isLoading}
-                    className="w-full bg-red-600 hover:bg-red-700 text-white"
-                    size="lg"
-                  >
-                    <XCircle className="w-5 h-5 mr-2" />
-                    Check Out
-                  </Button>
-                ) : (
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <p className="text-gray-600 text-sm">You have completed your day</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Location Info */}
-              {location && (
-                <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
-                  <MapPin className="w-4 h-4" />
-                  <span>Location recorded</span>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Mark Attendance for Employees (admin/super admin) */}
-      {user && (user.role === 'admin' || user.role === 'super_admin') && (
-        <div>
-          <h2 className="text-xl font-semibold mb-2">Mark Attendance for Employees</h2>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Users className="w-5 h-5" />
-                  Employee Attendance
-                </div>
-                {user.role === 'super_admin' && (
-                  <div className="flex items-center gap-2 text-sm text-purple-600 bg-purple-50 px-3 py-1 rounded-full">
-                    <Crown className="w-4 h-4" />
-                    Super Admin - Full Control
-                  </div>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="mb-4 flex flex-col items-start gap-2">
-                <label className="font-medium">Select Date</label>
-                <DatePicker
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={date => date && setSelectedDate(date)}
-                  className="border rounded-md"
-                />
-              </div>
-
-              {/* Super Admin Information */}
-              {user.role === 'super_admin' && (
-                <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
-                  <div className="flex items-start gap-2">
-                    <Crown className="w-4 h-4 text-purple-600 mt-0.5" />
-                    <div className="text-sm">
-                      <p className="font-medium text-purple-800 mb-1">Super Admin Privileges</p>
-                      <p className="text-purple-700">
-                        You can change any employee's attendance status from any status to any other status. 
-                        Use the "Change Status" button for administrative corrections and data management.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead>
-                    <tr>
-                      <th className="px-4 py-2 text-left">Name</th>
-                      <th className="px-4 py-2 text-left">Role</th>
-                      <th className="px-4 py-2 text-left">Status</th>
-                      <th className="px-4 py-2 text-left">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {employees.map(emp => {
-                      const canMark =
-                        user.role === 'super_admin' ||
-                        (user.role === 'admin' && emp.role !== 'super_admin' && emp.id !== user.id);
-                      const status = dateAttendanceMap[emp.id];
-                      const dateStr = selectedDate.toISOString().split('T')[0];
-                      return (
-                        <tr key={emp.id} className="border-b hover:bg-gray-50">
-                          <td className="px-4 py-2 font-medium">{emp.name}</td>
-                          <td className="px-4 py-2 capitalize">{emp.role.replace('_', ' ')}</td>
-                          <td className="px-4 py-2">{getStatusBadge(status)}</td>
-                          <td className="px-4 py-2 space-x-2">
-                            {canMark ? (
-                              <div className="flex flex-wrap gap-2">
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
-                                  disabled={marking === emp.id+'present'} 
-                                  onClick={() => markAttendanceForEmployee(emp.id, 'present')}
-                                >
-                                  Present
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
-                                  disabled={marking === emp.id+'absent'} 
-                                  onClick={() => markAttendanceForEmployee(emp.id, 'absent')}
-                                >
-                                  Absent
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
-                                  disabled={marking === emp.id+'late'} 
-                                  onClick={() => markAttendanceForEmployee(emp.id, 'late')}
-                                >
-                                  Late
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
-                                  disabled={marking === emp.id+'half_day'} 
-                                  onClick={() => markAttendanceForEmployee(emp.id, 'half_day')}
-                                >
-                                  Half Day
-                                </Button>
-                                {/* Super Admin Change Status Button */}
-                                {user.role === 'super_admin' && (
-                                  <Button 
-                                    size="sm" 
-                                    variant="secondary"
-                                    onClick={() => openStatusChangeModal(emp.id, emp.name, status || 'not_marked', dateStr)}
-                                    className="bg-purple-100 text-purple-700 hover:bg-purple-200 border-purple-300"
-                                  >
-                                    <Edit className="w-3 h-3 mr-1" />
-                                    Change Status
-                                  </Button>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-gray-400 text-xs">No permission</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Pending approvals for admins/super admins */}
-      {user && (user.role === 'admin' || user.role === 'super_admin') && pendingEntries.length > 0 && (
-        <Card className="mb-4">
-              <CardHeader>
-            <CardTitle>Pending Backdated Entries</CardTitle>
-              </CardHeader>
-              <CardContent>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
+          {/* Pending Approvals Section */}
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold mb-4">Pending Approvals</h2>
+            {pendingEntries.length === 0 ? (
+              <div className="text-gray-500">No pending approvals.</div>
+            ) : (
+              <table className="min-w-full divide-y divide-gray-200 mb-4">
                 <thead>
                   <tr>
                     <th className="px-4 py-2 text-left">Employee</th>
@@ -844,199 +498,121 @@ const AttendanceManagement: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {pendingEntries.map(entry => (
-                    <tr key={entry.id} className="border-b">
-                      <td className="px-4 py-2">{employees.find(e => e.id === entry.employee_id)?.name || entry.employee_id}</td>
-                      <td className="px-4 py-2">{entry.date}</td>
-                      <td className="px-4 py-2">{getStatusBadge(entry.status)}</td>
-                      <td className="px-4 py-2 space-x-2">
-                        <Button size="sm" variant="secondary" onClick={() => handleApprove(entry.id)}>Approve</Button>
-                        <Button size="sm" variant="destructive" onClick={() => handleReject(entry.id)}>Reject</Button>
-                      </td>
-                    </tr>
-                  ))}
+                  {pendingEntries.map((entry) => {
+                    const employee = employees.find(e => e.id === entry.employee_id);
+                    const canApprove = canApproveRequest(entry.requestor_role);
+                    return (
+                      <tr key={entry.id} className="border-b bg-gray-50 hover:bg-gray-100 transition-colors">
+                        <td className="px-4 py-2 font-medium text-gray-900">{employee ? employee.name : <span className="italic text-gray-400">Unknown</span>}</td>
+                        <td className="px-4 py-2 text-gray-700">{entry.date}</td>
+                        <td className="px-4 py-2">{getStatusBadge(entry.status)}</td>
+                        <td className="px-4 py-2 flex gap-2">
+                          <div className="relative group">
+                            <Button
+                              size="sm"
+                              onClick={() => handleApprove(entry.id)}
+                              className="bg-green-600 hover:bg-green-700 text-white shadow rounded-md border border-green-700 focus:ring-2 focus:ring-green-400 focus:outline-none transition"
+                              disabled={!canApprove}
+                            >
+                              Approve
+                            </Button>
+                            {!canApprove && (
+                              <span className="absolute left-1/2 -translate-x-1/2 top-full mt-1 w-max px-2 py-1 text-xs bg-gray-800 text-white rounded shadow opacity-0 group-hover:opacity-100 transition pointer-events-none z-10">
+                                You do not have permission to approve this request
+                              </span>
+                            )}
+                          </div>
+                          <div className="relative group">
+                            <Button
+                              size="sm"
+                              onClick={() => handleReject(entry.id)}
+                              className="bg-red-600 hover:bg-red-700 text-white shadow rounded-md border border-red-700 focus:ring-2 focus:ring-red-400 focus:outline-none transition"
+                              disabled={!canApprove}
+                            >
+                              Reject
+                            </Button>
+                            {!canApprove && (
+                              <span className="absolute left-1/2 -translate-x-1/2 top-full mt-1 w-max px-2 py-1 text-xs bg-gray-800 text-white rounded shadow opacity-0 group-hover:opacity-100 transition pointer-events-none z-10">
+                                You do not have permission to reject this request
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-      <Dialog open={showBackdateModal} onOpenChange={setShowBackdateModal}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Backdated Attendance/Leave Entry</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {/* Only admins/super_admins can select employee; others default to self */}
-            {user && (user.role === 'admin' || user.role === 'super_admin') ? (
-              <div>
-                <label className="block mb-1 font-medium">Employee</label>
-                <Select value={backdateForm.employeeId} onValueChange={v => setBackdateForm(f => ({ ...f, employeeId: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
-                  <SelectContent>
-                    {employees.map(emp => (
-                      <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : null}
-            <div>
-              <label className="block mb-1 font-medium">Date</label>
-              <Input type="date" value={backdateForm.date} onChange={e => setBackdateForm(f => ({ ...f, date: e.target.value }))} />
-            </div>
-            <div>
-              <label className="block mb-1 font-medium">Type</label>
-              <Select value={backdateForm.type} onValueChange={v => setBackdateForm(f => ({ ...f, type: v }))}>
-                <SelectTrigger><SelectValue /> </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="attendance">Attendance</SelectItem>
-                  <SelectItem value="leave">Leave</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="block mb-1 font-medium">Status</label>
-              <Select value={backdateForm.status} onValueChange={v => setBackdateForm(f => ({ ...f, status: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
-                <SelectContent>
-                  {backdateForm.type === 'attendance' ? (
-                    <>
-                      <SelectItem value="present">Present</SelectItem>
-                      <SelectItem value="absent">Absent</SelectItem>
-                      <SelectItem value="late">Late</SelectItem>
-                      <SelectItem value="half_day">Half Day</SelectItem>
-                    </>
-                  ) : (
-                    <>
-                      <SelectItem value="leave">Leave</SelectItem>
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button onClick={handleBackdateSubmit} disabled={submittingBackdate || !backdateForm.date || !backdateForm.status || (!backdateForm.employeeId && (user?.role === 'admin' || user?.role === 'super_admin'))} className="w-full">Submit for Approval</Button>
+            )}
           </div>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={showStatusChangeModal} onOpenChange={setShowStatusChangeModal}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Crown className="w-5 h-5 text-purple-600" />
-              Change Employee Status
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {/* Employee Info Display */}
-            <div className="p-3 bg-gray-50 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-gray-900">{statusChangeForm.employeeName}</p>
-                  <p className="text-sm text-gray-600">Employee</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium text-gray-900">
-                    Current: {statusChangeForm.currentStatus ? statusChangeForm.currentStatus.replace('_', ' ').toUpperCase() : 'Not Marked'}
-                  </p>
-                  <p className="text-xs text-gray-500">Status</p>
-                </div>
+
+          {/* Employee Attendance List Section */}
+          <div className="mb-8">
+            <div className="flex items-center gap-4 mb-4">
+              <h2 className="text-xl font-semibold">Employee Attendance</h2>
+              <div className="flex items-center gap-2">
+                <span className="text-gray-600">Date:</span>
+                <DatePicker
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={(date) => setSelectedDate(date as Date)}
+                  className="rounded border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-400"
+                  max={new Date()}
+                />
               </div>
             </div>
+            <table className="min-w-full divide-y divide-gray-200 mb-4">
+              <thead>
+                <tr>
+                  <th className="px-4 py-2 text-left">Employee</th>
+                  <th className="px-4 py-2 text-left">Status</th>
+                  <th className="px-4 py-2 text-left">Mark</th>
+                </tr>
+              </thead>
+              <tbody>
+                {employees.map((emp) => (
+                  <tr key={emp.id} className="border-b">
+                    <td className="px-4 py-2">{emp.name}</td>
+                    <td className="px-4 py-2">{getStatusBadge(dateAttendanceMap[emp.id])}</td>
+                    <td className="px-4 py-2 flex gap-2">
+                      <Button
+                        size="sm"
+                        className={`bg-green-600 hover:bg-green-700 text-white rounded shadow focus:ring-2 focus:ring-green-400 ${dateAttendanceMap[emp.id]==='present' ? 'ring-2 ring-green-500' : ''}`}
+                        onClick={() => markAttendanceForEmployee(emp.id, 'present')}
+                      >
+                        Present
+                      </Button>
+                      <Button
+                        size="sm"
+                        className={`bg-red-600 hover:bg-red-700 text-white rounded shadow focus:ring-2 focus:ring-red-400 ${dateAttendanceMap[emp.id]==='absent' ? 'ring-2 ring-red-500' : ''}`}
+                        onClick={() => markAttendanceForEmployee(emp.id, 'absent')}
+                      >
+                        Absent
+                      </Button>
+                      <Button
+                        size="sm"
+                        className={`bg-yellow-500 hover:bg-yellow-600 text-white rounded shadow focus:ring-2 focus:ring-yellow-300 ${dateAttendanceMap[emp.id]==='late' ? 'ring-2 ring-yellow-500' : ''}`}
+                        onClick={() => markAttendanceForEmployee(emp.id, 'late')}
+                      >
+                        Late
+                      </Button>
+                      <Button
+                        size="sm"
+                        className={`bg-blue-600 hover:bg-blue-700 text-white rounded shadow focus:ring-2 focus:ring-blue-400 ${dateAttendanceMap[emp.id]==='half_day' ? 'ring-2 ring-blue-500' : ''}`}
+                        onClick={() => markAttendanceForEmployee(emp.id, 'half_day')}
+                      >
+                        Half Day
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-            {/* New Status Selection */}
-            <div>
-              <Label className="text-sm font-medium">Change Status To</Label>
-              <Select 
-                value={statusChangeForm.newStatus} 
-                onValueChange={v => setStatusChangeForm(f => ({ ...f, newStatus: v }))}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Select new status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="present">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4 text-green-600" />
-                      Present
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="absent">
-                    <div className="flex items-center gap-2">
-                      <XCircle className="w-4 h-4 text-red-600" />
-                      Absent
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="late">
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-yellow-600" />
-                      Late
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="half_day">
-                    <div className="flex items-center gap-2">
-                      <Circle className="w-4 h-4 text-blue-600" />
-                      Half Day
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Date Selection */}
-            <div>
-              <Label className="text-sm font-medium">Date</Label>
-              <Input 
-                type="date" 
-                value={statusChangeForm.date} 
-                onChange={e => setStatusChangeForm(f => ({ ...f, date: e.target.value }))}
-                className="mt-1"
-              />
-            </div>
-
-            {/* Reason for Change */}
-            <div>
-              <Label className="text-sm font-medium">Reason for Change (Optional)</Label>
-              <Input 
-                type="text" 
-                value={statusChangeForm.reason} 
-                onChange={e => setStatusChangeForm(f => ({ ...f, reason: e.target.value }))}
-                placeholder="e.g., Administrative correction, system error, etc."
-                className="mt-1"
-              />
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-2 pt-2">
-              <Button 
-                variant="outline" 
-                onClick={() => setShowStatusChangeModal(false)}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button 
-                onClick={handleStatusChange} 
-                disabled={submittingStatusChange || !statusChangeForm.newStatus || !statusChangeForm.date}
-                className="flex-1 bg-purple-600 hover:bg-purple-700"
-              >
-                {submittingStatusChange ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                    Changing...
-                  </>
-                ) : (
-                  <>
-                    <Edit className="w-4 h-4 mr-2" />
-                    Change Status
+          {/* Status Change Modal and Backdate Modal can be added here if needed */}
                   </>
                 )}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

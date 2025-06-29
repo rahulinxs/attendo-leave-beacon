@@ -89,28 +89,20 @@ const LoginForm = () => {
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <div className="relative">
-                  <Input
-                    id="password"
+                <Input
+                  id="password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                     className="h-11 pr-10"
-                  />
+                />
                   <button
                     type="button"
-                    tabIndex={-1}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 focus:outline-none"
                     onClick={() => setShowPassword((v) => !v)}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs bg-gray-200 px-2 py-1 rounded"
                   >
-                    {showPassword ? (
-                      // Eye Off SVG
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-5.523 0-10-4.477-10-10 0-1.657.403-3.22 1.125-4.575m2.197-2.197A9.956 9.956 0 0112 3c5.523 0 10 4.477 10 10 0 2.21-.715 4.254-1.925 5.925M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3l18 18" /></svg>
-                    ) : (
-                      // Eye SVG
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                    )}
+                    EYE
                   </button>
                 </div>
               </div>
@@ -129,22 +121,19 @@ const LoginForm = () => {
                 )}
               </Button>
             </form>
-          </CardContent>
-        </Card>
-
-        {/* Demo Credentials */}
-        <Card className="border-0 shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-lg">Demo Credentials</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
+            {/* Demo Credentials (moved here, compact) */}
+            <div className="mt-4">
+              <div className="text-sm font-semibold mb-2 text-gray-700">Demo Credentials</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {demoCredentials.map((cred, index) => (
-              <div key={index} className="p-3 bg-gray-50 rounded-lg space-y-1">
-                <div className="font-medium text-sm text-gray-900">{cred.role}</div>
-                <div className="text-xs text-gray-600">Email: {cred.email}</div>
-                <div className="text-xs text-gray-600">Password: {cred.password}</div>
+                  <div key={index} className="p-2 bg-gray-50 rounded border text-xs flex flex-col gap-0.5">
+                    <span className="font-medium text-gray-800">{cred.role}</span>
+                    <span>Email: {cred.email}</span>
+                    <span>Password: {cred.password}</span>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
           </CardContent>
         </Card>
 
