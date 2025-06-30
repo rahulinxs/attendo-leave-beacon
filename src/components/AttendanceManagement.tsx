@@ -18,6 +18,8 @@ import { Calendar as DatePicker } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
 import * as XLSX from 'xlsx';
 import { useCompany } from '@/contexts/CompanyContext';
+import { useTheme } from '@/contexts/ThemeContext';
+import { THEME_OPTIONS } from '@/contexts/ThemeContext';
 
 const AttendanceManagement: React.FC = () => {
   const { user } = useAuth();
@@ -52,6 +54,8 @@ const AttendanceManagement: React.FC = () => {
   const [employeeTab, setEmployeeTab] = useState('today');
   const [backdateRequest, setBackdateRequest] = useState({ date: '', status: '', reason: '' });
   const [submittingBackdateRequest, setSubmittingBackdateRequest] = useState(false);
+  const { theme } = useTheme();
+  const themeClass = THEME_OPTIONS.find(t => t.key === theme)?.className || '';
 
   const getCurrentLocation = () => {
     if (navigator.geolocation) {
@@ -107,15 +111,15 @@ const AttendanceManagement: React.FC = () => {
   const getStatusBadge = (status: string | undefined) => {
     switch (status) {
       case 'present':
-        return <Badge className="bg-green-500 text-white flex items-center gap-1"><CheckCircle className="w-4 h-4 mr-1" /> Present</Badge>;
+        return <Badge className="bg-primary text-primary flex items-center gap-1"><CheckCircle className="w-4 h-4 mr-1" /> Present</Badge>;
       case 'absent':
-        return <Badge className="bg-red-500 text-white flex items-center gap-1"><XCircle className="w-4 h-4 mr-1" /> Absent</Badge>;
+        return <Badge className="bg-destructive text-destructive flex items-center gap-1"><XCircle className="w-4 h-4 mr-1" /> Absent</Badge>;
       case 'late':
-        return <Badge className="bg-yellow-500 text-white flex items-center gap-1"><Clock className="w-4 h-4 mr-1" /> Late</Badge>;
+        return <Badge className="bg-warning text-warning flex items-center gap-1"><Clock className="w-4 h-4 mr-1" /> Late</Badge>;
       case 'half_day':
-        return <Badge className="bg-blue-500 text-white flex items-center gap-1"><Circle className="w-4 h-4 mr-1" /> Half Day</Badge>;
+        return <Badge className="bg-secondary text-secondary flex items-center gap-1"><Circle className="w-4 h-4 mr-1" /> Half Day</Badge>;
       default:
-        return <Badge className="bg-gray-400 text-white flex items-center gap-1"><HelpCircle className="w-4 h-4 mr-1" /> Not Marked</Badge>;
+        return <Badge className="bg-muted text-muted flex items-center gap-1"><HelpCircle className="w-4 h-4 mr-1" /> Not Marked</Badge>;
     }
   };
 

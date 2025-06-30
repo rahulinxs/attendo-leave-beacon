@@ -33,6 +33,8 @@ import {
   UserMinus
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useTheme } from '@/contexts/ThemeContext';
+import { THEME_OPTIONS } from '@/contexts/ThemeContext';
 
 interface Team {
   id: string;
@@ -109,6 +111,12 @@ const TeamManagement: React.FC = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [addMemberTeamId, setAddMemberTeamId] = useState<string | null>(null);
   const [selectedAddMember, setSelectedAddMember] = useState<string>('');
+
+  // Add state to track selected stats card
+  const [selectedStat, setSelectedStat] = useState<string | null>(null);
+
+  const { theme } = useTheme();
+  const themeClass = THEME_OPTIONS.find(t => t.key === theme)?.className || '';
 
   const canManageTeams = ['admin', 'super_admin'].includes(user?.role || '');
 
@@ -337,6 +345,7 @@ const TeamManagement: React.FC = () => {
     return employees.filter(emp => emp.reporting_manager_id === managerId);
   };
 
+  // Filter employees based on filters
   const filteredEmployees = employees.filter(emp => {
     let match = true;
     if (filters.search) match = match && emp.name.toLowerCase().includes(filters.search.toLowerCase());
@@ -345,6 +354,20 @@ const TeamManagement: React.FC = () => {
     if (filters.department !== 'all') match = match && emp.department === filters.department;
     return match;
   });
+
+  // Only count teams with members
+  const teamsWithMembers = teams.filter(team => getTeamMembers(team.id).length > 0);
+
+  // Handlers for card clicks
+  const handleStatClick = (stat: string) => {
+    setSelectedStat(stat === selectedStat ? null : stat);
+  };
+
+  // Filtered data for each stat
+  const filteredTeams = selectedStat === 'teams' ? teamsWithMembers : teamsWithMembers;
+  const statFilteredEmployees = selectedStat === 'employees' ? employees : employees;
+  const filteredManagers = selectedStat === 'managers' ? getReportingManagers() : getReportingManagers();
+  const filteredUnassigned = selectedStat === 'unassigned' ? employees.filter(emp => !emp.team_id || !emp.reporting_manager_id) : employees.filter(emp => !emp.team_id || !emp.reporting_manager_id);
 
   const deleteTeam = async (teamId: string) => {
     setActionLoading(true);
@@ -399,13 +422,13 @@ const TeamManagement: React.FC = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <Users className="w-8 h-8 text-blue-600" />
+          <h1 className="font-bold text-foreground flex items-center gap-3">
+            <Users className="w-8 h-8 text-primary" />
             Team Management
           </h1>
-          <p className="text-gray-600 mt-1 flex items-center gap-2">
+          <p className="text-muted-foreground mt-1 flex items-center gap-2">
             Managing teams and reporting structure for 
-            <span className="font-medium text-blue-600 flex items-center gap-1">
+            <span className="font-medium text-primary flex items-center gap-1">
               <Building className="w-4 h-4" />
               {currentCompany.name}
             </span>
@@ -419,19 +442,19 @@ const TeamManagement: React.FC = () => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="border-l-4 border-blue-500">
+        <Card className={`${themeClass} card-theme border-l-4 border-primary cursor-pointer ${selectedStat === 'teams' ? 'ring-2 ring-primary' : ''}`} onClick={() => handleStatClick('teams')}>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Teams</p>
-                <p className="text-2xl font-bold text-blue-600">{teams.length}</p>
+                <p className="text-sm font-medium text-muted-foreground">Total Teams</p>
+                <p className="font-bold text-primary">{teamsWithMembers.length}</p>
               </div>
-              <Users className="w-10 h-10 text-blue-500" />
+              <Users className="w-10 h-10 text-primary" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-green-500">
+        <Card className={`${themeClass} card-theme border-l-4 border-green-500 cursor-pointer ${selectedStat === 'employees' ? 'ring-2 ring-green-400' : ''}`} onClick={() => handleStatClick('employees')}>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -443,7 +466,7 @@ const TeamManagement: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-purple-500">
+        <Card className={`${themeClass} card-theme border-l-4 border-purple-500 cursor-pointer ${selectedStat === 'managers' ? 'ring-2 ring-purple-400' : ''}`} onClick={() => handleStatClick('managers')}>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -455,14 +478,12 @@ const TeamManagement: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-orange-500">
+        <Card className={`${themeClass} card-theme border-l-4 border-orange-500 cursor-pointer ${selectedStat === 'unassigned' ? 'ring-2 ring-orange-400' : ''}`} onClick={() => handleStatClick('unassigned')}>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Unassigned</p>
-                <p className="text-2xl font-bold text-orange-600">
-                  {employees.filter(emp => !emp.team_id || !emp.reporting_manager_id).length}
-                </p>
+                <p className="text-2xl font-bold text-orange-600">{employees.filter(emp => !emp.team_id || !emp.reporting_manager_id).length}</p>
               </div>
               <UserCheck className="w-10 h-10 text-orange-500" />
             </div>
@@ -471,7 +492,7 @@ const TeamManagement: React.FC = () => {
       </div>
 
       {/* Unassigned Employees Card */}
-      <Card className="mb-6 border-l-4 border-orange-500">
+      <Card className={`${themeClass} card-theme mb-6 border-l-4 border-orange-500`}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <UserCheck className="w-5 h-5 text-orange-600" />
@@ -573,8 +594,8 @@ const TeamManagement: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {teams.map((team) => (
-              <Card key={team.id} className="hover:shadow-lg transition-shadow">
+            {filteredTeams.map((team) => (
+              <Card key={team.id} className={`${themeClass} card-theme hover:shadow-lg transition-shadow`}>
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between">
                     <span className="flex items-center gap-2">
@@ -774,14 +795,14 @@ const TeamManagement: React.FC = () => {
                     <tr className="border-b bg-gray-50">
                       <th className="text-left p-4 font-medium">Employee</th>
                       <th className="text-left p-4 font-medium">Department</th>
-                      <th className="text-left p-4 font-medium">Role</th>
+                      <th className="text-left p-4 font-medium">Position</th>
                       <th className="text-left p-4 font-medium">Team</th>
                       <th className="text-left p-4 font-medium">Reporting Manager</th>
                       <th className="text-left p-4 font-medium">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredEmployees.map((employee) => (
+                    {statFilteredEmployees.map((employee) => (
                       <tr key={employee.id} className="border-b hover:bg-gray-50">
                         <td className="p-4">
                           <div>
@@ -795,7 +816,7 @@ const TeamManagement: React.FC = () => {
                             employee.role === 'admin' ? 'destructive' :
                             employee.role === 'reporting_manager' ? 'default' : 'secondary'
                           }>
-                            {employee.role}
+                            {employee.position}
                           </Badge>
                         </td>
                         <td className="p-4">
@@ -895,14 +916,14 @@ const TeamManagement: React.FC = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {getReportingManagers().map(manager => (
+                  {filteredManagers.map(manager => (
                     <div key={manager.id} className="p-4 border rounded-lg">
                       <div className="flex items-center justify-between mb-3">
                         <div>
                           <h4 className="font-medium">{manager.name}</h4>
                           <p className="text-sm text-gray-600">{manager.department} • {manager.position}</p>
                         </div>
-                        <Badge variant="default">{manager.role}</Badge>
+                        <Badge variant="default">{manager.position}</Badge>
                       </div>
                       
                       <div className="space-y-2">
@@ -933,14 +954,14 @@ const TeamManagement: React.FC = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {employees.filter(emp => !emp.team_id || !emp.reporting_manager_id).map(emp => (
+                  {filteredUnassigned.map(emp => (
                     <div key={emp.id} className="flex items-center justify-between p-3 border rounded-lg">
                       <div>
                         <p className="font-medium">{emp.name}</p>
                         <p className="text-sm text-gray-600">{emp.department} • {emp.position}</p>
                       </div>
                       <div className="text-right">
-                        <Badge variant="secondary">{emp.role}</Badge>
+                        <Badge variant="secondary">{emp.position}</Badge>
                         <div className="text-xs text-gray-500 mt-1">
                           {!emp.team_id && 'No Team'}
                           {!emp.team_id && !emp.reporting_manager_id && ' • '}
@@ -949,7 +970,7 @@ const TeamManagement: React.FC = () => {
                       </div>
                     </div>
                   ))}
-                  {employees.filter(emp => !emp.team_id || !emp.reporting_manager_id).length === 0 && (
+                  {filteredUnassigned.length === 0 && (
                     <p className="text-center text-gray-500 py-8">All employees are properly assigned</p>
                   )}
                 </div>

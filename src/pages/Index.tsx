@@ -12,6 +12,7 @@ import ReportsAnalytics from '@/components/ReportsAnalytics';
 import HolidayManagement from '@/components/HolidayManagement';
 import SystemSettings from '@/components/SystemSettings';
 import EmployeeAttendance from '@/components/EmployeeAttendance';
+import Profile from '@/components/Profile';
 
 const Index = () => {
   const { user, isLoading } = useAuth();
@@ -100,30 +101,7 @@ const Index = () => {
       
       case 'profile':
         return (
-          <div className="glass-effect rounded-2xl p-8 border text-center">
-            <h2 className="text-2xl font-bold mb-4">Profile Settings</h2>
-            <div className="max-w-md mx-auto text-left">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Name</label>
-                  <p className="mt-1 text-sm text-gray-900">{user.name}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Email</label>
-                  <p className="mt-1 text-sm text-gray-900">{user.email}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Role</label>
-                  <p className="mt-1 text-sm text-gray-900 capitalize">{user.role.replace('_', ' ')}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Department</label>
-                  <p className="mt-1 text-sm text-gray-900">{user.department || 'Not assigned'}</p>
-                </div>
-              </div>
-            </div>
-            <p className="text-sm text-gray-500 mt-6">Profile editing feature coming soon...</p>
-          </div>
+          <Profile employeeId={user.id} />
         );
       
       case 'settings':

@@ -78,7 +78,7 @@
     --ring: 214 100% 59%;
   }
 
-  .theme-vibrant-blue {
+  :root.theme-vibrant-blue {
     --background: 210 100% 98%;
     --foreground: 222.2 84% 4.9%;
     --primary: 221 83% 53%;
@@ -92,7 +92,7 @@
     --card: 210 100% 98%;
     --card-foreground: 222.2 84% 4.9%;
   }
-  .theme-vibrant-green {
+  :root.theme-vibrant-green {
     --background: 138 76% 98%;
     --foreground: 142 71% 15%;
     --primary: 142 71% 45%;
@@ -106,7 +106,7 @@
     --card: 138 76% 98%;
     --card-foreground: 142 71% 15%;
   }
-  .theme-vibrant-purple {
+  :root.theme-vibrant-purple {
     --background: 270 100% 98%;
     --foreground: 271 91% 20%;
     --primary: 271 91% 65%;
@@ -120,7 +120,7 @@
     --card: 270 100% 98%;
     --card-foreground: 271 91% 20%;
   }
-  .theme-vibrant-orange {
+  :root.theme-vibrant-orange {
     --background: 24 100% 98%;
     --foreground: 24 100% 20%;
     --primary: 24 100% 50%;
@@ -141,10 +141,11 @@
     @apply border-border;
   }
 
-  body {
+  body, #root, .app-root {
     @apply bg-background text-foreground;
     font-family: var(--font-family);
     font-size: var(--font-size);
+    background: #fff !important;
   }
 }
 
@@ -258,5 +259,57 @@
 
   .nav-compact .nav-item {
     @apply px-2 py-1.5;
+  }
+
+  /* Card/Palette Theme Classes */
+  .theme-vibrant-blue {
+    --card-bg: #e3f0ff;
+    --card-text: #0a2540;
+  }
+  .theme-dark {
+    --card-bg: #23272f;
+    --card-text: #f5f6fa;
+  }
+  .theme-light {
+    --card-bg: #fff;
+    --card-text: #222;
+  }
+  .card-theme {
+    background: hsl(var(--card));
+    color: hsl(var(--card-foreground));
+    box-shadow: 0 4px 24px 0 rgba(0,0,0,0.10), 0 1.5px 6px 0 rgba(0,0,0,0.08);
+  }
+
+  .bg-background {
+    background-color: hsl(var(--background), #fff) !important;
+  }
+  .text-foreground {
+    color: hsl(var(--foreground), #222) !important;
+  }
+
+  /* Sidebar and Header Theme Classes */
+  .sidebar-theme {
+    background: var(--card-bg, #fff);
+    color: var(--card-text, #222);
+  }
+  .header-theme {
+    background: var(--card-bg, #fff);
+    color: var(--card-text, #222);
+  }
+
+  .bg-primary {
+    background-color: var(--primary, hsl(214,100%,59%)) !important;
+  }
+  .text-primary {
+    color: var(--primary, hsl(214,100%,59%)) !important;
+  }
+  .border-primary {
+    border-color: var(--primary, hsl(214,100%,59%)) !important;
+  }
+  .text-primary-foreground {
+    color: var(--primary-foreground, #fff) !important;
+  }
+  .bg-primary-foreground {
+    background-color: var(--primary-foreground, #fff) !important;
   }
 }

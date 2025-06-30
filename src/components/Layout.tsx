@@ -35,6 +35,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import CompanyLogo from './CompanyLogo';
+import { THEME_OPTIONS } from '@/contexts/ThemeContext';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -53,8 +54,9 @@ interface NavigationItem {
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => {
   const { user, logout } = useAuth();
   const { currentCompany } = useCompany();
-  const { sidebarPosition } = useTheme();
+  const { sidebarPosition, theme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const themeClass = THEME_OPTIONS.find(t => t.key === theme)?.className || '';
 
   // Enhanced navigation items with role-based access control
   const navigationItems: NavigationItem[] = [
@@ -202,16 +204,16 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+    <div className="min-h-screen">
       {/* Mobile Header */}
-      <div className="lg:hidden bg-white shadow-sm border-b">
+      <div className="lg:hidden header-theme shadow-sm border-b border-border">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center space-x-3">
             <CompanyLogo size="md" />
             <div className="flex flex-col">
-            <span className="font-bold text-lg">AttendEase</span>
+            <span className="font-bold">AttendEase</span>
               {currentCompany && (
-                <span className="text-xs text-gray-500 flex items-center gap-1">
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
                   <Building className="w-3 h-3" />
                   {currentCompany.name}
                 </span>
@@ -232,20 +234,21 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       <div className="flex">
         {/* Sidebar */}
         <div className={`
-          fixed inset-y-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out
+          fixed inset-y-0 z-50 w-64 transition-transform duration-200 ease-in-out transform lg:translate-x-0 lg:static lg:inset-0 ${themeClass} sidebar flex flex-col shadow-lg
           ${sidebarPosition === 'right' ? 'right-0' : 'left-0'}
           ${sidebarOpen ? 'translate-x-0' : 'translate-x-full'}
-          lg:relative lg:translate-x-0 lg:shadow-none
-        `}>
+        `}
+        style={{ background: 'hsl(var(--background))', color: 'hsl(var(--foreground))' }}
+        >
           <div className="flex flex-col h-full">
             {/* Sidebar Header */}
-            <div className="flex items-center justify-between p-3 border-b">
+            <div className="flex items-center justify-between p-3 border-b border-border header-theme">
               <div className="flex items-center space-x-2">
                 <CompanyLogo size="md" />
                 <div className="flex flex-col">
-                  <span className="font-bold text-base">AttendEase</span>
+                  <span className="font-bold">AttendEase</span>
                   {currentCompany && (
-                    <span className="text-xs text-gray-500 flex items-center gap-1">
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
                       <Building className="w-3 h-3" />
                       {currentCompany.name}
                     </span>
@@ -273,17 +276,18 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                     key={item.id}
                     onClick={() => onTabChange(item.id)}
                     className={`
-                      w-full flex items-center space-x-2 px-2 py-1.5 rounded-md text-left transition-colors text-sm
-                      ${isActive 
-                        ? 'bg-blue-100 text-blue-700 border border-blue-200' 
-                        : 'text-gray-700 hover:bg-gray-100'
+                      w-full flex items-center space-x-2 px-2 py-1.5 rounded-md text-left transition-colors
+                      ${isActive
+                        ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold'
+                        : 'hover:bg-[rgba(0,0,0,0.02)]'
                       }
                     `}
+                    style={{ color: 'var(--card-text)' }}
                   >
                     <Icon className="w-4 h-4" />
                     <span className="flex-1">{item.label}</span>
                     {item.requiresPermission && (
-                      <Lock className="w-3 h-3 text-gray-400" />
+                      <Lock className="w-3 h-3 text-muted-foreground" />
                     )}
                   </button>
                 );
@@ -291,17 +295,17 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
             </nav>
 
             {/* User Profile Section */}
-            <div className="p-3 border-t">
+            <div className="p-3 border-t border-border header-theme">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="w-full justify-between">
                     <div className="flex items-center space-x-2">
-                    <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
-                        <User className="w-3 h-3 text-blue-600" />
+                    <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center">
+                        <User className="w-3 h-3 text-primary" />
                     </div>
                       <div className="text-left">
                         <div className="font-medium text-xs">{user?.name || 'User'}</div>
-                        <div className="text-xs text-gray-500">{user?.email}</div>
+                        <div className="text-xs text-muted-foreground">{user?.email}</div>
                       </div>
                     </div>
                     <ChevronDown className="w-3 h-3" />
@@ -310,14 +314,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                 <DropdownMenuContent align="end" className="w-56">
                   <div className="px-3 py-2">
                     <div className="font-medium">{user?.name || 'User'}</div>
-                    <div className="text-sm text-gray-500">{user?.email}</div>
+                    <div className="text-sm text-muted-foreground">{user?.email}</div>
                     <div className="flex items-center gap-2 mt-2">
                       <Badge variant={getRoleBadgeVariant(user?.role || 'employee')}>
-                        {getRoleDisplayName(user?.role || 'employee')}
+                        {user?.position || getRoleDisplayName(user?.role || 'employee')}
                       </Badge>
                     </div>
                     {currentCompany && (
-                      <div className="flex items-center gap-2 mt-2 text-sm text-gray-500">
+                      <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
                         <Building className="w-3 h-3" />
                         {currentCompany.name}
                       </div>
