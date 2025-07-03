@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { THEME_OPTIONS } from '@/contexts/ThemeContext';
+import { OnboardingModal } from './OnboardingModal';
 
 interface DashboardProps {
   onNavigate?: (tab: string) => void;
@@ -42,6 +43,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     month: 'long', 
     day: 'numeric' 
   });
+  const [showOnboarding, setShowOnboarding] = useState(true);
 
   // Update clock every second
   useEffect(() => {
@@ -148,6 +150,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const attendanceStatus = getAttendanceStatus();
   const StatusIcon = attendanceStatus.icon;
 
+  if (currentCompany?.name === 'Unassigned') {
+    return (
+      <OnboardingModal open={showOnboarding} onClose={() => {}} />
+    );
+  }
+
   return (
     <div className="min-h-screen w-full flex flex-col items-stretch justify-start" style={{ background: '#fff' }}>
       <div className={`max-w-7xl mx-auto mb-8 p-6 md:p-10 rounded-3xl shadow-xl space-y-4 ${themeClass}`} style={{ background: 'hsl(var(--background))', color: 'hsl(var(--foreground))' }}>
@@ -172,236 +180,236 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
           </CardContent>
         </Card>
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* Quick Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <Card className={`${themeClass} card-theme card-hover border-0 shadow-lg`}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
                   <p className="text-sm font-medium text-muted-foreground">Today's Status</p>
-                  <div className="flex items-center mt-1">
+                <div className="flex items-center mt-1">
                     <StatusIcon className={`w-5 h-5 mr-2 text-primary`} />
                     <span className="font-bold text-foreground">{attendanceStatus.status}</span>
-                  </div>
-                  {todayAttendance?.check_in_time && (
-                    <p className="text-sm text-muted-foreground mt-1">
-                      at {new Date(todayAttendance.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  )}
                 </div>
+                {todayAttendance?.check_in_time && (
+                    <p className="text-sm text-muted-foreground mt-1">
+                    at {new Date(todayAttendance.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                )}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </CardContent>
+        </Card>
 
           <Card className={`${themeClass} card-theme card-hover border-0 shadow-lg`}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
                   <p className="text-sm font-medium text-muted-foreground">Working Hours</p>
-                  <div className="flex items-center mt-1">
+                <div className="flex items-center mt-1">
                     <Clock className="w-5 h-5 text-primary mr-2" />
                     <span className="font-bold text-foreground">
-                      {todayAttendance?.check_in_time && todayAttendance?.check_out_time 
-                        ? `${Math.round((new Date(todayAttendance.check_out_time).getTime() - new Date(todayAttendance.check_in_time).getTime()) / (1000 * 60 * 60) * 10) / 10}h`
-                        : todayAttendance?.check_in_time 
-                        ? `${Math.round((new Date().getTime() - new Date(todayAttendance.check_in_time).getTime()) / (1000 * 60 * 60) * 10) / 10}h`
-                        : '0h'
-                      }
-                    </span>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">Today</p>
+                    {todayAttendance?.check_in_time && todayAttendance?.check_out_time 
+                      ? `${Math.round((new Date(todayAttendance.check_out_time).getTime() - new Date(todayAttendance.check_in_time).getTime()) / (1000 * 60 * 60) * 10) / 10}h`
+                      : todayAttendance?.check_in_time 
+                      ? `${Math.round((new Date().getTime() - new Date(todayAttendance.check_in_time).getTime()) / (1000 * 60 * 60) * 10) / 10}h`
+                      : '0h'
+                    }
+                  </span>
                 </div>
+                  <p className="text-sm text-muted-foreground mt-1">Today</p>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </CardContent>
+        </Card>
 
           <Card className={`${themeClass} card-theme card-hover border-0 shadow-lg`}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
                   <p className="text-sm font-medium text-muted-foreground">Leave Balance</p>
-                  <div className="flex items-center mt-1">
+                <div className="flex items-center mt-1">
                     <Calendar className="w-5 h-5 text-primary mr-2" />
                     <span className="font-bold text-foreground">{totalLeaveBalance} days</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">Remaining</p>
                 </div>
+                  <p className="text-sm text-muted-foreground mt-1">Remaining</p>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </CardContent>
+        </Card>
 
           <Card className={`${themeClass} card-theme card-hover border-0 shadow-lg`}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
                   <p className="text-sm font-medium text-muted-foreground">Pending Requests</p>
-                  <div className="flex items-center mt-1">
+                <div className="flex items-center mt-1">
                     <AlertCircle className="w-5 h-5 text-primary mr-2" />
                     <span className="font-bold text-foreground">{pendingLeaveRequests}</span>
-                  </div>
+                </div>
                   <p className="text-sm text-muted-foreground mt-1">Leave request(s)</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card className={`${themeClass} card-theme border-0 shadow-lg`}>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center text-lg">
+                <Clock className="w-5 h-5 mr-2 text-primary" />
+              Recent Attendance
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {((recentAttendance || []).slice(0, 4)).map((record, index) => (
+                <div key={record.id} className="flex items-center justify-between p-2 rounded-lg">
+                <div className="flex items-center space-x-3">
+                  <div className={`w-3 h-3 rounded-full ${
+                    record.status === 'present' ? 'bg-green-500' : 
+                    record.status === 'holiday' ? 'bg-blue-500' : 'bg-red-500'
+                  }`} />
+                  <span className="font-medium">
+                    {index === 0 ? 'Today' : new Date(record.date).toLocaleDateString()}
+                  </span>
+                </div>
+                  <div className="text-right text-sm text-muted-foreground">
+                  <p>
+                    {record.check_in_time 
+                      ? new Date(record.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      : '-'
+                    } - {record.check_out_time 
+                      ? new Date(record.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      : index === 0 && record.check_in_time ? 'Active' : '-'
+                    }
+                  </p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Recent Activity */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Card className={`${themeClass} card-theme border-0 shadow-lg`}>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center text-lg">
-                <Clock className="w-5 h-5 mr-2 text-primary" />
-                Recent Attendance
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {((recentAttendance || []).slice(0, 4)).map((record, index) => (
-                <div key={record.id} className="flex items-center justify-between p-2 rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <div className={`w-3 h-3 rounded-full ${
-                      record.status === 'present' ? 'bg-green-500' : 
-                      record.status === 'holiday' ? 'bg-blue-500' : 'bg-red-500'
-                    }`} />
-                    <span className="font-medium">
-                      {index === 0 ? 'Today' : new Date(record.date).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <div className="text-right text-sm text-muted-foreground">
-                    <p>
-                      {record.check_in_time 
-                        ? new Date(record.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                        : '-'
-                      } - {record.check_out_time 
-                        ? new Date(record.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                        : index === 0 && record.check_in_time ? 'Active' : '-'
-                      }
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+            ))}
+          </CardContent>
+        </Card>
 
           <Card className={`${themeClass} card-theme border-0 shadow-lg`}>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center text-lg">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center text-lg">
                 <Calendar className="w-5 h-5 mr-2 text-primary" />
-                Leave Requests
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {((leaveRequests || []).slice(0, 3)).map((request) => (
+              Leave Requests
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {((leaveRequests || []).slice(0, 3)).map((request) => (
                 <div key={request.id} className="flex items-center justify-between p-2 rounded-lg">
-                  <div>
-                    <p className="font-medium">
-                      {new Date(request.start_date).toLocaleDateString()} - {new Date(request.end_date).toLocaleDateString()}
-                    </p>
+                <div>
+                  <p className="font-medium">
+                    {new Date(request.start_date).toLocaleDateString()} - {new Date(request.end_date).toLocaleDateString()}
+                  </p>
                     <p className="text-sm text-muted-foreground">
-                      {request.leave_types.name} • {request.total_days} day(s)
-                    </p>
-                  </div>
-                  <Badge variant={
-                    request.status === 'approved' ? 'default' : 
-                    request.status === 'pending' ? 'secondary' : 'destructive'
-                  }>
-                    {request.status}
-                  </Badge>
+                    {request.leave_types.name} • {request.total_days} day(s)
+                  </p>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
+                <Badge variant={
+                  request.status === 'approved' ? 'default' : 
+                  request.status === 'pending' ? 'secondary' : 'destructive'
+                }>
+                  {request.status}
+                </Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
 
-        {/* Admin/Manager Specific Section - Pending Leave Requests */}
-        {(['reporting_manager', 'admin', 'super_admin'].includes(user?.role || '') && ((pendingRequests || []).length > 0)) && (
+      {/* Admin/Manager Specific Section - Pending Leave Requests */}
+      {(['reporting_manager', 'admin', 'super_admin'].includes(user?.role || '') && ((pendingRequests || []).length > 0)) && (
           <Card className={`${themeClass} card-theme border-0 shadow-lg`}>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center text-lg">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center text-lg">
                 <AlertCircle className="w-5 h-5 mr-2 text-primary" />
-                Team Leave Requests Pending Approval
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {((pendingRequests || []).slice(0, 3)).map((request) => (
+              Team Leave Requests Pending Approval
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {((pendingRequests || []).slice(0, 3)).map((request) => (
                 <div key={request.id} className="flex items-center justify-between p-2 rounded-lg">
-                  <div>
-                    <p className="font-medium">{request.employees.name}</p>
+                <div>
+                  <p className="font-medium">{request.employees.name}</p>
                     <p className="text-sm text-muted-foreground">
-                      {request.leave_types.name} • {new Date(request.start_date).toLocaleDateString()} - {new Date(request.end_date).toLocaleDateString()} • {request.total_days} day(s)
-                    </p>
+                    {request.leave_types.name} • {new Date(request.start_date).toLocaleDateString()} - {new Date(request.end_date).toLocaleDateString()} • {request.total_days} day(s)
+                  </p>
                     <p className="text-sm text-muted-foreground mt-1">{request.reason}</p>
-                  </div>
-                  <div className="flex space-x-2">
-                    <Button 
-                      size="sm" 
-                      className="gradient-primary text-white border-0"
-                      onClick={() => handleApproveLeave(request.id)}
-                      disabled={leaveLoading}
-                    >
-                      Approve
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={() => handleRejectLeave(request.id)}
-                      disabled={leaveLoading}
-                    >
-                      Reject
-                    </Button>
-                  </div>
                 </div>
-              ))}
-              {((pendingRequests || []).length > 3) && (
-                <div className="text-center">
-                  <Button variant="outline" onClick={() => onNavigate?.('leave-management')}>
-                    View All Pending Requests ({(pendingRequests || []).length})
+                <div className="flex space-x-2">
+                  <Button 
+                    size="sm" 
+                    className="gradient-primary text-white border-0"
+                    onClick={() => handleApproveLeave(request.id)}
+                    disabled={leaveLoading}
+                  >
+                    Approve
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => handleRejectLeave(request.id)}
+                    disabled={leaveLoading}
+                  >
+                    Reject
                   </Button>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Quick Access for Admins/Managers */}
-        {(['admin', 'super_admin'].includes(user?.role || '') && (
-          <Card className={`${themeClass} card-theme border-0 shadow-lg`}>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center text-lg">
-                <Users className="w-5 h-5 mr-2 text-primary" />
-                Quick Admin Actions
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <Button 
-                  variant="outline" 
-                  className="justify-start"
-                  onClick={() => onNavigate?.('employees')}
-                >
-                  <Users className="w-4 h-4 mr-2" />
-                  Manage Employees
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="justify-start"
-                  onClick={() => onNavigate?.('leave-management')}
-                >
-                  <Calendar className="w-4 h-4 mr-2" />
-                  Leave Management
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="justify-start"
-                  onClick={() => onNavigate?.('reports')}
-                >
-                  <TrendingUp className="w-4 h-4 mr-2" />
-                  View Reports
+              </div>
+            ))}
+            {((pendingRequests || []).length > 3) && (
+              <div className="text-center">
+                <Button variant="outline" onClick={() => onNavigate?.('leave-management')}>
+                  View All Pending Requests ({(pendingRequests || []).length})
                 </Button>
               </div>
-            </CardContent>
-          </Card>
-        ))}
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Quick Access for Admins/Managers */}
+      {(['admin', 'super_admin'].includes(user?.role || '') && (
+          <Card className={`${themeClass} card-theme border-0 shadow-lg`}>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center text-lg">
+                <Users className="w-5 h-5 mr-2 text-primary" />
+              Quick Admin Actions
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Button 
+                variant="outline" 
+                className="justify-start"
+                onClick={() => onNavigate?.('employees')}
+              >
+                <Users className="w-4 h-4 mr-2" />
+                Manage Employees
+              </Button>
+              <Button 
+                variant="outline" 
+                className="justify-start"
+                onClick={() => onNavigate?.('leave-management')}
+              >
+                <Calendar className="w-4 h-4 mr-2" />
+                Leave Management
+              </Button>
+              <Button 
+                variant="outline" 
+                className="justify-start"
+                onClick={() => onNavigate?.('reports')}
+              >
+                <TrendingUp className="w-4 h-4 mr-2" />
+                View Reports
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
       </div>
     </div>
   );

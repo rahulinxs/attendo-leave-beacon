@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { Loader2, Building2, Users, Clock, UserPlus, LogIn } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
+import { supabase } from '@/lib/supabase';
 
 const Auth = () => {
   const [loginData, setLoginData] = useState({ email: '', password: '' });
@@ -16,11 +18,53 @@ const Auth = () => {
     password: '', 
     confirmPassword: '', 
     name: '', 
-    role: 'employee' as 'employee' | 'admin' 
+    role: 'admin' as 'employee' | 'admin' 
   });
-  const { login, signup, isLoading } = useAuth();
+  const { login, signup, isLoading, signupWithCompany, user } = useAuth();
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [showCompanyOnboarding, setShowCompanyOnboarding] = useState(false);
+  const [companyName, setCompanyName] = useState('');
+  const [companyLoading, setCompanyLoading] = useState(false);
+  const [onboardingSuccess, setOnboardingSuccess] = useState(false);
+  const [userCompanyName, setUserCompanyName] = useState<string | null>(null);
+
+  // Helper: fetch user's company name
+  const fetchUserCompanyName = async (userId: string) => {
+    // Try employees table first
+    let { data, error } = await supabase
+      .from('employees')
+      .select('company_id, company:company_id(name)')
+      .eq('user_id', userId)
+      .single();
+    if (!error && data?.company?.name) return data.company.name;
+    // Try profiles table as fallback
+    ({ data, error } = await supabase
+      .from('profiles')
+      .select('company_id, company:company_id(name)')
+      .eq('id', userId)
+      .single());
+    if (!error && data?.company?.name) return data.company.name;
+    return null;
+  };
+
+  // Show onboarding modal after login/signup if company is 'Unassigned'
+  useEffect(() => {
+    const checkCompany = async () => {
+      if (user) {
+        const companyName = await fetchUserCompanyName(user.id);
+        console.log('[Onboarding Debug] User:', user.id, 'Company:', companyName);
+        setUserCompanyName(companyName);
+        if (companyName === 'Unassigned' && !onboardingSuccess) {
+          setShowCompanyOnboarding(true);
+        } else {
+          setShowCompanyOnboarding(false);
+        }
+      }
+    };
+    checkCompany();
+    // eslint-disable-next-line
+  }, [user, onboardingSuccess]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,50 +96,72 @@ const Auth = () => {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!signupData.email || !signupData.password || !signupData.name) {
       toast({
         title: "Error",
         description: "Please fill in all required fields",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
-
     if (signupData.password !== signupData.confirmPassword) {
       toast({
         title: "Error",
         description: "Passwords do not match",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
-
-    if (signupData.password.length < 6) {
-      toast({
-        title: "Error",
-        description: "Password must be at least 6 characters long",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const result = await signup(signupData.email, signupData.password, signupData.name, signupData.role);
-    
-    if (!result.success) {
-      toast({
-        title: "Signup Failed",
-        description: result.error || "Failed to create account",
-        variant: "destructive"
-      });
+    const { success, error } = await signup(signupData.email, signupData.password, signupData.name, signupData.role);
+    if (success) {
+      // The onboarding modal should only be triggered by the useEffect after login/signup, based on the user's company name
     } else {
       toast({
-        title: "Account Created!",
-        description: "Please check your email to verify your account",
+        title: "Signup Failed",
+        description: error || "Unknown error",
+        variant: "destructive",
       });
-      // Reset form
-      setSignupData({ email: '', password: '', confirmPassword: '', name: '', role: 'employee' });
     }
+  };
+
+  const handleCompanyCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!companyName) return;
+    setCompanyLoading(true);
+    try {
+      // 1. Insert new company
+      const { data: company, error: companyError } = await supabase
+        .from('companies')
+        .insert([{ name: companyName }])
+        .select()
+        .single();
+      if (companyError) throw companyError;
+
+      // 2. Update user in employees table
+      const { error: empError } = await supabase
+        .from('employees')
+        .update({ company_id: company.id, role: signupData.role })
+        .eq('user_id', user.id);
+      if (empError) throw empError;
+
+      // 3. Update user in profiles table (if exists)
+      await supabase
+        .from('profiles')
+        .update({ company_id: company.id, role: signupData.role })
+        .eq('id', user.id);
+
+      setOnboardingSuccess(true);
+      setTimeout(() => {
+        setShowCompanyOnboarding(false);
+        setOnboardingSuccess(false);
+        setCompanyName('');
+        setUserCompanyName(company.name);
+      }, 1500);
+      toast({ title: 'Success', description: 'Company created and profile updated!', variant: 'default' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to create company', variant: 'destructive' });
+    }
+    setCompanyLoading(false);
   };
 
   return (
@@ -305,6 +371,42 @@ const Auth = () => {
             <p className="text-xs text-gray-600">Enterprise Ready</p>
           </div>
         </div>
+
+        {/* Post-signup onboarding modal */}
+        <Dialog open={showCompanyOnboarding} onOpenChange={() => {}}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create Your Company</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleCompanyCreate} className="space-y-4">
+              <input
+                type="text"
+                placeholder="Company Name"
+                value={companyName}
+                onChange={e => setCompanyName(e.target.value)}
+                className="w-full border rounded px-3 py-2"
+                required
+                disabled={companyLoading || onboardingSuccess}
+              />
+              <button
+                type="submit"
+                className="bg-primary text-primary-foreground px-6 py-2 rounded hover:bg-primary/80 disabled:opacity-50 flex items-center justify-center"
+                disabled={companyLoading || onboardingSuccess}
+              >
+                {companyLoading ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating...</>
+                ) : onboardingSuccess ? (
+                  <span>Success! 🎉</span>
+                ) : (
+                  'Create Company'
+                )}
+              </button>
+              {onboardingSuccess && (
+                <div className="text-green-600 text-center font-semibold mt-2">Company created! Redirecting...</div>
+              )}
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

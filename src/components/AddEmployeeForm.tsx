@@ -32,6 +32,8 @@ interface AddEmployeeFormProps {
   onCancel: () => void;
 }
 
+const DEFAULT_MANAGER_ID = '385fe928-0d70-4adc-9d4e-c11548e52f4f';
+
 const AddEmployeeForm: React.FC<AddEmployeeFormProps> = ({ onSuccess, onCancel }) => {
   const { user } = useAuth();
   const { currentCompany } = useCompany();
@@ -62,7 +64,7 @@ const AddEmployeeForm: React.FC<AddEmployeeFormProps> = ({ onSuccess, onCancel }
     };
     fetchData();
   }, [currentCompany]);
-
+  
   const form = useForm<AddEmployeeForm>({
     resolver: zodResolver(addEmployeeSchema),
     defaultValues: {
@@ -100,7 +102,10 @@ const AddEmployeeForm: React.FC<AddEmployeeFormProps> = ({ onSuccess, onCancel }
       const payload = {
         ...data,
         team_id: data.team_id === 'no_team' ? null : data.team_id || null,
-        reporting_manager_id: data.reporting_manager_id === 'no_manager' ? null : data.reporting_manager_id || null,
+        reporting_manager_id:
+          data.reporting_manager_id === 'no_manager' || !data.reporting_manager_id
+            ? DEFAULT_MANAGER_ID
+            : data.reporting_manager_id,
         hire_date: data.hire_date || null,
         is_active: data.is_active,
       };
@@ -178,63 +183,63 @@ const AddEmployeeForm: React.FC<AddEmployeeFormProps> = ({ onSuccess, onCancel }
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="role"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Role</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select role" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="employee">Employee</SelectItem>
-                    <SelectItem value="reporting_manager">Reporting Manager</SelectItem>
-                    {user?.role === 'super_admin' && (
-                      <>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="super_admin">Super Admin</SelectItem>
-                      </>
-                    )}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="department"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Department (Optional)</FormLabel>
+        <FormField
+          control={form.control}
+          name="role"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Role</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <FormControl>
-                  <Input placeholder="Enter department" {...field} />
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
                 </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                <SelectContent>
+                  <SelectItem value="employee">Employee</SelectItem>
+                  <SelectItem value="reporting_manager">Reporting Manager</SelectItem>
+                  {user?.role === 'super_admin' && (
+                    <>
+                    <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="super_admin">Super Admin</SelectItem>
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="department"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Department (Optional)</FormLabel>
+              <FormControl>
+                <Input placeholder="Enter department" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="position"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Position (Optional)</FormLabel>
-                <FormControl>
-                  <Input placeholder="Enter position" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+        <FormField
+          control={form.control}
+          name="position"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Position (Optional)</FormLabel>
+              <FormControl>
+                <Input placeholder="Enter position" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
           <FormField
             control={form.control}

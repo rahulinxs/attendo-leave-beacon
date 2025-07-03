@@ -16,6 +16,8 @@ interface CompanyContextType {
   loading: boolean;
   setCurrentCompany: (company: Company | null) => void;
   refreshCompanies: () => Promise<void>;
+  createCompany: (name: string, domain: string) => Promise<Company | null>;
+  enrollUserInCompany: (userId: string, companyId: string) => Promise<boolean>;
 }
 
 const CompanyContext = createContext<CompanyContextType | undefined>(undefined);
@@ -54,6 +56,19 @@ export const CompanyProvider: React.FC<CompanyProviderProps> = ({ children }) =>
       return [];
     }
     try {
+      // If platform_super_admin, fetch all companies
+      if (user.platform_super_admin) {
+        const { data: allCompanies, error: allCompaniesError } = await supabase
+          .from('companies')
+          .select('*');
+        if (allCompaniesError || !allCompanies) {
+          console.error('[CompanyContext] Error fetching all companies:', allCompaniesError);
+          setCompanies([]);
+          return [];
+        }
+        setCompanies(allCompanies);
+        return allCompanies;
+      }
       // Get the user's company ID from the profile
       const { data: userProfile } = await supabase
         .from('employees')
@@ -91,6 +106,56 @@ export const CompanyProvider: React.FC<CompanyProviderProps> = ({ children }) =>
 
   const refreshCompanies = async () => {
     await fetchCompanies();
+  };
+
+  const createCompany = async (name: string, domain: string): Promise<Company | null> => {
+    try {
+      // Step 1: Log current user
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      console.log('[CompanyContext] Current user before createCompany:', user);
+      console.log('[CompanyContext] Auth error:', authError);
+
+      // Step 2: Attempt insert and log error
+      console.log('Inserting company:', { name, domain });
+      const { data, error } = await supabase
+        .from('companies')
+        .insert([{ name, domain }])
+        .select('*')
+        .single();
+
+      if (error) {
+        console.error('[CompanyContext] Supabase error creating company:', error);
+        return null;
+      }
+
+      if (!data) {
+        console.error('[CompanyContext] No data returned after inserting company.');
+        return null;
+      }
+
+      return data as Company;
+    } catch (err) {
+      console.error('[CompanyContext] Exception creating company:', err);
+      return null;
+    }
+  };
+
+  const enrollUserInCompany = async (userId: string, companyId: string): Promise<boolean> => {
+    try {
+      // Update the employee's company_id
+      const { error } = await supabase
+        .from('employees')
+        .update({ company_id: companyId })
+        .eq('id', userId);
+      if (error) {
+        console.error('[CompanyContext] Error enrolling user in company:', error);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error('[CompanyContext] Exception enrolling user in company:', err);
+      return false;
+    }
   };
 
   useEffect(() => {
@@ -182,6 +247,8 @@ export const CompanyProvider: React.FC<CompanyProviderProps> = ({ children }) =>
     loading,
     setCurrentCompany,
     refreshCompanies,
+    createCompany,
+    enrollUserInCompany,
   };
 
   return (

@@ -419,16 +419,16 @@ const ReportsAnalytics = () => {
 
       // Fetch all attendance and leave records for the company and date
       const { data: attendanceData, error: attendanceError } = await supabase
-        .from('attendance')
+          .from('attendance')
         .select('*')
-        .eq('company_id', currentCompany.id)
+          .eq('company_id', currentCompany.id)
         .eq('date', selectedDate.toISOString().split('T')[0]);
       if (attendanceError) throw attendanceError;
 
       const { data: leaveData, error: leaveError } = await supabase
-        .from('leave_requests')
+          .from('leave_requests')
         .select('*')
-        .eq('company_id', currentCompany.id)
+          .eq('company_id', currentCompany.id)
         .eq('start_date', selectedDate.toISOString().split('T')[0]);
       if (leaveError) throw leaveError;
 
@@ -997,54 +997,54 @@ const ReportsAnalytics = () => {
                       {filteredEmployees.length === 0 && (
                         <div className="text-red-500 font-bold">[DEBUG] No employees found for this team.</div>
                       )}
-                      <div className="rounded-md border">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
+                    <div className="rounded-md border">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Leave Type</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check In</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check Out</th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {filteredAttendance.map((record, index) => (
-                              <tr key={record.employeeId} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                <td 
-                                  className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 hover:text-blue-800 cursor-pointer"
-                                  onClick={() => handleEmployeeClick(record.employeeId)}
-                                >
-                                  {record.employeeName}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Leave Type</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check In</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check Out</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {filteredAttendance.map((record, index) => (
+                            <tr key={record.employeeId} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                              <td 
+                                className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 hover:text-blue-800 cursor-pointer"
+                                onClick={() => handleEmployeeClick(record.employeeId)}
+                              >
+                                {record.employeeName}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                   {teams.find(t => t.id === record.team_id)?.name || 'Unassigned'}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                  <Badge variant={
-                                    record.status === 'present' ? 'default' :
-                                    record.status === 'late' ? 'secondary' :
-                                    record.status === 'leave' ? 'secondary' :
-                                    'destructive'
-                                  }>
-                                    {record.status}
-                                  </Badge>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                  {record.leaveType || '-'}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                  {record.checkIn ? new Date(record.checkIn).toLocaleTimeString() : '-'}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                  {record.checkOut ? new Date(record.checkOut).toLocaleTimeString() : '-'}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                <Badge variant={
+                                  record.status === 'present' ? 'default' :
+                                  record.status === 'late' ? 'secondary' :
+                                  record.status === 'leave' ? 'secondary' :
+                                  'destructive'
+                                }>
+                                  {record.status}
+                                </Badge>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {record.leaveType || '-'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {record.checkIn ? new Date(record.checkIn).toLocaleTimeString() : '-'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {record.checkOut ? new Date(record.checkOut).toLocaleTimeString() : '-'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                     </>
                   )}
                 </CardContent>

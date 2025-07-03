@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import CompanyLogo from './CompanyLogo';
 import { THEME_OPTIONS } from '@/contexts/ThemeContext';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -53,7 +54,7 @@ interface NavigationItem {
 
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => {
   const { user, logout } = useAuth();
-  const { currentCompany } = useCompany();
+  const { currentCompany, companies, setCurrentCompany } = useCompany();
   const { sidebarPosition, theme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const themeClass = THEME_OPTIONS.find(t => t.key === theme)?.className || '';
@@ -212,11 +213,30 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
             <CompanyLogo size="md" />
             <div className="flex flex-col">
             <span className="font-bold">AttendEase</span>
-              {currentCompany && (
-                <span className="text-xs text-muted-foreground flex items-center gap-1">
+              {user?.platform_super_admin && companies.length > 1 ? (
+                <Select
+                  value={currentCompany?.id || ''}
+                  onValueChange={id => {
+                    const selected = companies.find(c => c.id === id);
+                    if (selected) setCurrentCompany(selected);
+                  }}
+                >
+                  <SelectTrigger className="w-full text-xs">
+                    <SelectValue placeholder="Select Company" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {companies.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                currentCompany && (
+                  <span className="text-xs text-muted-foreground flex items-center gap-1">
                   <Building className="w-3 h-3" />
                   {currentCompany.name}
                 </span>
+                )
               )}
             </div>
           </div>
@@ -247,11 +267,30 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                 <CompanyLogo size="md" />
                 <div className="flex flex-col">
                   <span className="font-bold">AttendEase</span>
-                  {currentCompany && (
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                  {user?.platform_super_admin && companies.length > 1 ? (
+                    <Select
+                      value={currentCompany?.id || ''}
+                      onValueChange={id => {
+                        const selected = companies.find(c => c.id === id);
+                        if (selected) setCurrentCompany(selected);
+                      }}
+                    >
+                      <SelectTrigger className="w-full text-xs">
+                        <SelectValue placeholder="Select Company" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {companies.map(c => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    currentCompany && (
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
                       <Building className="w-3 h-3" />
                       {currentCompany.name}
                     </span>
+                    )
                   )}
                 </div>
               </div>
@@ -277,7 +316,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                     onClick={() => onTabChange(item.id)}
                     className={`
                       w-full flex items-center space-x-2 px-2 py-1.5 rounded-md text-left transition-colors
-                      ${isActive
+                      ${isActive 
                         ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold'
                         : 'hover:bg-[rgba(0,0,0,0.02)]'
                       }

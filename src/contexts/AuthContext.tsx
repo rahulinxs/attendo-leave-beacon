@@ -9,6 +9,7 @@ interface User {
   role: 'employee' | 'reporting_manager' | 'admin' | 'super_admin';
   department?: string;
   position?: string;
+  platform_super_admin?: boolean;
 }
 
 interface AuthContextType {
@@ -18,6 +19,14 @@ interface AuthContextType {
   signup: (email: string, password: string, name: string, role?: 'employee' | 'reporting_manager' | 'admin') => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   isLoading: boolean;
+  signupWithCompany: (
+    email: string,
+    password: string,
+    name: string,
+    companyName: string,
+    role?: 'employee' | 'admin'
+  ) => Promise<{ success: boolean; error?: string }>;
+  platform_super_admin?: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -101,6 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: profile.role as 'employee' | 'reporting_manager' | 'admin' | 'super_admin',
           department: profile.department,
           position: profile.position,
+          platform_super_admin: profile.platform_super_admin || false,
         });
       } else {
         console.log('No profile found for user:', userId);
@@ -203,8 +213,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     sessionStorage.clear();
   };
 
+  const signupWithCompany = async (
+    email: string,
+    password: string,
+    name: string,
+    companyName: string,
+    role: 'employee' | 'admin' = 'admin'
+  ): Promise<{ success: boolean; error?: string }> => {
+    setIsLoading(true);
+    try {
+      // 1. Create company
+      const { data: companyData, error: companyError } = await supabase
+        .from('companies')
+        .insert([{ name: companyName }])
+        .select()
+        .single();
+      if (companyError || !companyData) {
+        setIsLoading(false);
+        return { success: false, error: companyError?.message || 'Failed to create company' };
+      }
+      // 2. Sign up user
+      const redirectUrl = `${window.location.origin}/`;
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectUrl,
+          data: {
+            name,
+            role,
+          }
+        }
+      });
+      if (authError || !authData.user) {
+        setIsLoading(false);
+        return { success: false, error: authError?.message || 'Failed to create user' };
+      }
+      // 3. Create employee profile
+      const { error: profileError } = await supabase
+        .from('employees')
+        .insert([{
+          id: authData.user.id,
+          email,
+          name,
+          company_id: companyData.id,
+          role,
+        }]);
+      if (profileError) {
+        setIsLoading(false);
+        return { success: false, error: profileError.message };
+      }
+      setIsLoading(false);
+      return { success: true };
+    } catch (error: any) {
+      setIsLoading(false);
+      return { success: false, error: error.message || 'An unexpected error occurred' };
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, session, login, signup, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, session, login, signup, logout, isLoading, signupWithCompany, platform_super_admin: user?.platform_super_admin || false }}>
       {children}
     </AuthContext.Provider>
   );
