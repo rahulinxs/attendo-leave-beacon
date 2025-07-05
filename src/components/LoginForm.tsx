@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { Loader2, Building2, Users, Clock } from 'lucide-react';
+import { APP_NAME, APP_TAGLINE } from "../branding";
 
 const LoginForm = () => {
   const [email, setEmail] = useState('');
@@ -58,10 +59,10 @@ const LoginForm = () => {
             <Building2 className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900">
-            AttendEase
+            {APP_NAME}
           </h1>
           <p className="text-gray-600">
-            Smart Attendance & Leave Management
+            {APP_TAGLINE}
           </p>
         </div>
 

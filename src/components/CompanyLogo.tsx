@@ -1,5 +1,6 @@
 import React from 'react';
 import { Building2 } from 'lucide-react';
+import { APP_NAME, APP_TAGLINE } from "../branding";
 
 interface CompanyLogoProps {
   size?: 'sm' | 'md' | 'lg';
@@ -28,8 +29,8 @@ const CompanyLogo: React.FC<CompanyLogoProps> = ({
     <div className={`flex items-center space-x-3 ${className}`}>
       <div className={`${sizeClasses[size]} flex items-center justify-center`}>
         <img 
-          src="https://images.squarespace-cdn.com/content/v1/5dbf48651ece6c59d3759a0f/1574036911051-VK4VVW36OZ6DL5LZLKHL/logohighres.jpg?format=500w" 
-          alt="Company Logo" 
+          src="/attendedge-logo.png" 
+          alt="AttendEdge Logo" 
           className="w-full h-full object-contain"
           onError={(e) => {
             // Fallback to icon if logo fails to load
@@ -52,8 +53,8 @@ const CompanyLogo: React.FC<CompanyLogoProps> = ({
       </div>
       {showText && (
         <div>
-          <h1 className="font-bold text-xl text-gray-900">AttendEase</h1>
-          <p className="text-sm text-gray-500">Management System</p>
+          <h1 className="font-bold text-xl text-gray-900">{APP_NAME}</h1>
+          <p className="text-sm text-gray-500">{APP_TAGLINE}</p>
         </div>
       )}
     </div>

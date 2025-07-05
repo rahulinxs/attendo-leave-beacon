@@ -37,6 +37,7 @@ import {
 import CompanyLogo from './CompanyLogo';
 import { THEME_OPTIONS } from '@/contexts/ThemeContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { APP_NAME } from "../branding";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -212,7 +213,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
           <div className="flex items-center space-x-3">
             <CompanyLogo size="md" />
             <div className="flex flex-col">
-            <span className="font-bold">AttendEase</span>
+            <span className="font-bold">{APP_NAME}</span>
               {user?.platform_super_admin && companies.length > 1 ? (
                 <Select
                   value={currentCompany?.id || ''}
@@ -266,7 +267,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
               <div className="flex items-center space-x-2">
                 <CompanyLogo size="md" />
                 <div className="flex flex-col">
-                  <span className="font-bold">AttendEase</span>
+                  <span className="font-bold">{APP_NAME}</span>
                   {user?.platform_super_admin && companies.length > 1 ? (
                     <Select
                       value={currentCompany?.id || ''}

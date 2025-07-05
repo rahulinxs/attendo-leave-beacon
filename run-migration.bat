@@ -1,6 +1,6 @@
 @echo off
 echo ========================================
-echo    AttendEase Migration Runner
+echo    AttendEdge Migration Runner
 echo ========================================
 echo.
 echo This will help you run the companies migration.

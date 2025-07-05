@@ -1,6 +1,6 @@
 @echo off
 echo ========================================
-echo   AttendEase Supabase Migration Runner
+echo   AttendEdge Supabase Migration Runner
 echo ========================================
 echo.
 

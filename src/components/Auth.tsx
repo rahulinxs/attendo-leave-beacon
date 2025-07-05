@@ -10,6 +10,7 @@ import { toast } from '@/hooks/use-toast';
 import { Loader2, Building2, Users, Clock, UserPlus, LogIn } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { supabase } from '@/lib/supabase';
+import { APP_NAME, APP_TAGLINE } from "../branding";
 
 const Auth = () => {
   const [loginData, setLoginData] = useState({ email: '', password: '' });
@@ -173,10 +174,10 @@ const Auth = () => {
             <Building2 className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900">
-            AttendEase
+            {APP_NAME}
           </h1>
           <p className="text-gray-600">
-            Smart Attendance & Leave Management
+            {APP_TAGLINE}
           </p>
         </div>
 
