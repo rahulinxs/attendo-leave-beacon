@@ -3,16 +3,15 @@ import { supabase } from './supabase';
 
 export interface Employee {
   id: string;
-  employee_id: string;
-  first_name: string;
-  last_name: string;
   email: string;
-  position: string;
+  name: string;
+  role: string;
   department: string;
-  status: string;
-  joining_date: string;
-  company_id?: string;
-  team_id?: string;
+  position: string;
+  hire_date: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export const useEmployees = () => {
@@ -28,7 +27,7 @@ export const useEmployees = () => {
       const { data, error: fetchError } = await supabase
         .from('employees')
         .select('*')
-        .order('first_name', { ascending: true });
+        .order('name', { ascending: true });
 
       if (fetchError) {
         throw fetchError;
@@ -72,7 +71,7 @@ export const useEmployees = () => {
     }
   };
 
-  const createEmployee = async (employeeData: Omit<Employee, 'id'>): Promise<Employee | null> => {
+  const createEmployee = async (employeeData: Omit<Employee, 'id' | 'created_at' | 'updated_at'>): Promise<Employee | null> => {
     try {
       setLoading(true);
       setError(null);
@@ -164,8 +163,8 @@ export const useEmployees = () => {
       const { data, error: searchError } = await supabase
         .from('employees')
         .select('*')
-        .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,email.ilike.%${query}%`)
-        .order('first_name', { ascending: true });
+        .or(`name.ilike.%${query}%,email.ilike.%${query}%`)
+        .order('name', { ascending: true });
 
       if (searchError) {
         throw searchError;

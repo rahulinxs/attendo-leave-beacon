@@ -26,7 +26,7 @@ export default function HolidayManagementScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'past'>('all');
-  const { userProfile } = useUserProfile();
+  const { profileData } = useUserProfile();
 
   const loadHolidays = async () => {
     try {
@@ -132,7 +132,7 @@ export default function HolidayManagementScreen({ navigation }: any) {
     loadHolidays();
   }, []);
 
-  const canManageHolidays = userProfile?.role === 'admin' || userProfile?.role === 'super_admin';
+  const canManageHolidays = profileData?.profile?.role === 'admin' || profileData?.profile?.role === 'super_admin';
 
   if (!canManageHolidays) {
     return (

@@ -14,21 +14,22 @@ import { useUserProfile } from '../lib/useUserProfile';
 
 interface Employee {
   id: string;
-  employee_id: string;
-  first_name: string;
-  last_name: string;
   email: string;
-  position: string;
+  name: string;
+  role: string;
   department: string;
-  status: string;
-  joining_date: string;
+  position: string;
+  hire_date: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export default function EmployeeManagementScreen({ navigation }: any) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const { userProfile } = useUserProfile();
+  const { profileData } = useUserProfile();
   const { getEmployees, deleteEmployee } = useEmployees();
 
   const loadEmployees = async () => {
@@ -88,7 +89,7 @@ export default function EmployeeManagementScreen({ navigation }: any) {
     loadEmployees();
   }, []);
 
-  const canManageEmployees = userProfile?.role === 'admin' || userProfile?.role === 'super_admin';
+  const canManageEmployees = profileData?.profile?.role === 'admin' || profileData?.profile?.role === 'super_admin';
 
   if (!canManageEmployees) {
     return (
@@ -97,6 +98,15 @@ export default function EmployeeManagementScreen({ navigation }: any) {
       </View>
     );
   }
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
 
   return (
     <View style={styles.container}>
@@ -126,26 +136,39 @@ export default function EmployeeManagementScreen({ navigation }: any) {
           employees.map((employee) => (
             <View key={employee.id} style={styles.employeeCard}>
               <View style={styles.employeeInfo}>
-                <Text style={styles.employeeName}>
-                  {employee.first_name} {employee.last_name}
-                </Text>
-                <Text style={styles.employeeId}>ID: {employee.employee_id}</Text>
+                <Text style={styles.employeeName}>{employee.name}</Text>
                 <Text style={styles.employeeEmail}>{employee.email}</Text>
                 <Text style={styles.employeePosition}>
                   {employee.position} • {employee.department}
+                </Text>
+                <Text style={styles.employeeHireDate}>
+                  Hired: {formatDate(employee.hire_date)}
                 </Text>
                 <View style={styles.statusContainer}>
                   <View
                     style={[
                       styles.statusBadge,
                       {
-                        backgroundColor:
-                          employee.status === 'active' ? '#10b981' : '#ef4444',
+                        backgroundColor: employee.is_active ? '#10b981' : '#ef4444',
                       },
                     ]}
                   >
                     <Text style={styles.statusText}>
-                      {employee.status.charAt(0).toUpperCase() + employee.status.slice(1)}
+                      {employee.is_active ? 'Active' : 'Inactive'}
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.roleBadge,
+                      {
+                        backgroundColor:
+                          employee.role === 'admin' ? '#3b82f6' :
+                          employee.role === 'super_admin' ? '#ef4444' : '#64748b',
+                      },
+                    ]}
+                  >
+                    <Text style={styles.roleText}>
+                      {employee.role.charAt(0).toUpperCase() + employee.role.slice(1)}
                     </Text>
                   </View>
                 </View>
@@ -162,7 +185,7 @@ export default function EmployeeManagementScreen({ navigation }: any) {
                 
                 <TouchableOpacity
                   style={[styles.actionButton, styles.deleteButton]}
-                  onPress={() => handleDeleteEmployee(employee.id, `${employee.first_name} ${employee.last_name}`)}
+                  onPress={() => handleDeleteEmployee(employee.id, employee.name)}
                 >
                   <Ionicons name="trash" size={16} color="#ef4444" />
                   <Text style={styles.deleteButtonText}>Delete</Text>
@@ -244,11 +267,6 @@ const styles = StyleSheet.create({
     color: '#1e293b',
     marginBottom: 4,
   },
-  employeeId: {
-    fontSize: 14,
-    color: '#64748b',
-    marginBottom: 4,
-  },
   employeeEmail: {
     fontSize: 14,
     color: '#64748b',
@@ -257,11 +275,17 @@ const styles = StyleSheet.create({
   employeePosition: {
     fontSize: 14,
     color: '#64748b',
+    marginBottom: 4,
+  },
+  employeeHireDate: {
+    fontSize: 14,
+    color: '#64748b',
     marginBottom: 8,
   },
   statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -269,6 +293,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'white',
+  },
+  roleBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  roleText: {
     fontSize: 12,
     fontWeight: '600',
     color: 'white',

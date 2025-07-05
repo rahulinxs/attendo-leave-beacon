@@ -10,13 +10,15 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useUserProfile } from '../lib/useUserProfile';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function SettingsScreen({ navigation }: any) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
-  const { userProfile, signOut } = useUserProfile();
+  const { profileData } = useUserProfile();
+  const { logout } = useAuth();
 
   const handleSignOut = () => {
     Alert.alert(
@@ -29,7 +31,7 @@ export default function SettingsScreen({ navigation }: any) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await signOut();
+              await logout();
               // Navigation will be handled by AuthContext
             } catch (error) {
               console.error('Error signing out:', error);
@@ -86,7 +88,7 @@ export default function SettingsScreen({ navigation }: any) {
     Alert.alert('Help & Support', 'Help and support functionality coming soon');
   };
 
-  const canAccessAdminSettings = userProfile?.role === 'admin' || userProfile?.role === 'super_admin';
+  const canAccessAdminSettings = profileData?.profile?.role === 'admin' || profileData?.profile?.role === 'super_admin';
 
   const renderSettingItem = (
     icon: string,
@@ -254,23 +256,23 @@ export default function SettingsScreen({ navigation }: any) {
             </View>
             <View style={styles.userDetails}>
               <Text style={styles.userName}>
-                {userProfile?.first_name} {userProfile?.last_name}
+                {profileData?.profile?.name}
               </Text>
-              <Text style={styles.userEmail}>{userProfile?.email}</Text>
+              <Text style={styles.userEmail}>{profileData?.profile?.email}</Text>
               <View style={styles.userRole}>
                 <View
                   style={[
                     styles.roleBadge,
                     {
                       backgroundColor:
-                        userProfile?.role === 'super_admin' ? '#ef4444' :
-                        userProfile?.role === 'admin' ? '#3b82f6' :
-                        userProfile?.role === 'reporting_manager' ? '#10b981' : '#64748b',
+                        profileData?.profile?.role === 'super_admin' ? '#ef4444' :
+                        profileData?.profile?.role === 'admin' ? '#3b82f6' :
+                        profileData?.profile?.role === 'reporting_manager' ? '#10b981' : '#64748b',
                     },
                   ]}
                 >
                   <Text style={styles.roleText}>
-                    {userProfile?.role?.replace('_', ' ').toUpperCase()}
+                    {profileData?.profile?.role?.replace('_', ' ').toUpperCase()}
                   </Text>
                 </View>
               </View>

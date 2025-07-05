@@ -35,7 +35,7 @@ export default function TeamManagementScreen({ navigation }: any) {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const { userProfile } = useUserProfile();
+  const { profileData } = useUserProfile();
 
   const loadTeams = async () => {
     try {
@@ -184,7 +184,7 @@ export default function TeamManagementScreen({ navigation }: any) {
     loadTeams();
   }, []);
 
-  const canManageTeams = userProfile?.role === 'admin' || userProfile?.role === 'super_admin';
+  const canManageTeams = profileData?.profile?.role === 'admin' || profileData?.profile?.role === 'super_admin';
 
   if (!canManageTeams) {
     return (

@@ -5,24 +5,27 @@ export interface LeaveRequest {
   id: string;
   employee_id: string;
   employee_name?: string;
-  leave_type: string;
+  leave_type_id: string;
+  leave_type_name?: string;
   start_date: string;
   end_date: string;
+  total_days: number;
   reason: string;
   status: string;
-  days_requested: number;
-  submitted_at: string;
   approved_by?: string;
   approved_at?: string;
-  company_id?: string;
+  admin_comments?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface LeaveType {
   id: string;
   name: string;
   description: string;
-  default_days: number;
-  company_id?: string;
+  max_days_per_year: number;
+  is_active: boolean;
+  created_at: string;
 }
 
 export const useLeave = () => {
@@ -46,12 +49,14 @@ export const useLeave = () => {
         .select(`
           *,
           employees!inner(
-            first_name,
-            last_name,
+            name,
             email
+          ),
+          leave_types!inner(
+            name
           )
         `)
-        .order('submitted_at', { ascending: false });
+        .order('created_at', { ascending: false });
 
       // Apply filters
       if (filters?.status) {
@@ -73,10 +78,11 @@ export const useLeave = () => {
         throw fetchError;
       }
 
-      // Transform data to include employee name
+      // Transform data to include employee name and leave type name
       const transformedData = data?.map(item => ({
         ...item,
-        employee_name: `${item.employees?.first_name} ${item.employees?.last_name}`.trim(),
+        employee_name: item.employees?.name || 'Unknown Employee',
+        leave_type_name: item.leave_types?.name || 'Unknown Type',
       })) || [];
 
       setLeaveRequests(transformedData);
@@ -101,9 +107,11 @@ export const useLeave = () => {
         .select(`
           *,
           employees!inner(
-            first_name,
-            last_name,
+            name,
             email
+          ),
+          leave_types!inner(
+            name
           )
         `)
         .eq('id', id)
@@ -115,7 +123,8 @@ export const useLeave = () => {
 
       return {
         ...data,
-        employee_name: `${data.employees?.first_name} ${data.employees?.last_name}`.trim(),
+        employee_name: data.employees?.name || 'Unknown Employee',
+        leave_type_name: data.leave_types?.name || 'Unknown Type',
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch leave request';
@@ -127,17 +136,14 @@ export const useLeave = () => {
     }
   };
 
-  const createLeaveRequest = async (leaveData: Omit<LeaveRequest, 'id' | 'submitted_at'>): Promise<LeaveRequest | null> => {
+  const createLeaveRequest = async (leaveData: Omit<LeaveRequest, 'id' | 'created_at' | 'updated_at'>): Promise<LeaveRequest | null> => {
     try {
       setLoading(true);
       setError(null);
 
       const { data, error: createError } = await supabase
         .from('leave_requests')
-        .insert([{
-          ...leaveData,
-          submitted_at: new Date().toISOString(),
-        }])
+        .insert([leaveData])
         .select()
         .single();
 
@@ -214,7 +220,7 @@ export const useLeave = () => {
     }
   };
 
-  const approveLeaveRequest = async (id: string, approvedBy: string): Promise<boolean> => {
+  const approveLeaveRequest = async (id: string, approvedBy: string, comments?: string): Promise<boolean> => {
     try {
       setLoading(true);
       setError(null);
@@ -225,6 +231,7 @@ export const useLeave = () => {
           status: 'approved',
           approved_by: approvedBy,
           approved_at: new Date().toISOString(),
+          admin_comments: comments,
         })
         .eq('id', id);
 
@@ -245,7 +252,7 @@ export const useLeave = () => {
     }
   };
 
-  const rejectLeaveRequest = async (id: string, approvedBy: string): Promise<boolean> => {
+  const rejectLeaveRequest = async (id: string, approvedBy: string, comments?: string): Promise<boolean> => {
     try {
       setLoading(true);
       setError(null);
@@ -256,6 +263,7 @@ export const useLeave = () => {
           status: 'rejected',
           approved_by: approvedBy,
           approved_at: new Date().toISOString(),
+          admin_comments: comments,
         })
         .eq('id', id);
 
@@ -284,6 +292,7 @@ export const useLeave = () => {
       const { data, error: fetchError } = await supabase
         .from('leave_types')
         .select('*')
+        .eq('is_active', true)
         .order('name', { ascending: true });
 
       if (fetchError) {

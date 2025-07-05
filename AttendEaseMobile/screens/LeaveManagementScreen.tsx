@@ -15,14 +15,19 @@ import { useUserProfile } from '../lib/useUserProfile';
 interface LeaveRequest {
   id: string;
   employee_id: string;
-  employee_name: string;
-  leave_type: string;
+  employee_name?: string;
+  leave_type_id: string;
+  leave_type_name?: string;
   start_date: string;
   end_date: string;
+  total_days: number;
   reason: string;
   status: string;
-  days_requested: number;
-  submitted_at: string;
+  approved_by?: string;
+  approved_at?: string;
+  admin_comments?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export default function LeaveManagementScreen({ navigation }: any) {
@@ -30,53 +35,14 @@ export default function LeaveManagementScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
-  const { userProfile } = useUserProfile();
-  const { getLeaveRequests, updateLeaveRequest } = useLeave();
+  const { profileData } = useUserProfile();
+  const { getLeaveRequests, approveLeaveRequest, rejectLeaveRequest } = useLeave();
 
   const loadLeaveRequests = async () => {
     try {
       setLoading(true);
-      // This would need to be implemented in the useLeave hook
-      // For now, we'll use placeholder data
-      const mockData: LeaveRequest[] = [
-        {
-          id: '1',
-          employee_id: 'EMP001',
-          employee_name: 'John Doe',
-          leave_type: 'Annual Leave',
-          start_date: '2024-01-15',
-          end_date: '2024-01-17',
-          reason: 'Family vacation',
-          status: 'pending',
-          days_requested: 3,
-          submitted_at: '2024-01-10T10:00:00Z',
-        },
-        {
-          id: '2',
-          employee_id: 'EMP002',
-          employee_name: 'Jane Smith',
-          leave_type: 'Sick Leave',
-          start_date: '2024-01-20',
-          end_date: '2024-01-20',
-          reason: 'Medical appointment',
-          status: 'approved',
-          days_requested: 1,
-          submitted_at: '2024-01-18T14:30:00Z',
-        },
-        {
-          id: '3',
-          employee_id: 'EMP003',
-          employee_name: 'Mike Johnson',
-          leave_type: 'Personal Leave',
-          start_date: '2024-01-25',
-          end_date: '2024-01-26',
-          reason: 'Personal matters',
-          status: 'rejected',
-          days_requested: 2,
-          submitted_at: '2024-01-22T09:15:00Z',
-        },
-      ];
-      setLeaveRequests(mockData);
+      const data = await getLeaveRequests();
+      setLeaveRequests(data || []);
     } catch (error) {
       console.error('Error loading leave requests:', error);
       Alert.alert('Error', 'Failed to load leave requests');
@@ -101,7 +67,12 @@ export default function LeaveManagementScreen({ navigation }: any) {
           text: 'Approve',
           onPress: async () => {
             try {
-              await updateLeaveRequest(requestId, { status: 'approved' });
+              const userId = profileData?.profile?.id;
+              if (!userId) {
+                Alert.alert('Error', 'User not authenticated');
+                return;
+              }
+              await approveLeaveRequest(requestId, userId);
               Alert.alert('Success', 'Leave request approved successfully');
               loadLeaveRequests();
             } catch (error) {
@@ -125,7 +96,12 @@ export default function LeaveManagementScreen({ navigation }: any) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await updateLeaveRequest(requestId, { status: 'rejected' });
+              const userId = profileData?.profile?.id;
+              if (!userId) {
+                Alert.alert('Error', 'User not authenticated');
+                return;
+              }
+              await rejectLeaveRequest(requestId, userId);
               Alert.alert('Success', 'Leave request rejected successfully');
               loadLeaveRequests();
             } catch (error) {
@@ -141,7 +117,7 @@ export default function LeaveManagementScreen({ navigation }: any) {
   const handleViewDetails = (request: LeaveRequest) => {
     Alert.alert(
       'Leave Request Details',
-      `Employee: ${request.employee_name}\nLeave Type: ${request.leave_type}\nStart Date: ${request.start_date}\nEnd Date: ${request.end_date}\nDays: ${request.days_requested}\nReason: ${request.reason}\nStatus: ${request.status}`,
+      `Employee: ${request.employee_name}\nLeave Type: ${request.leave_type_name}\nStart Date: ${formatDate(request.start_date)}\nEnd Date: ${formatDate(request.end_date)}\nDays: ${request.total_days}\nReason: ${request.reason}\nStatus: ${request.status}`,
       [{ text: 'OK' }]
     );
   };
@@ -150,7 +126,7 @@ export default function LeaveManagementScreen({ navigation }: any) {
     loadLeaveRequests();
   }, []);
 
-  const canManageLeave = userProfile?.role === 'admin' || userProfile?.role === 'super_admin' || userProfile?.role === 'reporting_manager';
+  const canManageLeave = profileData?.profile?.role === 'admin' || profileData?.profile?.role === 'super_admin' || profileData?.profile?.role === 'reporting_manager';
 
   if (!canManageLeave) {
     return (
@@ -192,7 +168,7 @@ export default function LeaveManagementScreen({ navigation }: any) {
       <View style={styles.filterContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           {[
-            { key: 'all', label: 'All' },
+            { key: 'all', label: 'All Holidays' },
             { key: 'pending', label: 'Pending' },
             { key: 'approved', label: 'Approved' },
             { key: 'rejected', label: 'Rejected' },
@@ -239,7 +215,7 @@ export default function LeaveManagementScreen({ navigation }: any) {
               <View style={styles.leaveHeader}>
                 <View style={styles.employeeInfo}>
                   <Text style={styles.employeeName}>{request.employee_name}</Text>
-                  <Text style={styles.employeeId}>ID: {request.employee_id}</Text>
+                  <Text style={styles.leaveType}>{request.leave_type_name}</Text>
                 </View>
                 <View
                   style={[
@@ -255,19 +231,21 @@ export default function LeaveManagementScreen({ navigation }: any) {
               
               <View style={styles.leaveDetails}>
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Leave Type:</Text>
-                  <Text style={styles.detailValue}>{request.leave_type}</Text>
-                </View>
-                <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Duration:</Text>
                   <Text style={styles.detailValue}>
-                    {formatDate(request.start_date)} - {formatDate(request.end_date)} ({request.days_requested} days)
+                    {formatDate(request.start_date)} - {formatDate(request.end_date)} ({request.total_days} days)
                   </Text>
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Reason:</Text>
                   <Text style={styles.detailValue} numberOfLines={2}>
                     {request.reason}
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Submitted:</Text>
+                  <Text style={styles.detailValue}>
+                    {formatDate(request.created_at)}
                   </Text>
                 </View>
               </View>
@@ -285,7 +263,7 @@ export default function LeaveManagementScreen({ navigation }: any) {
                   <>
                     <TouchableOpacity
                       style={[styles.actionButton, styles.approveButton]}
-                      onPress={() => handleApproveLeave(request.id, request.employee_name)}
+                      onPress={() => handleApproveLeave(request.id, request.employee_name || 'Employee')}
                     >
                       <Ionicons name="checkmark" size={16} color="#10b981" />
                       <Text style={styles.approveButtonText}>Approve</Text>
@@ -293,7 +271,7 @@ export default function LeaveManagementScreen({ navigation }: any) {
                     
                     <TouchableOpacity
                       style={[styles.actionButton, styles.rejectButton]}
-                      onPress={() => handleRejectLeave(request.id, request.employee_name)}
+                      onPress={() => handleRejectLeave(request.id, request.employee_name || 'Employee')}
                     >
                       <Ionicons name="close" size={16} color="#ef4444" />
                       <Text style={styles.rejectButtonText}>Reject</Text>
@@ -399,7 +377,7 @@ const styles = StyleSheet.create({
     color: '#1e293b',
     marginBottom: 4,
   },
-  employeeId: {
+  leaveType: {
     fontSize: 14,
     color: '#64748b',
   },

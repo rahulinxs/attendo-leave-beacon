@@ -15,12 +15,14 @@ import { useUserProfile } from '../lib/useUserProfile';
 interface AttendanceRecord {
   id: string;
   employee_id: string;
-  employee_name: string;
+  employee_name?: string;
   date: string;
-  check_in: string;
-  check_out: string;
+  check_in_time: string;
+  check_out_time: string;
   status: string;
-  total_hours: number;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export default function AttendanceManagementScreen({ navigation }: any) {
@@ -28,7 +30,7 @@ export default function AttendanceManagementScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const { userProfile } = useUserProfile();
+  const { profileData } = useUserProfile();
   const { getAttendanceRecords, updateAttendance } = useAttendance();
 
   const loadAttendanceRecords = async () => {
@@ -42,20 +44,22 @@ export default function AttendanceManagementScreen({ navigation }: any) {
           employee_id: 'EMP001',
           employee_name: 'John Doe',
           date: selectedDate,
-          check_in: '09:00',
-          check_out: '17:00',
+          check_in_time: '09:00',
+          check_out_time: '17:00',
           status: 'present',
-          total_hours: 8,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         },
         {
           id: '2',
           employee_id: 'EMP002',
           employee_name: 'Jane Smith',
           date: selectedDate,
-          check_in: '08:30',
-          check_out: '17:30',
+          check_in_time: '08:30',
+          check_out_time: '17:30',
           status: 'present',
-          total_hours: 9,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         },
       ];
       setAttendanceRecords(mockData);
@@ -114,7 +118,7 @@ export default function AttendanceManagementScreen({ navigation }: any) {
     loadAttendanceRecords();
   }, [selectedDate]);
 
-  const canManageAttendance = userProfile?.role === 'admin' || userProfile?.role === 'super_admin' || userProfile?.role === 'reporting_manager';
+  const canManageAttendance = profileData?.profile?.role === 'admin' || profileData?.profile?.role === 'super_admin' || profileData?.profile?.role === 'reporting_manager';
 
   if (!canManageAttendance) {
     return (
@@ -132,6 +136,24 @@ export default function AttendanceManagementScreen({ navigation }: any) {
       month: 'long',
       day: 'numeric',
     });
+  };
+
+  const formatTime = (timeString: string) => {
+    if (!timeString) return 'N/A';
+    const time = new Date(timeString);
+    return time.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const calculateTotalHours = (checkIn: string, checkOut: string) => {
+    if (!checkIn || !checkOut) return 0;
+    const start = new Date(checkIn);
+    const end = new Date(checkOut);
+    const diffMs = end.getTime() - start.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+    return Math.round(diffHours * 100) / 100;
   };
 
   return (
@@ -181,15 +203,17 @@ export default function AttendanceManagementScreen({ navigation }: any) {
                 <View style={styles.timeRow}>
                   <View style={styles.timeItem}>
                     <Text style={styles.timeLabel}>Check In</Text>
-                    <Text style={styles.timeValue}>{record.check_in}</Text>
+                    <Text style={styles.timeValue}>{formatTime(record.check_in_time)}</Text>
                   </View>
                   <View style={styles.timeItem}>
                     <Text style={styles.timeLabel}>Check Out</Text>
-                    <Text style={styles.timeValue}>{record.check_out}</Text>
+                    <Text style={styles.timeValue}>{formatTime(record.check_out_time)}</Text>
                   </View>
                   <View style={styles.timeItem}>
                     <Text style={styles.timeLabel}>Total Hours</Text>
-                    <Text style={styles.timeValue}>{record.total_hours}h</Text>
+                    <Text style={styles.timeValue}>
+                      {calculateTotalHours(record.check_in_time, record.check_out_time)}h
+                    </Text>
                   </View>
                 </View>
                 
