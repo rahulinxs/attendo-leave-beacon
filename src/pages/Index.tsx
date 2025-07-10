@@ -60,6 +60,9 @@ const Index = () => {
           </div>
         );
       
+      case 'leave-type-management':
+        return <LeaveManagement />;
+      
       case 'holidays':
         return <HolidayManagement />;
       

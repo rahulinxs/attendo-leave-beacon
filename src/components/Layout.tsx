@@ -104,6 +104,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       roles: ['reporting_manager', 'admin', 'super_admin'],
       requiresPermission: true
     },
+    {
+      id: 'leave-type-management',
+      label: 'Leave Type Management',
+      icon: Calendar, // or ClipboardList
+      roles: ['admin', 'super_admin'],
+      requiresPermission: true
+    },
     
     // Admin features - for admins and super admins
     {

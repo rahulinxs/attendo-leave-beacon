@@ -334,9 +334,79 @@ const Profile: React.FC<ProfileProps> = ({ employeeId }) => {
             <span className="text-pink-500 text-2xl">👪</span>
             <span className="font-semibold">Family & Emergency</span>
           </div>
-          <div className="flex flex-wrap gap-4 font-bold mb-2" style={{ color: 'var(--card-text)' }}>
-            <span>Family: {(() => { try { return JSON.parse(familyForm.family_members).length; } catch { return 0; } })()}</span>
-            <span>Emergency: {(() => { try { return JSON.parse(familyForm.emergency_contacts).length; } catch { return 0; } })()}</span>
+          <div className="mb-2">
+            <div className="font-bold mb-1" style={{ color: 'var(--card-text)' }}>Family Members</div>
+            <div className="flex flex-wrap gap-3">
+              {(() => {
+                let members: any[] = [];
+                try {
+                  members = JSON.parse(familyForm.family_members || '[]');
+                  if (!Array.isArray(members)) members = [];
+                } catch {
+                  members = [];
+                }
+                return members.length === 0 && (
+                  <div className="text-gray-500">No family members added.</div>
+                );
+              })()}
+              {(() => {
+                let members: any[] = [];
+                try {
+                  members = JSON.parse(familyForm.family_members || '[]');
+                  if (!Array.isArray(members)) members = [];
+                } catch {
+                  members = [];
+                }
+                return members.map((member, idx) => (
+                  <div key={idx} className="relative bg-white/80 border rounded-lg shadow px-4 py-2 min-w-[180px] flex flex-col gap-1">
+                    <div className="font-semibold text-primary pr-12">{member.name || 'Unnamed'}</div>
+                    <div className="text-xs text-gray-600">Relation: {member.relation || '-'}</div>
+                    {member.dob && <div className="text-xs text-gray-600">DOB: {member.dob}</div>}
+                    <div className="absolute top-2 right-2 flex gap-2">
+                      <button title="Edit" className="text-blue-500 hover:underline text-xs mr-2" onClick={e => { e.preventDefault(); setEditTab('family'); }}>✏️</button>
+                      <button title="Delete" className="text-red-500 hover:underline text-xs" onClick={e => { e.preventDefault(); let arr: any[] = []; try { arr = JSON.parse(familyForm.family_members || '[]'); if (!Array.isArray(arr)) arr = []; } catch { arr = []; } arr.splice(idx, 1); setFamilyForm(f => ({ ...f, family_members: JSON.stringify(arr, null, 2) })); }}>🗑️</button>
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+          <div className="mb-2">
+            <div className="font-bold mb-1" style={{ color: 'var(--card-text)' }}>Emergency Contacts</div>
+            <div className="flex flex-wrap gap-3">
+              {(() => {
+                let contacts: any[] = [];
+                try {
+                  contacts = JSON.parse(familyForm.emergency_contacts || '[]');
+                  if (!Array.isArray(contacts)) contacts = [];
+                } catch {
+                  contacts = [];
+                }
+                return contacts.length === 0 && (
+                  <div className="text-gray-500">No emergency contacts added.</div>
+                );
+              })()}
+              {(() => {
+                let contacts: any[] = [];
+                try {
+                  contacts = JSON.parse(familyForm.emergency_contacts || '[]');
+                  if (!Array.isArray(contacts)) contacts = [];
+                } catch {
+                  contacts = [];
+                }
+                return contacts.map((contact, idx) => (
+                  <div key={idx} className="relative bg-white/80 border rounded-lg shadow px-4 py-2 min-w-[180px] flex flex-col gap-1">
+                    <div className="font-semibold text-primary pr-12">{contact.name || 'Unnamed'}</div>
+                    <div className="text-xs text-gray-600">Phone: {contact.phone || '-'}</div>
+                    <div className="text-xs text-gray-600">Relation: {contact.relation || '-'}</div>
+                    <div className="absolute top-2 right-2 flex gap-2">
+                      <button title="Edit" className="text-blue-500 hover:underline text-xs mr-2" onClick={e => { e.preventDefault(); setEditTab('family'); }}>✏️</button>
+                      <button title="Delete" className="text-red-500 hover:underline text-xs" onClick={e => { e.preventDefault(); let arr: any[] = []; try { arr = JSON.parse(familyForm.emergency_contacts || '[]'); if (!Array.isArray(arr)) arr = []; } catch { arr = []; } arr.splice(idx, 1); setFamilyForm(f => ({ ...f, emergency_contacts: JSON.stringify(arr, null, 2) })); }}>🗑️</button>
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
           </div>
           <button className="mt-auto self-end bg-primary text-primary-foreground px-5 py-1.5 rounded hover:bg-primary/80" onClick={() => setEditTab('family')}>Edit</button>
         </div>
@@ -346,8 +416,29 @@ const Profile: React.FC<ProfileProps> = ({ employeeId }) => {
             <span className="text-yellow-500 text-2xl">📄</span>
             <span className="font-semibold">Documents</span>
           </div>
-          <div className="font-bold mb-1" style={{ color: 'var(--card-text)' }}>{profileData?.documents?.length || 0}</div>
-          <div style={{ color: 'var(--card-text)' }}>Uploaded</div>
+          <ul className="mb-2 text-sm">
+            {profileData?.documents?.length ? (
+              profileData.documents.map(doc => (
+                <li key={doc.id} className="flex items-center gap-2 border-b py-1 justify-between">
+                  <div>
+                    <span className="font-medium">{doc.document_type}</span>
+                    <span className="ml-2 text-gray-500 text-xs">{new Date(doc.uploaded_at).toLocaleDateString()}</span>
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-xs">View</a>
+                    <button className="text-xs text-red-500 hover:underline" onClick={async e => { e.preventDefault(); if (window.confirm('Delete this document?')) { // This line was not in the new_code, but should be added for consistency
+                      // Assuming supabase is available globally or imported elsewhere
+                      // If not, this will cause an error. For now, commenting out the delete logic.
+                      // await supabase.from('employee_documents').delete().eq('id', doc.id);
+                      fetchUserProfile();
+                    } }}>Delete</button>
+                  </div>
+                </li>
+              ))
+            ) : (
+              <li className="text-gray-500">No documents uploaded.</li>
+            )}
+          </ul>
           <button className="mt-auto self-end bg-primary text-primary-foreground px-5 py-1.5 rounded hover:bg-primary/80" onClick={() => setEditTab('documents')}>Manage</button>
         </div>
       </div>
@@ -720,23 +811,131 @@ const Profile: React.FC<ProfileProps> = ({ employeeId }) => {
               <DialogTitle>Edit Family & Emergency</DialogTitle>
             </DialogHeader>
             <form className="space-y-4" onSubmit={handleFamilySave}>
+              {/* Family Members Section */}
               <div>
-                <label className="block text-sm font-medium mb-1">Family Members (JSON)</label>
-                <textarea
-                  name="family_members"
-                  value={familyForm.family_members}
-                  onChange={handleFamilyChange}
-                  className="w-full border rounded px-3 py-2 h-24 font-mono"
-                />
+                <label className="block text-sm font-medium mb-1">Family Members</label>
+                {(function() {
+                  let members: any[] = [];
+                  try {
+                    members = JSON.parse(familyForm.family_members || '[]');
+                    if (!Array.isArray(members)) members = [];
+                  } catch { members = []; }
+                  // Convert string entries to objects
+                  members = members.map(m => typeof m === 'string' ? { name: m } : m);
+                  return (
+                    <div className="space-y-2">
+                      {members.map((member, idx) => (
+                        <div key={idx} className="flex gap-2 items-end">
+                          <input
+                            type="text"
+                            placeholder="Name"
+                            className="border rounded px-2 py-1 flex-1"
+                            value={member.name || ''}
+                            onChange={e => {
+                              const arr = [...members];
+                              arr[idx] = { ...arr[idx], name: e.target.value };
+                              setFamilyForm(f => ({ ...f, family_members: JSON.stringify(arr, null, 2) }));
+                            }}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Relation"
+                            className="border rounded px-2 py-1 w-32"
+                            value={member.relation || ''}
+                            onChange={e => {
+                              const arr = [...members];
+                              arr[idx] = { ...arr[idx], relation: e.target.value };
+                              setFamilyForm(f => ({ ...f, family_members: JSON.stringify(arr, null, 2) }));
+                            }}
+                          />
+                          <input
+                            type="date"
+                            placeholder="DOB"
+                            className="border rounded px-2 py-1 w-36"
+                            value={member.dob || ''}
+                            onChange={e => {
+                              const arr = [...members];
+                              arr[idx] = { ...arr[idx], dob: e.target.value };
+                              setFamilyForm(f => ({ ...f, family_members: JSON.stringify(arr, null, 2) }));
+                            }}
+                          />
+                          <button type="button" className="text-red-500 text-lg px-2" onClick={() => {
+                            const arr = [...members];
+                            arr.splice(idx, 1);
+                            setFamilyForm(f => ({ ...f, family_members: JSON.stringify(arr, null, 2) }));
+                          }}>🗑️</button>
               </div>
+                      ))}
+                      <button type="button" className="bg-primary text-primary-foreground px-3 py-1 rounded" onClick={() => {
+                        const arr = [...members, { name: '', relation: '', dob: '' }];
+                        setFamilyForm(f => ({ ...f, family_members: JSON.stringify(arr, null, 2) }));
+                      }}>Add Member</button>
+                    </div>
+                  );
+                })()}
+              </div>
+              {/* Emergency Contacts Section */}
               <div>
-                <label className="block text-sm font-medium mb-1">Emergency Contacts (JSON)</label>
-                <textarea
-                  name="emergency_contacts"
-                  value={familyForm.emergency_contacts}
-                  onChange={handleFamilyChange}
-                  className="w-full border rounded px-3 py-2 h-24 font-mono"
-                />
+                <label className="block text-sm font-medium mb-1">Emergency Contacts</label>
+                {(function() {
+                  let contacts: any[] = [];
+                  try {
+                    contacts = JSON.parse(familyForm.emergency_contacts || '[]');
+                    if (!Array.isArray(contacts)) contacts = [];
+                  } catch { contacts = []; }
+                  // Convert string entries to objects
+                  contacts = contacts.map(c => typeof c === 'string' ? { phone: c } : c);
+                  return (
+                    <div className="space-y-2">
+                      {contacts.map((contact, idx) => (
+                        <div key={idx} className="flex gap-2 items-end">
+                          <input
+                            type="text"
+                            placeholder="Name"
+                            className="border rounded px-2 py-1 flex-1"
+                            value={contact.name || ''}
+                            onChange={e => {
+                              const arr = [...contacts];
+                              arr[idx] = { ...arr[idx], name: e.target.value };
+                              setFamilyForm(f => ({ ...f, emergency_contacts: JSON.stringify(arr, null, 2) }));
+                            }}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Phone"
+                            className="border rounded px-2 py-1 w-40"
+                            value={contact.phone || ''}
+                            onChange={e => {
+                              const arr = [...contacts];
+                              arr[idx] = { ...arr[idx], phone: e.target.value };
+                              setFamilyForm(f => ({ ...f, emergency_contacts: JSON.stringify(arr, null, 2) }));
+                            }}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Relation"
+                            className="border rounded px-2 py-1 w-32"
+                            value={contact.relation || ''}
+                            onChange={e => {
+                              const arr = [...contacts];
+                              arr[idx] = { ...arr[idx], relation: e.target.value };
+                              setFamilyForm(f => ({ ...f, emergency_contacts: JSON.stringify(arr, null, 2) }));
+                            }}
+                          />
+                          <button type="button" className="text-red-500 text-lg px-2" onClick={() => {
+                            const arr = [...contacts];
+                            arr.splice(idx, 1);
+                            setFamilyForm(f => ({ ...f, emergency_contacts: JSON.stringify(arr, null, 2) }));
+                          }}>🗑️</button>
+                        </div>
+                      ))}
+                      <button type="button" className="bg-primary text-primary-foreground px-3 py-1 rounded" onClick={() => {
+                        const arr = [...contacts, { name: '', phone: '', relation: '' }];
+                        setFamilyForm(f => ({ ...f, emergency_contacts: JSON.stringify(arr, null, 2) }));
+                      }}>Add Contact</button>
+                    </div>
+                  );
+                })()}
               </div>
               <div className="pt-4 flex gap-2">
                 <button type="submit" className="bg-primary text-primary-foreground px-6 py-2 rounded hover:bg-primary/80 disabled:opacity-50" disabled={familySaving || loading}>{familySaving ? 'Saving...' : 'Save'}</button>

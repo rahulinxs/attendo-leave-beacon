@@ -78,6 +78,23 @@ interface NotificationSettings {
   weeklyReports: boolean;
 }
 
+// --- Leave Type Management Card/Palette UI ---
+const LeaveTypeCard = ({ leaveType, onEdit, onToggleActive }) => (
+  <div className={`relative card-theme rounded-2xl p-6 flex flex-col min-h-[120px] shadow-md border ${leaveType.active ? '' : 'opacity-60 grayscale'}`}
+    style={{ background: 'hsl(var(--card))', color: 'hsl(var(--card-foreground))' }}>
+    <div className="flex items-center justify-between mb-2">
+      <span className="font-bold text-lg text-primary">{leaveType.name}</span>
+      <div className="flex gap-2 items-center">
+        <button title="Edit" className="text-blue-500 hover:underline text-xs mr-2" onClick={() => onEdit(leaveType)}>✏️</button>
+        <Switch checked={leaveType.active} onCheckedChange={() => onToggleActive(leaveType)} />
+      </div>
+    </div>
+    <div className="text-xs text-gray-600 mb-1">{leaveType.description || 'No description'}</div>
+    <div className="text-xs text-gray-600">Quota: <span className="font-semibold">{leaveType.max_days_per_year}</span> days/year</div>
+    {!leaveType.active && <div className="absolute top-2 right-2 text-xs text-red-500">Inactive</div>}
+  </div>
+);
+
 const LeaveManagement: React.FC = () => {
   const { user } = useAuth();
   const { 
@@ -120,7 +137,124 @@ const LeaveManagement: React.FC = () => {
     weeklyReports: false
   });
 
+  // Leave Type Management states
+  const [allLeaveTypes, setAllLeaveTypes] = useState<any[]>([]);
+  const [showLeaveTypeModal, setShowLeaveTypeModal] = useState(false);
+  const [editingLeaveType, setEditingLeaveType] = useState<any>(null);
+  const [leaveTypeForm, setLeaveTypeForm] = useState({
+    name: '',
+    description: '',
+    max_days_per_year: 0,
+    active: true
+  });
+
+  const { currentCompany } = useCompany();
+
   const canApproveRequests = ['reporting_manager', 'admin', 'super_admin'].includes(user?.role || '');
+  const canManageLeaveTypes = ['admin', 'super_admin'].includes(user?.role || '');
+
+  // Fetch all leave types for management
+  useEffect(() => {
+    if (canManageLeaveTypes) {
+      fetchAllLeaveTypes();
+    }
+  }, [canManageLeaveTypes]);
+
+  const fetchAllLeaveTypes = async () => {
+    const { data, error } = await supabase
+      .from('leave_types')
+      .select('*')
+      .order('name');
+    
+    if (!error && data) {
+      setAllLeaveTypes(data);
+    }
+  };
+
+  const handleAddLeaveType = () => {
+    setEditingLeaveType(null);
+    setLeaveTypeForm({
+      name: '',
+      description: '',
+      max_days_per_year: 0,
+      active: true
+    });
+    setShowLeaveTypeModal(true);
+  };
+
+  const handleEditLeaveType = (leaveType: any) => {
+    setEditingLeaveType(leaveType);
+    setLeaveTypeForm({
+      name: leaveType.name,
+      description: leaveType.description || '',
+      max_days_per_year: leaveType.max_days_per_year,
+      active: leaveType.active !== false
+    });
+    setShowLeaveTypeModal(true);
+  };
+
+  const handleSaveLeaveType = async () => {
+    if (!leaveTypeForm.name || leaveTypeForm.max_days_per_year <= 0) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!currentCompany?.id) {
+      toast({
+        title: "Error",
+        description: "No company selected.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const { error } = editingLeaveType 
+      ? await supabase
+          .from('leave_types')
+          .update({ ...leaveTypeForm, company_id: currentCompany.id })
+          .eq('id', editingLeaveType.id)
+      : await supabase
+          .from('leave_types')
+          .insert({ ...leaveTypeForm, company_id: currentCompany.id });
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save leave type",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: `Leave type ${editingLeaveType ? 'updated' : 'created'} successfully`,
+      });
+      setShowLeaveTypeModal(false);
+      fetchAllLeaveTypes();
+    }
+  };
+
+  const handleToggleLeaveTypeActive = async (leaveType: any) => {
+    const { error } = await supabase
+      .from('leave_types')
+      .update({ active: !leaveType.active })
+      .eq('id', leaveType.id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update leave type status",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: `Leave type ${leaveType.active ? 'deactivated' : 'activated'}`,
+      });
+      fetchAllLeaveTypes();
+    }
+  };
 
   // If not a manager, show employee view
   if (!canApproveRequests) {
@@ -205,6 +339,92 @@ const LeaveManagement: React.FC = () => {
   // Manager/Admin Enhanced View
   return (
     <div className="space-y-4">
+      {/* Admin/Super Admin Leave Type Management Section */}
+      {canManageLeaveTypes && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Manage Leave Types</h2>
+              <p className="text-gray-600 mt-1">Configure leave types and their quotas</p>
+            </div>
+            <Button onClick={handleAddLeaveType} className="gradient-primary text-white">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Leave Type
+            </Button>
+          </div>
+
+          {/* Leave Types Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {allLeaveTypes.map((leaveType) => (
+              <LeaveTypeCard
+                key={leaveType.id}
+                leaveType={leaveType}
+                onEdit={handleEditLeaveType}
+                onToggleActive={handleToggleLeaveTypeActive}
+              />
+            ))}
+          </div>
+
+          {/* Add/Edit Leave Type Modal */}
+          <Dialog open={showLeaveTypeModal} onOpenChange={setShowLeaveTypeModal}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>
+                  {editingLeaveType ? 'Edit Leave Type' : 'Add New Leave Type'}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="name">Leave Type Name *</Label>
+                  <Input
+                    id="name"
+                    value={leaveTypeForm.name}
+                    onChange={(e) => setLeaveTypeForm({...leaveTypeForm, name: e.target.value})}
+                    placeholder="e.g., Sick Leave, Casual Leave"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    value={leaveTypeForm.description}
+                    onChange={(e) => setLeaveTypeForm({...leaveTypeForm, description: e.target.value})}
+                    placeholder="Brief description of this leave type"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="quota">Days Per Year *</Label>
+                  <Input
+                    id="quota"
+                    type="number"
+                    min="1"
+                    value={leaveTypeForm.max_days_per_year}
+                    onChange={(e) => setLeaveTypeForm({...leaveTypeForm, max_days_per_year: parseInt(e.target.value) || 0})}
+                    placeholder="e.g., 12"
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="active"
+                    checked={leaveTypeForm.active}
+                    onCheckedChange={(checked) => setLeaveTypeForm({...leaveTypeForm, active: checked})}
+                  />
+                  <Label htmlFor="active">Active</Label>
+                </div>
+                <div className="flex gap-2 pt-4">
+                  <Button onClick={handleSaveLeaveType} className="flex-1">
+                    {editingLeaveType ? 'Update' : 'Create'} Leave Type
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowLeaveTypeModal(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+      )}
+
       {/* Enhanced Header */}
       <div className="flex justify-between items-center">
         <div>
