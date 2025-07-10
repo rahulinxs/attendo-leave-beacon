@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Clock, MapPin, User, TrendingUp, Download, CheckCircle, XCircle, CalendarIcon, Circle, HelpCircle, Edit, Crown, Users } from 'lucide-react';
+import { Calendar, Clock, MapPin, User, TrendingUp, Download, CheckCircle, XCircle, CalendarIcon, Circle, HelpCircle, Edit, Crown, Users, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import AttendanceCalendar from './AttendanceCalendar';
@@ -20,6 +20,7 @@ import * as XLSX from 'xlsx';
 import { useCompany } from '@/contexts/CompanyContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { THEME_OPTIONS } from '@/contexts/ThemeContext';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const AttendanceManagement: React.FC = () => {
   const { user } = useAuth();
@@ -109,17 +110,95 @@ const AttendanceManagement: React.FC = () => {
   };
 
   const getStatusBadge = (status: string | undefined) => {
+    // Use theme variables for color, and a more compact size
+    const badgeBase =
+      "flex items-center gap-1 px-2.5 py-0.5 text-sm font-semibold rounded-full shadow-sm border transition-all duration-200 animate-fadein";
     switch (status) {
       case 'present':
-        return <Badge className="bg-primary text-primary flex items-center gap-1"><CheckCircle className="w-4 h-4 mr-1" /> Present</Badge>;
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant="default"
+                  className={badgeBase + " bg-primary text-primary-foreground border border-primary/20"}
+                  aria-label="Present: Employee is present today"
+                >
+                  <CheckCircle className="w-4 h-4 mr-1" /> Present
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>Present: Employee is present today</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
       case 'absent':
-        return <Badge className="bg-destructive text-destructive flex items-center gap-1"><XCircle className="w-4 h-4 mr-1" /> Absent</Badge>;
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant="destructive"
+                  className={badgeBase + " bg-destructive text-destructive-foreground border border-destructive/20"}
+                  aria-label="Absent: Employee is absent today"
+                >
+                  <XCircle className="w-4 h-4 mr-1" /> Absent
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>Absent: Employee is absent today</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
       case 'late':
-        return <Badge className="bg-warning text-warning flex items-center gap-1"><Clock className="w-4 h-4 mr-1" /> Late</Badge>;
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant="secondary"
+                  className={badgeBase + " bg-accent text-accent-foreground border border-yellow-400/30"}
+                  aria-label="Late: Employee checked in late"
+                >
+                  <Clock className="w-4 h-4 mr-1 text-yellow-600" /> Late
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>Late: Employee checked in late</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
       case 'half_day':
-        return <Badge className="bg-secondary text-secondary flex items-center gap-1"><Circle className="w-4 h-4 mr-1" /> Half Day</Badge>;
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant="secondary"
+                  className={badgeBase + " bg-secondary text-secondary-foreground border border-secondary/20"}
+                  aria-label="Half Day: Employee worked half a day"
+                >
+                  <Circle className="w-4 h-4 mr-1 text-purple-600" /> Half Day
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>Half Day: Employee worked half a day</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
       default:
-        return <Badge className="bg-muted text-muted flex items-center gap-1"><HelpCircle className="w-4 h-4 mr-1" /> Not Marked</Badge>;
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant="outline"
+                  className={badgeBase + " bg-muted text-muted-foreground border border-muted/20"}
+                  aria-label="Not Marked: Attendance not marked"
+                >
+                  <Sparkles className="w-4 h-4 mr-1 text-blue-400" /> Not Marked
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>Not Marked: Attendance not marked</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
     }
   };
 
@@ -561,7 +640,6 @@ const AttendanceManagement: React.FC = () => {
                   selected={selectedDate}
                   onSelect={(date) => setSelectedDate(date as Date)}
                   className="rounded border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-400"
-                  max={new Date()}
                 />
               </div>
             </div>

@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Alert,
   Switch,
+  Appearance,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useUserProfile } from '../lib/useUserProfile';
@@ -17,6 +18,8 @@ export default function SettingsScreen({ navigation }: any) {
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
+  const [theme, setTheme] = useState('system');
+  const [language, setLanguage] = useState('en');
   const { profileData } = useUserProfile();
   const { logout } = useAuth();
 
@@ -88,6 +91,16 @@ export default function SettingsScreen({ navigation }: any) {
     Alert.alert('Help & Support', 'Help and support functionality coming soon');
   };
 
+  const handleThemeChange = (value: string) => {
+    setTheme(value);
+    // Optionally, persist theme to async storage or backend
+  };
+
+  const handleLanguageChange = (value: string) => {
+    setLanguage(value);
+    // Optionally, persist language to async storage or backend
+  };
+
   const canAccessAdminSettings = profileData?.profile?.role === 'admin' || profileData?.profile?.role === 'super_admin';
 
   const renderSettingItem = (
@@ -116,7 +129,7 @@ export default function SettingsScreen({ navigation }: any) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Settings</Text>
+        <Text style={styles.title}>System Settings</Text>
       </View>
 
       <ScrollView style={styles.scrollView}>
@@ -180,6 +193,71 @@ export default function SettingsScreen({ navigation }: any) {
             'sync',
             'Auto Sync',
             'Automatically sync data in background',
+            undefined,
+            <Switch
+              value={autoSyncEnabled}
+              onValueChange={setAutoSyncEnabled}
+              trackColor={{ false: '#e2e8f0', true: '#3b82f6' }}
+              thumbColor={autoSyncEnabled ? '#ffffff' : '#f4f3f4'}
+            />
+          )}
+        </View>
+
+        {/* Appearance Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Appearance</Text>
+          <View style={styles.settingRow}>
+            <Text style={styles.settingLabel}>Theme</Text>
+            <View style={styles.themeOptions}>
+              <TouchableOpacity onPress={() => handleThemeChange('light')} style={[styles.themeOption, theme === 'light' && styles.themeOptionSelected]}>
+                <Text style={styles.themeOptionText}>Light</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleThemeChange('dark')} style={[styles.themeOption, theme === 'dark' && styles.themeOptionSelected]}>
+                <Text style={styles.themeOptionText}>Dark</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleThemeChange('system')} style={[styles.themeOption, theme === 'system' && styles.themeOptionSelected]}>
+                <Text style={styles.themeOptionText}>System</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        {/* Language Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Language</Text>
+          <View style={styles.settingRow}>
+            <Text style={styles.settingLabel}>App Language</Text>
+            <View style={styles.languageOptions}>
+              <TouchableOpacity onPress={() => handleLanguageChange('en')} style={[styles.languageOption, language === 'en' && styles.languageOptionSelected]}>
+                <Text style={styles.languageOptionText}>English</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleLanguageChange('hi')} style={[styles.languageOption, language === 'hi' && styles.languageOptionSelected]}>
+                <Text style={styles.languageOptionText}>Hindi</Text>
+              </TouchableOpacity>
+              {/* Add more languages as needed */}
+            </View>
+          </View>
+        </View>
+
+        {/* Notification Preferences Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Notifications</Text>
+          {renderSettingItem(
+            'notifications',
+            'Push Notifications',
+            'Receive push notifications',
+            undefined,
+            <Switch
+              value={notificationsEnabled}
+              onValueChange={setNotificationsEnabled}
+              trackColor={{ false: '#e2e8f0', true: '#3b82f6' }}
+              thumbColor={notificationsEnabled ? '#ffffff' : '#f4f3f4'}
+            />
+          )}
+          {renderSettingItem(
+            'mail',
+            'Email Notifications',
+            'Receive email notifications',
             undefined,
             <Switch
               value={autoSyncEnabled}
@@ -398,5 +476,56 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: 'white',
+  },
+  // New styles for Appearance and Language sections
+  settingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  settingLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1e293b',
+  },
+  themeOptions: {
+    flexDirection: 'row',
+    backgroundColor: '#e2e8f0',
+    borderRadius: 8,
+    padding: 4,
+  },
+  themeOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  themeOptionSelected: {
+    backgroundColor: '#3b82f6',
+  },
+  themeOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3b82f6',
+  },
+  languageOptions: {
+    flexDirection: 'row',
+    backgroundColor: '#e2e8f0',
+    borderRadius: 8,
+    padding: 4,
+  },
+  languageOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  languageOptionSelected: {
+    backgroundColor: '#3b82f6',
+  },
+  languageOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3b82f6',
   },
 }); 

@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useUserProfile } from '../lib/useUserProfile';
+import { supabase } from '../lib/supabase';
 
 interface Team {
   id: string;
@@ -40,34 +41,11 @@ export default function TeamManagementScreen({ navigation }: any) {
   const loadTeams = async () => {
     try {
       setLoading(true);
-      // Mock data - this would be replaced with actual API calls
-      const mockTeams: Team[] = [
-        {
-          id: '1',
-          name: 'Development Team',
-          description: 'Software development and engineering team',
-          manager_name: 'John Doe',
-          member_count: 8,
-          created_at: '2024-01-01T00:00:00Z',
-        },
-        {
-          id: '2',
-          name: 'Design Team',
-          description: 'UI/UX design and creative team',
-          manager_name: 'Jane Smith',
-          member_count: 5,
-          created_at: '2024-01-15T00:00:00Z',
-        },
-        {
-          id: '3',
-          name: 'Marketing Team',
-          description: 'Digital marketing and communications team',
-          manager_name: 'Mike Johnson',
-          member_count: 6,
-          created_at: '2024-02-01T00:00:00Z',
-        },
-      ];
-      setTeams(mockTeams);
+      const { data, error } = await supabase
+        .from('teams')
+        .select('*');
+      if (error) throw error;
+      setTeams(data || []);
     } catch (error) {
       console.error('Error loading teams:', error);
       Alert.alert('Error', 'Failed to load teams');
@@ -78,34 +56,12 @@ export default function TeamManagementScreen({ navigation }: any) {
 
   const loadTeamMembers = async (teamId: string) => {
     try {
-      // Mock data - this would be replaced with actual API calls
-      const mockMembers: TeamMember[] = [
-        {
-          id: '1',
-          employee_id: 'EMP001',
-          name: 'John Doe',
-          position: 'Team Lead',
-          email: 'john.doe@company.com',
-          role: 'manager',
-        },
-        {
-          id: '2',
-          employee_id: 'EMP002',
-          name: 'Alice Brown',
-          position: 'Senior Developer',
-          email: 'alice.brown@company.com',
-          role: 'member',
-        },
-        {
-          id: '3',
-          employee_id: 'EMP003',
-          name: 'Bob Wilson',
-          position: 'Developer',
-          email: 'bob.wilson@company.com',
-          role: 'member',
-        },
-      ];
-      setTeamMembers(mockMembers);
+      const { data, error } = await supabase
+        .from('employees')
+        .select('*')
+        .eq('team_id', teamId);
+      if (error) throw error;
+      setTeamMembers(data || []);
     } catch (error) {
       console.error('Error loading team members:', error);
       Alert.alert('Error', 'Failed to load team members');
@@ -126,15 +82,40 @@ export default function TeamManagementScreen({ navigation }: any) {
     loadTeamMembers(team.id);
   };
 
-  const handleCreateTeam = () => {
-    Alert.alert('Create Team', 'Create team functionality coming soon');
+  const handleCreateTeam = async (teamName: string, description: string) => {
+    try {
+      setLoading(true);
+      const { error } = await supabase
+        .from('teams')
+        .insert([{ name: teamName, description }]);
+      if (error) throw error;
+      Alert.alert('Success', 'Team created successfully');
+      loadTeams();
+    } catch (error) {
+      Alert.alert('Error', 'Failed to create team');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleEditTeam = (team: Team) => {
-    Alert.alert('Edit Team', `Edit team "${team.name}" functionality coming soon`);
+  const handleEditTeam = async (teamId: string, updates: any) => {
+    try {
+      setLoading(true);
+      const { error } = await supabase
+        .from('teams')
+        .update(updates)
+        .eq('id', teamId);
+      if (error) throw error;
+      Alert.alert('Success', 'Team updated successfully');
+      loadTeams();
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update team');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDeleteTeam = (team: Team) => {
+  const handleDeleteTeam = async (team: Team) => {
     Alert.alert(
       'Delete Team',
       `Are you sure you want to delete the team "${team.name}"?`,
@@ -143,12 +124,24 @@ export default function TeamManagementScreen({ navigation }: any) {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            Alert.alert('Success', 'Team deleted successfully');
-            loadTeams();
-            if (selectedTeam?.id === team.id) {
-              setSelectedTeam(null);
-              setTeamMembers([]);
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const { error } = await supabase
+                .from('teams')
+                .delete()
+                .eq('id', team.id);
+              if (error) throw error;
+              Alert.alert('Success', 'Team deleted successfully');
+              loadTeams();
+              if (selectedTeam?.id === team.id) {
+                setSelectedTeam(null);
+                setTeamMembers([]);
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete team');
+            } finally {
+              setLoading(false);
             }
           },
         },
@@ -156,11 +149,24 @@ export default function TeamManagementScreen({ navigation }: any) {
     );
   };
 
-  const handleAddMember = () => {
-    Alert.alert('Add Member', 'Add member functionality coming soon');
+  const handleAddMember = async (teamId: string, employeeId: string) => {
+    try {
+      setLoading(true);
+      const { error } = await supabase
+        .from('employees')
+        .update({ team_id: teamId })
+        .eq('id', employeeId);
+      if (error) throw error;
+      Alert.alert('Success', 'Member added to team');
+      loadTeamMembers(teamId);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to add member');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleRemoveMember = (member: TeamMember) => {
+  const handleRemoveMember = async (member: TeamMember) => {
     Alert.alert(
       'Remove Member',
       `Are you sure you want to remove ${member.name} from the team?`,
@@ -169,10 +175,22 @@ export default function TeamManagementScreen({ navigation }: any) {
         {
           text: 'Remove',
           style: 'destructive',
-          onPress: () => {
-            Alert.alert('Success', 'Member removed successfully');
-            if (selectedTeam) {
-              loadTeamMembers(selectedTeam.id);
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const { error } = await supabase
+                .from('employees')
+                .update({ team_id: null })
+                .eq('id', member.id);
+              if (error) throw error;
+              Alert.alert('Success', 'Member removed successfully');
+              if (selectedTeam) {
+                loadTeamMembers(selectedTeam.id);
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Failed to remove member');
+            } finally {
+              setLoading(false);
             }
           },
         },
@@ -198,7 +216,7 @@ export default function TeamManagementScreen({ navigation }: any) {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Team Management</Text>
-        <TouchableOpacity style={styles.addButton} onPress={handleCreateTeam}>
+        <TouchableOpacity style={styles.addButton} onPress={() => Alert.alert('Create Team', 'Enter team name and description')}>
           <Ionicons name="add" size={24} color="white" />
         </TouchableOpacity>
       </View>
@@ -225,7 +243,7 @@ export default function TeamManagementScreen({ navigation }: any) {
                   <View style={styles.teamActions}>
                     <TouchableOpacity
                       style={styles.teamActionButton}
-                      onPress={() => handleEditTeam(team)}
+                      onPress={() => Alert.alert('Edit Team', `Enter new name and description for "${team.name}"`)}
                     >
                       <Ionicons name="pencil" size={16} color="#3b82f6" />
                     </TouchableOpacity>
@@ -255,7 +273,7 @@ export default function TeamManagementScreen({ navigation }: any) {
               <Text style={styles.sectionTitle}>
                 {selectedTeam.name} - Members
               </Text>
-              <TouchableOpacity style={styles.addMemberButton} onPress={handleAddMember}>
+              <TouchableOpacity style={styles.addMemberButton} onPress={() => Alert.alert('Add Member', 'Enter employee ID to add')}>
                 <Ionicons name="person-add" size={20} color="#3b82f6" />
                 <Text style={styles.addMemberButtonText}>Add Member</Text>
               </TouchableOpacity>

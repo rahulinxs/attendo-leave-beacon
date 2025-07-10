@@ -25,7 +25,8 @@ import {
   EyeOff,
   Building,
   Network,
-  FlaskConical
+  FlaskConical,
+  ClipboardList
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -99,7 +100,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
     {
       id: 'leave-management',
       label: 'Manage Leave Requests',
-      icon: UserCheck,
+      icon: ClipboardList,
       roles: ['reporting_manager', 'admin', 'super_admin'],
       requiresPermission: true
     },
@@ -254,12 +255,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
 
       <div className="flex">
         {/* Sidebar */}
-        <div className={`
-          fixed inset-y-0 z-50 w-64 transition-transform duration-200 ease-in-out transform lg:translate-x-0 lg:static lg:inset-0 ${themeClass} sidebar flex flex-col shadow-lg
-          ${sidebarPosition === 'right' ? 'right-0' : 'left-0'}
-          ${sidebarOpen ? 'translate-x-0' : 'translate-x-full'}
-        `}
-        style={{ background: 'hsl(var(--background))', color: 'hsl(var(--foreground))' }}
+        <div
+          className={`
+            fixed inset-y-0 z-50 transition-all duration-300 ease-in-out transform lg:translate-x-0 lg:static lg:inset-0 ${themeClass} sidebar flex flex-col shadow-lg
+            ${sidebarPosition === 'right' ? 'right-0' : 'left-0'}
+            ${sidebarOpen ? 'translate-x-0' : 'translate-x-full'}
+          `}
+          style={{ background: 'hsl(var(--background))', color: 'hsl(var(--foreground))', height: '100vh', width: '16rem', minWidth: '16rem', maxWidth: '16rem', position: 'fixed', top: 0, left: 0 }}
         >
           <div className="flex flex-col h-full">
             {/* Sidebar Header */}
@@ -306,26 +308,28 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 p-3 space-y-1">
+            <nav className="flex-1 p-2 space-y-1">
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
-                
                 return (
                   <button
                     key={item.id}
                     onClick={() => onTabChange(item.id)}
                     className={`
-                      w-full flex items-center space-x-2 px-2 py-1.5 rounded-md text-left transition-colors
+                      w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn
                       ${isActive 
                         ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold'
                         : 'hover:bg-[rgba(0,0,0,0.02)]'
                       }
                     `}
                     style={{ color: 'var(--card-text)' }}
+                    aria-label={item.label}
                   >
-                    <Icon className="w-4 h-4" />
-                    <span className="flex-1">{item.label}</span>
+                    <Icon className="w-5 h-5" />
+                    <span className="sidebar-label text-sm">
+                      {item.label}
+                    </span>
                     {item.requiresPermission && (
                       <Lock className="w-3 h-3 text-muted-foreground" />
                     )}
@@ -379,7 +383,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 lg:ml-0">
+        <div className="flex-1" style={{ marginLeft: '16rem', height: '100vh', overflowY: 'auto' }}>
           <div className="p-3 lg:p-4">
             {children}
           </div>

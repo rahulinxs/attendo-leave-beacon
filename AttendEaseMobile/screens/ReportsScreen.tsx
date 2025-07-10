@@ -1,17 +1,32 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useUserProfile } from '../lib/useUserProfile';
 import { APP_NAME } from '../branding';
+import { Picker } from '@react-native-picker/picker';
+
+interface AnalyticsData {
+  attendanceRate?: number;
+  presentDays?: number;
+  totalDays?: number;
+  totalLeaveRequests?: number;
+  approvedLeave?: number;
+  pendingLeave?: number;
+  userRole?: string;
+}
 
 const ReportsScreen = () => {
   const { profileData } = useUserProfile();
-  const [analytics, setAnalytics] = useState({});
+  const [analytics, setAnalytics] = useState<AnalyticsData>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [selectedTeam, setSelectedTeam] = useState('all');
+  const [teams, setTeams] = useState([]);
 
   useEffect(() => {
     fetchAnalytics();
+    fetchTeams();
   }, [profileData]);
 
   const fetchAnalytics = async () => {
@@ -66,6 +81,12 @@ const ReportsScreen = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchTeams = async () => {
+    if (!profileData?.profile) return;
+    const { data, error } = await supabase.from('teams').select('id, name');
+    if (!error && data) setTeams(data);
   };
 
   const getTeamMemberIds = async (managerId) => {
@@ -128,26 +149,52 @@ const ReportsScreen = () => {
     <ScrollView style={styles.container}>
       <Text style={styles.title}>{APP_NAME} Reports</Text>
       <Text style={styles.subtitle}>{getScopeText()}</Text>
-      
+      <View style={styles.filterRow}>
+        <Text style={styles.filterLabel}>Date:</Text>
+        <TouchableOpacity onPress={() => {/* show date picker */}} style={styles.filterInput}>
+          <Text>{selectedDate}</Text>
+        </TouchableOpacity>
+        {['admin', 'super_admin', 'reporting_manager'].includes(profileData?.profile?.role) && (
+          <>
+            <Text style={styles.filterLabel}>Team:</Text>
+            <Picker
+              selectedValue={selectedTeam}
+              style={styles.filterInput}
+              onValueChange={(itemValue) => setSelectedTeam(itemValue)}
+            >
+              <Picker.Item label="All" value="all" />
+              {teams.map(team => (
+                <Picker.Item key={team.id} label={team.name} value={team.id} />
+              ))}
+            </Picker>
+          </>
+        )}
+      </View>
+      {/* Analytics Cards */}
       <View style={styles.card}>
         <Text style={styles.metricTitle}>Attendance Rate</Text>
-        <Text style={styles.metricValue}>{analytics.attendanceRate}%</Text>
+        <Text style={styles.metricValue}>{analytics.attendanceRate ?? 0}%</Text>
+        <View style={styles.barChartContainer}>
+          <View style={[styles.bar, { width: `${analytics.attendanceRate ?? 0}%` }]} />
+        </View>
         <Text style={styles.metricDetail}>
-          {analytics.presentDays} of {analytics.totalDays} days
+          {analytics.presentDays ?? 0} of {analytics.totalDays ?? 0} days
         </Text>
       </View>
-
       <View style={styles.card}>
         <Text style={styles.metricTitle}>Leave Requests</Text>
-        <Text style={styles.metricValue}>{analytics.totalLeaveRequests}</Text>
+        <Text style={styles.metricValue}>{analytics.totalLeaveRequests ?? 0}</Text>
+        <View style={styles.barChartContainer}>
+          <View style={[styles.bar, { width: `${((analytics.approvedLeave ?? 0) / ((analytics.totalLeaveRequests ?? 1))) * 100}%`, backgroundColor: '#10b981' }]} />
+          <View style={[styles.bar, { width: `${((analytics.pendingLeave ?? 0) / ((analytics.totalLeaveRequests ?? 1))) * 100}%`, backgroundColor: '#f59e0b' }]} />
+        </View>
         <Text style={styles.metricDetail}>
-          {analytics.approvedLeave} approved, {analytics.pendingLeave} pending
+          {analytics.approvedLeave ?? 0} approved, {analytics.pendingLeave ?? 0} pending
         </Text>
       </View>
-
       <View style={styles.card}>
         <Text style={styles.metricTitle}>User Role</Text>
-        <Text style={styles.metricValue}>{analytics.userRole}</Text>
+        <Text style={styles.metricValue}>{analytics.userRole ?? ''}</Text>
         <Text style={styles.metricDetail}>Access level</Text>
       </View>
     </ScrollView>
@@ -163,6 +210,39 @@ const styles = StyleSheet.create({
   metricValue: { fontSize: 24, fontWeight: 'bold', color: '#2563eb', marginBottom: 4 },
   metricDetail: { fontSize: 14, color: '#64748b', textAlign: 'center' },
   errorText: { color: 'red', textAlign: 'center', marginTop: 20 },
+  filterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    marginBottom: 16,
+    flexWrap: 'wrap',
+  },
+  filterLabel: {
+    fontSize: 16,
+    color: '#475569',
+    marginRight: 10,
+  },
+  filterInput: {
+    backgroundColor: '#e2e8f0',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    minWidth: 100,
+    textAlign: 'center',
+  },
+  barChartContainer: {
+    width: '100%',
+    height: 20,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  bar: {
+    height: '100%',
+    borderRadius: 10,
+  },
 });
 
 export default ReportsScreen; 

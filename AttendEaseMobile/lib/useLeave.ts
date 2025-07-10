@@ -48,10 +48,6 @@ export const useLeave = () => {
         .from('leave_requests')
         .select(`
           *,
-          employees!inner(
-            name,
-            email
-          ),
           leave_types!inner(
             name
           )
@@ -78,10 +74,9 @@ export const useLeave = () => {
         throw fetchError;
       }
 
-      // Transform data to include employee name and leave type name
+      // Transform data to include leave type name only
       const transformedData = data?.map(item => ({
         ...item,
-        employee_name: item.employees?.name || 'Unknown Employee',
         leave_type_name: item.leave_types?.name || 'Unknown Type',
       })) || [];
 
@@ -106,10 +101,6 @@ export const useLeave = () => {
         .from('leave_requests')
         .select(`
           *,
-          employees!inner(
-            name,
-            email
-          ),
           leave_types!inner(
             name
           )
@@ -123,7 +114,6 @@ export const useLeave = () => {
 
       return {
         ...data,
-        employee_name: data.employees?.name || 'Unknown Employee',
         leave_type_name: data.leave_types?.name || 'Unknown Type',
       };
     } catch (err) {

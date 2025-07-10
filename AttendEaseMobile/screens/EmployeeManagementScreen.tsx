@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useEmployees } from '../lib/useEmployees';
 import { useUserProfile } from '../lib/useUserProfile';
+import { supabase } from '../lib/supabase';
 
 interface Employee {
   id: string;
@@ -35,7 +36,10 @@ export default function EmployeeManagementScreen({ navigation }: any) {
   const loadEmployees = async () => {
     try {
       setLoading(true);
-      const data = await getEmployees();
+      const { data, error } = await supabase
+        .from('employees')
+        .select('*');
+      if (error) throw error;
       setEmployees(data || []);
     } catch (error) {
       console.error('Error loading employees:', error);
@@ -76,13 +80,56 @@ export default function EmployeeManagementScreen({ navigation }: any) {
   };
 
   const handleEditEmployee = (employee: Employee) => {
-    // Navigate to edit employee screen (to be implemented)
-    Alert.alert('Edit Employee', 'Edit functionality coming soon');
+    Alert.prompt('Edit Employee', 'Enter new name', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Save',
+        onPress: async (name) => {
+          if (name) {
+            try {
+              setLoading(true);
+              const { error } = await supabase
+                .from('employees')
+                .update({ name })
+                .eq('id', employee.id);
+              if (error) throw error;
+              Alert.alert('Success', 'Employee updated successfully');
+              loadEmployees();
+            } catch (error) {
+              Alert.alert('Error', 'Failed to update employee');
+            } finally {
+              setLoading(false);
+            }
+          }
+        },
+      },
+    ]);
   };
 
   const handleAddEmployee = () => {
-    // Navigate to add employee screen (to be implemented)
-    Alert.alert('Add Employee', 'Add employee functionality coming soon');
+    Alert.prompt('Add Employee', 'Enter employee name', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Add',
+        onPress: async (name) => {
+          if (name) {
+            try {
+              setLoading(true);
+              const { error } = await supabase
+                .from('employees')
+                .insert([{ name }]);
+              if (error) throw error;
+              Alert.alert('Success', 'Employee added successfully');
+              loadEmployees();
+            } catch (error) {
+              Alert.alert('Error', 'Failed to add employee');
+            } finally {
+              setLoading(false);
+            }
+          }
+        },
+      },
+    ]);
   };
 
   useEffect(() => {

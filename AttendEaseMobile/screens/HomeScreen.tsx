@@ -23,11 +23,12 @@ const HomeScreen = ({ navigation }) => {
       { label: 'Profile', icon: '👤', screen: 'Profile', roles: ['employee', 'reporting_manager', 'admin', 'super_admin'] },
       
       // Management modules
-      { label: 'Employee Mgmt', icon: '👨‍💼', screen: 'EmployeeManagement', roles: ['admin', 'super_admin'] },
-      { label: 'Attendance Mgmt', icon: '📋', screen: 'AttendanceManagement', roles: ['reporting_manager', 'admin', 'super_admin'] },
-      { label: 'Leave Mgmt', icon: '📝', screen: 'LeaveManagement', roles: ['reporting_manager', 'admin', 'super_admin'] },
-      { label: 'Team Mgmt', icon: '🏢', screen: 'TeamManagement', roles: ['admin', 'super_admin'] },
-      { label: 'Holiday Mgmt', icon: '🎉', screen: 'HolidayManagement', roles: ['admin', 'super_admin'] },
+      { label: 'Employee Management', icon: '👨‍💼', screen: 'EmployeeManagement', roles: ['admin', 'super_admin'] },
+      { label: 'Attendance Management', icon: '📋', screen: 'AttendanceManagement', roles: ['reporting_manager', 'admin', 'super_admin'] },
+      { label: 'Leave Management', icon: '📝', screen: 'LeaveManagement', roles: ['reporting_manager', 'admin', 'super_admin'] },
+      { label: 'Team Management', icon: '🏢', screen: 'TeamManagement', roles: ['admin', 'super_admin'] },
+      { label: 'Holiday Management', icon: '🎉', screen: 'HolidayManagement', roles: ['admin', 'super_admin'] },
+      { label: 'System Settings', icon: '⚙️', screen: 'Settings', roles: ['employee', 'reporting_manager', 'admin', 'super_admin'] },
     ];
 
     return allModules.filter(module => module.roles.includes(userRole));
@@ -51,11 +52,12 @@ const HomeScreen = ({ navigation }) => {
 
   // Separate regular modules from management modules
   const regularModules = availableModules.filter(module => 
-    !module.label.includes('Mgmt')
+    !module.label.includes('Management') && module.label !== 'System Settings'
   );
   const managementModules = availableModules.filter(module => 
-    module.label.includes('Mgmt')
+    module.label.includes('Management')
   );
+  const systemSettingsModule = availableModules.find(module => module.label === 'System Settings');
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -67,7 +69,7 @@ const HomeScreen = ({ navigation }) => {
       {/* Regular Modules */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <View style={styles.linksContainer}>
+      <View style={styles.linksContainer}>
           {regularModules.map((module) => (
             <TouchableOpacity 
               key={module.label} 
@@ -76,8 +78,8 @@ const HomeScreen = ({ navigation }) => {
             >
               <Text style={styles.linkIcon}>{module.icon}</Text>
               <Text style={styles.linkLabel}>{module.label}</Text>
-            </TouchableOpacity>
-          ))}
+          </TouchableOpacity>
+        ))}
         </View>
       </View>
 
@@ -96,6 +98,23 @@ const HomeScreen = ({ navigation }) => {
                 <Text style={styles.linkLabel}>{module.label}</Text>
               </TouchableOpacity>
             ))}
+          </View>
+        </View>
+      )}
+
+      {/* System Settings Module */}
+      {systemSettingsModule && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>System Settings</Text>
+          <View style={styles.linksContainer}>
+            <TouchableOpacity 
+              key={systemSettingsModule.label} 
+              style={styles.linkCard} 
+              onPress={() => handleLinkPress(systemSettingsModule.screen)}
+            >
+              <Text style={styles.linkIcon}>{systemSettingsModule.icon}</Text>
+              <Text style={styles.linkLabel}>{systemSettingsModule.label}</Text>
+            </TouchableOpacity>
           </View>
         </View>
       )}

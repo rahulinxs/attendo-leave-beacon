@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useUserProfile } from '../lib/useUserProfile';
+import { supabase } from '../lib/supabase';
 
 interface Holiday {
   id: string;
@@ -31,55 +32,11 @@ export default function HolidayManagementScreen({ navigation }: any) {
   const loadHolidays = async () => {
     try {
       setLoading(true);
-      // Mock data - this would be replaced with actual API calls
-      const mockHolidays: Holiday[] = [
-        {
-          id: '1',
-          name: 'New Year\'s Day',
-          date: '2024-01-01',
-          type: 'Public Holiday',
-          description: 'Celebration of the new year',
-          is_recurring: true,
-          created_at: '2023-12-01T00:00:00Z',
-        },
-        {
-          id: '2',
-          name: 'Independence Day',
-          date: '2024-07-04',
-          type: 'Public Holiday',
-          description: 'Independence Day celebration',
-          is_recurring: true,
-          created_at: '2023-12-01T00:00:00Z',
-        },
-        {
-          id: '3',
-          name: 'Christmas Day',
-          date: '2024-12-25',
-          type: 'Public Holiday',
-          description: 'Christmas celebration',
-          is_recurring: true,
-          created_at: '2023-12-01T00:00:00Z',
-        },
-        {
-          id: '4',
-          name: 'Company Anniversary',
-          date: '2024-03-15',
-          type: 'Company Holiday',
-          description: 'Company founding anniversary',
-          is_recurring: true,
-          created_at: '2024-01-01T00:00:00Z',
-        },
-        {
-          id: '5',
-          name: 'Team Building Day',
-          date: '2024-06-20',
-          type: 'Optional Holiday',
-          description: 'Annual team building event',
-          is_recurring: false,
-          created_at: '2024-02-01T00:00:00Z',
-        },
-      ];
-      setHolidays(mockHolidays);
+      const { data, error } = await supabase
+        .from('holidays')
+        .select('*');
+      if (error) throw error;
+      setHolidays(data || []);
     } catch (error) {
       console.error('Error loading holidays:', error);
       Alert.alert('Error', 'Failed to load holidays');
@@ -94,15 +51,40 @@ export default function HolidayManagementScreen({ navigation }: any) {
     setRefreshing(false);
   };
 
-  const handleAddHoliday = () => {
-    Alert.alert('Add Holiday', 'Add holiday functionality coming soon');
+  const handleAddHoliday = async (holiday: Holiday) => {
+    try {
+      setLoading(true);
+      const { error } = await supabase
+        .from('holidays')
+        .insert([holiday]);
+      if (error) throw error;
+      Alert.alert('Success', 'Holiday added successfully');
+      loadHolidays();
+    } catch (error) {
+      Alert.alert('Error', 'Failed to add holiday');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleEditHoliday = (holiday: Holiday) => {
-    Alert.alert('Edit Holiday', `Edit holiday "${holiday.name}" functionality coming soon`);
+  const handleEditHoliday = async (holidayId: string, updates: Partial<Holiday>) => {
+    try {
+      setLoading(true);
+      const { error } = await supabase
+        .from('holidays')
+        .update(updates)
+        .eq('id', holidayId);
+      if (error) throw error;
+      Alert.alert('Success', 'Holiday updated successfully');
+      loadHolidays();
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update holiday');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDeleteHoliday = (holiday: Holiday) => {
+  const handleDeleteHoliday = async (holiday: Holiday) => {
     Alert.alert(
       'Delete Holiday',
       `Are you sure you want to delete the holiday "${holiday.name}"?`,
@@ -111,9 +93,21 @@ export default function HolidayManagementScreen({ navigation }: any) {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            Alert.alert('Success', 'Holiday deleted successfully');
-            loadHolidays();
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const { error } = await supabase
+                .from('holidays')
+                .delete()
+                .eq('id', holiday.id);
+              if (error) throw error;
+              Alert.alert('Success', 'Holiday deleted successfully');
+              loadHolidays();
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete holiday');
+            } finally {
+              setLoading(false);
+            }
           },
         },
       ]
@@ -178,7 +172,28 @@ export default function HolidayManagementScreen({ navigation }: any) {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Holiday Management</Text>
-        <TouchableOpacity style={styles.addButton} onPress={handleAddHoliday}>
+        <TouchableOpacity style={styles.addButton} onPress={() => {
+          Alert.prompt('Add New Holiday', 'Enter holiday name', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Add',
+              onPress: (name) => {
+                if (name) {
+                  const newHoliday: Holiday = {
+                    id: '', // Will be generated by Supabase
+                    name: name,
+                    date: new Date().toISOString().slice(0, 10), // Default to today
+                    type: 'Public Holiday', // Default type
+                    description: '',
+                    is_recurring: false,
+                    created_at: new Date().toISOString(),
+                  };
+                  handleAddHoliday(newHoliday);
+                }
+              },
+            },
+          ]);
+        }}>
           <Ionicons name="add" size={24} color="white" />
         </TouchableOpacity>
       </View>
@@ -243,7 +258,19 @@ export default function HolidayManagementScreen({ navigation }: any) {
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.holidayActionButton}
-                    onPress={() => handleEditHoliday(holiday)}
+                    onPress={() => {
+                      Alert.prompt('Edit Holiday', 'Enter new holiday name', [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Save',
+                          onPress: (name) => {
+                            if (name) {
+                              handleEditHoliday(holiday.id, { name });
+                            }
+                          },
+                        },
+                      ]);
+                    }}
                   >
                     <Ionicons name="pencil" size={16} color="#3b82f6" />
                   </TouchableOpacity>

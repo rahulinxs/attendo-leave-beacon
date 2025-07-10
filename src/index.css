@@ -134,6 +134,48 @@
     --card: 24 100% 98%;
     --card-foreground: 24 100% 20%;
   }
+  :root.theme-vibrant-pink {
+    --background: 340 100% 98%;
+    --foreground: 340 80% 20%;
+    --primary: 340 82% 60%;
+    --primary-foreground: 340 100% 98%;
+    --secondary: 340 100% 92%;
+    --secondary-foreground: 340 80% 20%;
+    --accent: 340 100% 85%;
+    --accent-foreground: 340 80% 20%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 340 100% 98%;
+    --card: 340 100% 98%;
+    --card-foreground: 340 80% 20%;
+  }
+  :root.theme-vibrant-teal {
+    --background: 168 100% 98%;
+    --foreground: 168 80% 20%;
+    --primary: 168 76% 45%;
+    --primary-foreground: 168 100% 98%;
+    --secondary: 168 100% 92%;
+    --secondary-foreground: 168 80% 20%;
+    --accent: 168 100% 85%;
+    --accent-foreground: 168 80% 20%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 168 100% 98%;
+    --card: 168 100% 98%;
+    --card-foreground: 168 80% 20%;
+  }
+  :root.theme-vibrant-yellow {
+    --background: 48 100% 98%;
+    --foreground: 48 80% 20%;
+    --primary: 48 100% 50%;
+    --primary-foreground: 48 100% 98%;
+    --secondary: 48 100% 92%;
+    --secondary-foreground: 48 80% 20%;
+    --accent: 48 100% 85%;
+    --accent-foreground: 48 80% 20%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 48 100% 98%;
+    --card: 48 100% 98%;
+    --card-foreground: 48 80% 20%;
+  }
 }
 
 @layer base {

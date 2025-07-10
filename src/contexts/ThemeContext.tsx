@@ -8,11 +8,6 @@ export const THEME_OPTIONS = [
     className: '',
   },
   {
-    key: 'dark',
-    name: 'Dark',
-    className: 'dark',
-  },
-  {
     key: 'vibrant-blue',
     name: 'Vibrant Blue',
     className: 'theme-vibrant-blue',
@@ -31,6 +26,21 @@ export const THEME_OPTIONS = [
     key: 'vibrant-orange',
     name: 'Vibrant Orange',
     className: 'theme-vibrant-orange',
+  },
+  {
+    key: 'vibrant-pink',
+    name: 'Vibrant Pink',
+    className: 'theme-vibrant-pink',
+  },
+  {
+    key: 'vibrant-teal',
+    name: 'Vibrant Teal',
+    className: 'theme-vibrant-teal',
+  },
+  {
+    key: 'vibrant-yellow',
+    name: 'Vibrant Yellow',
+    className: 'theme-vibrant-yellow',
   },
 ];
 
