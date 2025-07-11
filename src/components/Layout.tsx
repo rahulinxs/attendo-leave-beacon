@@ -253,7 +253,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
             variant="ghost"
             size="sm"
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className={sidebarPosition === 'right' ? 'order-first' : 'order-last'}
+            className="order-last"
           >
             <Menu className="w-5 h-5" />
           </Button>
@@ -265,8 +265,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
         <div
           className={`
             fixed inset-y-0 z-50 transition-all duration-300 ease-in-out transform lg:translate-x-0 lg:static lg:inset-0 ${themeClass} sidebar flex flex-col shadow-lg
-            ${sidebarPosition === 'right' ? 'right-0' : 'left-0'}
-            ${sidebarOpen ? 'translate-x-0' : 'translate-x-full'}
+            left-0
+            ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
           `}
           style={{ background: 'hsl(var(--background))', color: 'hsl(var(--foreground))', height: '100vh', width: '16rem', minWidth: '16rem', maxWidth: '16rem', position: 'fixed', top: 0, left: 0 }}
         >

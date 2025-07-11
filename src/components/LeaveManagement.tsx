@@ -58,6 +58,7 @@ interface LeaveType {
   id: string;
   name: string;
   max_days_per_year: number;
+  is_active?: boolean;
 }
 
 interface TeamMember {
@@ -80,18 +81,18 @@ interface NotificationSettings {
 
 // --- Leave Type Management Card/Palette UI ---
 const LeaveTypeCard = ({ leaveType, onEdit, onToggleActive }) => (
-  <div className={`relative card-theme rounded-2xl p-6 flex flex-col min-h-[120px] shadow-md border ${leaveType.active ? '' : 'opacity-60 grayscale'}`}
+  <div className={`relative card-theme rounded-2xl p-6 flex flex-col min-h-[120px] shadow-md border ${leaveType.is_active ? '' : 'opacity-60 grayscale'}`}
     style={{ background: 'hsl(var(--card))', color: 'hsl(var(--card-foreground))' }}>
     <div className="flex items-center justify-between mb-2">
       <span className="font-bold text-lg text-primary">{leaveType.name}</span>
       <div className="flex gap-2 items-center">
         <button title="Edit" className="text-blue-500 hover:underline text-xs mr-2" onClick={() => onEdit(leaveType)}>✏️</button>
-        <Switch checked={leaveType.active} onCheckedChange={() => onToggleActive(leaveType)} />
+        <Switch checked={leaveType.is_active} onCheckedChange={() => onToggleActive(leaveType)} />
       </div>
     </div>
     <div className="text-xs text-gray-600 mb-1">{leaveType.description || 'No description'}</div>
     <div className="text-xs text-gray-600">Quota: <span className="font-semibold">{leaveType.max_days_per_year}</span> days/year</div>
-    {!leaveType.active && <div className="absolute top-2 right-2 text-xs text-red-500">Inactive</div>}
+    {!leaveType.is_active && <div className="absolute top-2 right-2 text-xs text-red-500">Inactive</div>}
   </div>
 );
 
@@ -145,7 +146,7 @@ const LeaveManagement: React.FC = () => {
     name: '',
     description: '',
     max_days_per_year: 0,
-    active: true
+    is_active: true
   });
 
   const { currentCompany } = useCompany();
@@ -177,7 +178,7 @@ const LeaveManagement: React.FC = () => {
       name: '',
       description: '',
       max_days_per_year: 0,
-      active: true
+      is_active: true
     });
     setShowLeaveTypeModal(true);
   };
@@ -188,7 +189,7 @@ const LeaveManagement: React.FC = () => {
       name: leaveType.name,
       description: leaveType.description || '',
       max_days_per_year: leaveType.max_days_per_year,
-      active: leaveType.active !== false
+      is_active: leaveType.is_active !== false
     });
     setShowLeaveTypeModal(true);
   };
@@ -238,7 +239,7 @@ const LeaveManagement: React.FC = () => {
   const handleToggleLeaveTypeActive = async (leaveType: any) => {
     const { error } = await supabase
       .from('leave_types')
-      .update({ active: !leaveType.active })
+      .update({ is_active: !leaveType.is_active })
       .eq('id', leaveType.id);
 
     if (error) {
@@ -250,7 +251,7 @@ const LeaveManagement: React.FC = () => {
     } else {
       toast({
         title: "Success",
-        description: `Leave type ${leaveType.active ? 'deactivated' : 'activated'}`,
+        description: `Leave type ${leaveType.is_active ? 'deactivated' : 'activated'}`,
       });
       fetchAllLeaveTypes();
     }
@@ -405,11 +406,11 @@ const LeaveManagement: React.FC = () => {
                 </div>
                 <div className="flex items-center space-x-2">
                   <Switch
-                    id="active"
-                    checked={leaveTypeForm.active}
-                    onCheckedChange={(checked) => setLeaveTypeForm({...leaveTypeForm, active: checked})}
+                    id="is_active"
+                    checked={leaveTypeForm.is_active}
+                    onCheckedChange={(checked) => setLeaveTypeForm({...leaveTypeForm, is_active: checked})}
                   />
-                  <Label htmlFor="active">Active</Label>
+                  <Label htmlFor="is_active">Active</Label>
                 </div>
                 <div className="flex gap-2 pt-4">
                   <Button onClick={handleSaveLeaveType} className="flex-1">
@@ -1047,7 +1048,7 @@ const EmployeeLeaveView: React.FC = () => {
                           <SelectValue placeholder="Select leave type" />
                         </SelectTrigger>
                         <SelectContent>
-                      {leaveTypes.map(type => (
+                      {leaveTypes.filter(type => type.is_active).map(type => (
                         <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
                           ))}
                         </SelectContent>
@@ -1119,35 +1120,41 @@ const EmployeeLeaveView: React.FC = () => {
               </CardHeader>
               <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {leaveBalances.map((balance) => (
-                  <div key={balance.leave_type_id} className="p-4 bg-gray-50 rounded-lg">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="font-medium">{balance.leave_types?.name}</p>
-                        <p className="text-sm text-gray-600">
-                          {balance.used_days} of {balance.allocated_days} days used
-                        </p>
+                {leaveTypes.filter(type => type.is_active).map(type => {
+                  const appliedDays = leaveRequests
+                    .filter(req => req.leave_type_id === type.id && ['approved', 'pending'].includes(req.status))
+                    .reduce((sum, req) => sum + (req.total_days || 0), 0);
+                  const remaining = type.max_days_per_year - appliedDays;
+                  return (
+                    <div key={type.id} className="p-4 bg-gray-50 rounded-lg">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="font-medium">{type.name}</p>
+                          <p className="text-sm text-gray-600">
+                            {appliedDays} of {type.max_days_per_year} days used
+                          </p>
                         </div>
-                      <div className="text-right">
-                        <p className="text-2xl font-bold text-blue-600">
-                          {balance.allocated_days - balance.used_days}
-                        </p>
-                        <p className="text-xs text-gray-500">Remaining</p>
+                        <div className="text-right">
+                          <p className="text-2xl font-bold text-blue-600">
+                            {remaining}
+                          </p>
+                          <p className="text-xs text-gray-500">Remaining</p>
+                        </div>
+                      </div>
+                      <div className="mt-2">
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div 
+                            className="bg-blue-600 h-2 rounded-full" 
+                            style={{ width: `${(appliedDays / type.max_days_per_year) * 100}%` }}
+                          ></div>
+                        </div>
                       </div>
                     </div>
-                    <div className="mt-2">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-blue-600 h-2 rounded-full" 
-                          style={{ width: `${(balance.used_days / balance.allocated_days) * 100}%` }}
-                        ></div>
-                      </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
 
           {/* My Leave Requests */}
           <Card>

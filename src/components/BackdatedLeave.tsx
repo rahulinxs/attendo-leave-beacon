@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCompany } from '@/contexts/CompanyContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,14 +9,31 @@ const BackdatedLeave: React.FC = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
+  const [leaveTypeId, setLeaveTypeId] = useState('');
+  const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    const fetchLeaveTypes = async () => {
+      const { data, error } = await supabase.from('leave_types').select('*');
+      if (!error && data) {
+        setLeaveTypes(data.filter((type: any) => type.is_active));
+      }
+    };
+    fetchLeaveTypes();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setMessage('');
 
+    if (!leaveTypeId) {
+      setMessage('Please select a leave type.');
+      setSubmitting(false);
+      return;
+    }
     if (new Date(startDate) > new Date() || new Date(endDate) > new Date()) {
       setMessage('Backdated leave must be for past dates only.');
       setSubmitting(false);
@@ -34,6 +51,7 @@ const BackdatedLeave: React.FC = () => {
     const { error } = await supabase.from('leave_requests').insert({
       employee_id: user.id,
       company_id: currentCompany.id,
+      leave_type_id: leaveTypeId,
       start_date: startDate,
       end_date: endDate,
       total_days: totalDays,
@@ -48,6 +66,7 @@ const BackdatedLeave: React.FC = () => {
       setStartDate('');
       setEndDate('');
       setReason('');
+      setLeaveTypeId('');
     }
     setSubmitting(false);
   };
@@ -56,6 +75,20 @@ const BackdatedLeave: React.FC = () => {
     <div className="p-4">
       <form className="max-w-md mx-auto space-y-4" onSubmit={handleSubmit}>
         <h2 className="text-xl font-bold mb-2">Request Backdated Leave</h2>
+        <div>
+          <label className="block text-sm font-medium mb-1">Leave Type</label>
+          <select
+            className="w-full border rounded px-3 py-2"
+            value={leaveTypeId}
+            onChange={e => setLeaveTypeId(e.target.value)}
+            required
+          >
+            <option value="">Select leave type</option>
+            {leaveTypes.map(type => (
+              <option key={type.id} value={type.id}>{type.name}</option>
+            ))}
+          </select>
+        </div>
         <div>
           <label className="block text-sm font-medium mb-1">Start Date</label>
           <input
