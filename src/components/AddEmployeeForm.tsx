@@ -36,25 +36,28 @@ const DEFAULT_MANAGER_ID = '385fe928-0d70-4adc-9d4e-c11548e52f4f';
 
 const AddEmployeeForm: React.FC<AddEmployeeFormProps> = ({ onSuccess, onCancel }) => {
   const { user } = useAuth();
-  const { currentCompany } = useCompany();
+  const { currentCompany, companies, setCurrentCompany } = useCompany();
+  const [selectedCompanyId, setSelectedCompanyId] = React.useState(currentCompany?.id || '');
   const [teams, setTeams] = React.useState<{ id: string; name: string }[]>([]);
   const [reportingManagers, setReportingManagers] = React.useState<{ id: string; name: string; department: string }[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [showAddTeam, setShowAddTeam] = React.useState(false);
+  const [newTeamName, setNewTeamName] = React.useState('');
 
   React.useEffect(() => {
     const fetchData = async () => {
-      if (!currentCompany) return;
+      if (!selectedCompanyId) return;
       try {
         const { data: teamsData } = await supabase
           .from('teams')
           .select('id, name')
-          .eq('company_id', currentCompany.id)
+          .eq('company_id', selectedCompanyId)
           .eq('is_active', true);
         if (teamsData) setTeams(teamsData);
         const { data: managersData } = await supabase
           .from('employees')
           .select('id, name, department')
-          .eq('company_id', currentCompany.id)
+          .eq('company_id', selectedCompanyId)
           .eq('role', 'reporting_manager')
           .eq('is_active', true);
         if (managersData) setReportingManagers(managersData);
@@ -63,8 +66,25 @@ const AddEmployeeForm: React.FC<AddEmployeeFormProps> = ({ onSuccess, onCancel }
       }
     };
     fetchData();
-  }, [currentCompany]);
-  
+  }, [selectedCompanyId]);
+
+  // Add new team inline
+  const handleAddTeam = async () => {
+    if (!newTeamName.trim() || !selectedCompanyId) return;
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from('teams')
+      .insert([{ name: newTeamName, company_id: selectedCompanyId, is_active: true }])
+      .select();
+    setIsLoading(false);
+    if (!error && data && data[0]) {
+      setTeams(prev => [...prev, data[0]]);
+      setShowAddTeam(false);
+      setNewTeamName('');
+      form.setValue('team_id', data[0].id);
+    }
+  };
+
   const form = useForm<AddEmployeeForm>({
     resolver: zodResolver(addEmployeeSchema),
     defaultValues: {
@@ -84,21 +104,11 @@ const AddEmployeeForm: React.FC<AddEmployeeFormProps> = ({ onSuccess, onCancel }
   const onSubmit = async (data: any) => {
     setIsLoading(true);
     try {
-      console.log('Creating new employee via edge function:', data.email);
-      
-      // Get current session for auth
       const { data: { session } } = await supabase.auth.getSession();
-      
       if (!session) {
-        toast({
-          title: "Error",
-          description: "You must be logged in to create employees",
-          variant: "destructive",
-        });
+        toast({ title: "Error", description: "You must be logged in to create employees", variant: "destructive" });
         return;
       }
-
-      // Add team, manager, hire_date, is_active to the payload
       const payload = {
         ...data,
         team_id: data.team_id === 'no_team' ? null : data.team_id || null,
@@ -108,52 +118,47 @@ const AddEmployeeForm: React.FC<AddEmployeeFormProps> = ({ onSuccess, onCancel }
             : data.reporting_manager_id,
         hire_date: data.hire_date || null,
         is_active: data.is_active,
+        company_id: currentCompany?.id, // Always use current company
       };
-
-      // Call the edge function
       const { data: result, error } = await supabase.functions.invoke('create-employee', {
         body: payload,
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
+        headers: { Authorization: `Bearer ${session.access_token}` },
       });
-
       if (error) {
-        console.error('Edge function error:', error);
-        toast({
-          title: "Error",
-          description: error.message || "Failed to create employee",
-          variant: "destructive",
-        });
+        toast({ title: "Error", description: error.message || "Failed to create employee", variant: "destructive" });
         return;
       }
-
       if (result?.success) {
-        toast({
-          title: "Success",
-          description: result.message || "Employee created successfully and welcome email sent",
-        });
-        
+        toast({ title: "Success", description: result.message || "Employee created successfully and welcome email sent" });
         form.reset();
         onSuccess();
       } else {
         throw new Error(result?.error || 'Unknown error occurred');
       }
     } catch (error) {
-      console.error('Error creating employee:', error);
-      toast({
-        title: "Error",
-        description: "Failed to create employee",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
+      toast({ title: "Error", description: "Failed to create employee", variant: "destructive" });
     }
+    setIsLoading(false);
   };
 
   return (
     <Form {...form}>
+      {/* Simple debug line for current company */}
+      <div style={{ fontWeight: 'bold', marginBottom: 12, color: '#2563eb' }}>
+        Current company: {currentCompany ? currentCompany.name : 'No company selected'}
+      </div>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        {/* Removed company field from the form */}
+        {/* Show warning if currentCompany is not set */}
+        {!currentCompany && (
+          <div className="p-4 text-red-600 bg-red-50 rounded">No company selected. Please select a company before adding an employee.</div>
+        )}
+        {currentCompany && (
+          <FormItem>
+            <FormLabel>Company</FormLabel>
+            <Input value={currentCompany.name} readOnly disabled />
+          </FormItem>
+        )}
         <FormField
           control={form.control}
           name="name"
@@ -256,17 +261,17 @@ const AddEmployeeForm: React.FC<AddEmployeeFormProps> = ({ onSuccess, onCancel }
           />
         </div>
 
-        {/* Team Assignment */}
+        {/* Team Assignment - always visible, with add option if no teams */}
         <FormField
           control={form.control}
           name="team_id"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Team Assignment</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select team (optional)" />
+                    <SelectValue placeholder={teams.length ? "Select team (optional)" : "No teams available"} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
@@ -276,6 +281,22 @@ const AddEmployeeForm: React.FC<AddEmployeeFormProps> = ({ onSuccess, onCancel }
                   ))}
                 </SelectContent>
               </Select>
+              {teams.length === 0 && (
+                <div className="mt-2">
+                  <Button type="button" size="sm" onClick={() => setShowAddTeam(true)}>
+                    Add Team
+                  </Button>
+                </div>
+              )}
+              {showAddTeam && (
+                <div className="flex gap-2 mt-2">
+                  <Input value={newTeamName} onChange={e => setNewTeamName(e.target.value)} placeholder="Team name" />
+                  <Button type="button" size="sm" onClick={handleAddTeam} disabled={isLoading || !newTeamName.trim()}>
+                    {isLoading ? 'Adding...' : 'Save'}
+                  </Button>
+                  <Button type="button" size="sm" variant="outline" onClick={() => setShowAddTeam(false)}>Cancel</Button>
+                </div>
+              )}
               <FormMessage />
             </FormItem>
           )}

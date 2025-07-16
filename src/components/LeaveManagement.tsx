@@ -59,6 +59,7 @@ interface LeaveType {
   name: string;
   max_days_per_year: number;
   is_active?: boolean;
+  company_id?: string; // Add this line
 }
 
 interface TeamMember {
@@ -156,15 +157,17 @@ const LeaveManagement: React.FC = () => {
 
   // Fetch all leave types for management
   useEffect(() => {
-    if (canManageLeaveTypes) {
+    if (canManageLeaveTypes && currentCompany?.id) {
       fetchAllLeaveTypes();
     }
-  }, [canManageLeaveTypes]);
+  }, [canManageLeaveTypes, currentCompany]);
 
   const fetchAllLeaveTypes = async () => {
+    if (!currentCompany?.id) return;
     const { data, error } = await supabase
       .from('leave_types')
       .select('*')
+      .eq('company_id', currentCompany.id)
       .order('name');
     
     if (!error && data) {
@@ -910,6 +913,56 @@ const LeaveManagement: React.FC = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* My Leave Balances */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="w-5 h-5" />
+                My Leave Balances
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {leaveTypes.filter(type => type.is_active).map(type => {
+                  const used = leaveRequests
+                    .filter(req => req.leave_type_id === type.id && ['approved', 'pending'].includes(req.status))
+                    .reduce((sum, req) => sum + (req.total_days || 0), 0);
+                  const remaining = type.max_days_per_year - used;
+                  return (
+                    <div key={type.id} className="p-4 bg-gray-50 rounded-lg">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="font-medium">{type.name}</p>
+                          <p className="text-xs text-gray-500">Company: {type.company_id}</p>
+                          <p className="text-sm text-gray-600">
+                            {used} of {type.max_days_per_year} days used
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-2xl font-bold text-blue-600">
+                            {remaining}
+                          </p>
+                          <p className="text-xs text-gray-500">Remaining</p>
+                        </div>
+                      </div>
+                      <div className="mt-2">
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div 
+                            className="bg-blue-600 h-2 rounded-full" 
+                            style={{ width: `${(used / type.max_days_per_year) * 100}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {leaveTypes.filter(type => type.is_active).length === 0 && (
+                  <p className="text-gray-500">No leave balances found.</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Team Calendar Tab */}
@@ -951,10 +1004,14 @@ const EmployeeLeaveView: React.FC = () => {
 
   useEffect(() => {
     fetchLeaveTypes();
-  }, []);
+  }, [currentCompany]);
 
   const fetchLeaveTypes = async () => {
-    const { data, error } = await supabase.from('leave_types').select('*');
+    if (!currentCompany) return;
+    const { data, error } = await supabase
+      .from('leave_types')
+      .select('*')
+      .eq('company_id', currentCompany.id);
     if (!error && data) {
       setLeaveTypes(data);
     }
@@ -1110,28 +1167,29 @@ const EmployeeLeaveView: React.FC = () => {
 
         {/* Leave Requests Tab */}
         <TabsContent value="requests" className="space-y-6">
-          {/* Leave Balances */}
-            <Card>
-              <CardHeader>
+          {/* My Leave Balances */}
+          <Card>
+            <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="w-5 h-5" />
                 My Leave Balances
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {leaveTypes.filter(type => type.is_active).map(type => {
-                  const appliedDays = leaveRequests
+                  const used = leaveRequests
                     .filter(req => req.leave_type_id === type.id && ['approved', 'pending'].includes(req.status))
                     .reduce((sum, req) => sum + (req.total_days || 0), 0);
-                  const remaining = type.max_days_per_year - appliedDays;
+                  const remaining = type.max_days_per_year - used;
                   return (
                     <div key={type.id} className="p-4 bg-gray-50 rounded-lg">
                       <div className="flex justify-between items-center">
                         <div>
                           <p className="font-medium">{type.name}</p>
+                          <p className="text-xs text-gray-500">Company: {type.company_id}</p>
                           <p className="text-sm text-gray-600">
-                            {appliedDays} of {type.max_days_per_year} days used
+                            {used} of {type.max_days_per_year} days used
                           </p>
                         </div>
                         <div className="text-right">
@@ -1145,17 +1203,19 @@ const EmployeeLeaveView: React.FC = () => {
                         <div className="w-full bg-gray-200 rounded-full h-2">
                           <div 
                             className="bg-blue-600 h-2 rounded-full" 
-                            style={{ width: `${(appliedDays / type.max_days_per_year) * 100}%` }}
+                            style={{ width: `${(used / type.max_days_per_year) * 100}%` }}
                           ></div>
                         </div>
                       </div>
                     </div>
                   );
                 })}
+                {leaveTypes.filter(type => type.is_active).length === 0 && (
+                  <p className="text-gray-500">No leave balances found.</p>
+                )}
               </div>
             </CardContent>
           </Card>
-
           {/* My Leave Requests */}
           <Card>
             <CardHeader>

@@ -80,7 +80,9 @@ const LeaveRequestManagement: React.FC = () => {
     approveLeaveRequest, 
     rejectLeaveRequest, 
     isLoading,
-    fetchLeaveRequests 
+    fetchLeaveRequests,
+    leaveBalances,
+    fetchLeaveBalances
   } = useLeave('manager');
 
   const [selectedRequests, setSelectedRequests] = useState<string[]>([]);
@@ -107,6 +109,8 @@ const LeaveRequestManagement: React.FC = () => {
     weeklyReports: false
   });
 
+  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+
   const canManageRequests = ['reporting_manager', 'admin', 'super_admin'].includes(user?.role || '');
 
   useEffect(() => {
@@ -114,6 +118,23 @@ const LeaveRequestManagement: React.FC = () => {
       fetchTeamData();
     }
   }, [canManageRequests, currentCompany]);
+
+  useEffect(() => {
+    if (user) {
+      fetchLeaveBalances();
+    }
+  }, [user]);
+
+  // Fetch departments from the departments table
+  useEffect(() => {
+    if (!currentCompany) return;
+    supabase
+      .from('departments')
+      .select('id, name')
+      .eq('is_active', true)
+      .eq('company_id', currentCompany.id)
+      .then(({ data }) => setDepartments(data || []));
+  }, [currentCompany]);
 
   const fetchTeamData = async () => {
     if (!currentCompany) return;
@@ -590,15 +611,15 @@ const LeaveRequestManagement: React.FC = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {departmentStats.map((dept) => (
-                    <div key={dept.department} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                  {departments.map((dept) => (
+                    <div key={dept.id} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
                       <div>
-                        <p className="font-medium">{dept.department}</p>
-                        <p className="text-sm text-gray-600">{dept.totalEmployees} employees</p>
+                        <p className="font-medium">{dept.name}</p>
+                        <p className="text-sm text-gray-600">{teamMembers.filter(m => m.department === dept.name).length} employees</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-medium text-orange-600">{dept.pendingRequests} pending</p>
-                        <p className="text-xs text-gray-500">{dept.totalLeaveDays} days taken</p>
+                        <p className="text-sm font-medium text-orange-600">{teamMembers.filter(m => m.department === dept.name).filter(m => m.pendingRequests > 0).length} pending</p>
+                        <p className="text-xs text-gray-500">{teamMembers.filter(m => m.department === dept.name).reduce((sum, m) => sum + m.totalLeaveDays, 0)} days taken</p>
                       </div>
                     </div>
                   ))}
@@ -606,6 +627,53 @@ const LeaveRequestManagement: React.FC = () => {
               </CardContent>
             </Card>
           </div>
+          {/* My Leave Balances Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="w-5 h-5" />
+                My Leave Balances
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {leaveBalances && leaveBalances.length > 0 ? (
+                  leaveBalances.filter(balance => balance.leave_types && balance.leave_types.name && balance.allocated_days > 0).map(balance => {
+                    const used = balance.used_days || 0;
+                    const remaining = (balance.allocated_days || 0) - used;
+                    return (
+                      <div key={balance.leave_type_id} className="p-4 bg-gray-50 rounded-lg">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="font-medium">{balance.leave_types.name}</p>
+                            <p className="text-sm text-gray-600">
+                              {used} of {balance.allocated_days} days used
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-2xl font-bold text-blue-600">
+                              {remaining}
+                            </p>
+                            <p className="text-xs text-gray-500">Remaining</p>
+                          </div>
+                        </div>
+                        <div className="mt-2">
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div 
+                              className="bg-blue-600 h-2 rounded-full" 
+                              style={{ width: `${(used / (balance.allocated_days || 1)) * 100}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-gray-500">No leave balances found.</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* All Requests Tab */}
@@ -642,8 +710,8 @@ const LeaveRequestManagement: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Departments</SelectItem>
-                      {departmentStats.map(dept => (
-                        <SelectItem key={dept.department} value={dept.department}>{dept.department}</SelectItem>
+                      {departments.map(dept => (
+                        <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -835,23 +903,23 @@ const LeaveRequestManagement: React.FC = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {departmentStats.map((dept) => (
-                    <div key={dept.department} className="p-3 bg-blue-50 rounded-lg">
+                  {departments.map((dept) => (
+                    <div key={dept.id} className="p-3 bg-blue-50 rounded-lg">
                       <div className="flex justify-between items-center mb-2">
-                        <span className="font-medium">{dept.department}</span>
-                        <span className="text-sm text-gray-600">{dept.totalEmployees} employees</span>
+                        <span className="font-medium">{dept.name}</span>
+                        <span className="text-sm text-gray-600">{teamMembers.filter(m => m.department === dept.name).length} employees</span>
                       </div>
                       <div className="grid grid-cols-3 gap-2 text-xs">
                         <div className="text-center">
-                          <p className="font-medium text-orange-600">{dept.pendingRequests}</p>
+                          <p className="font-medium text-orange-600">{teamMembers.filter(m => m.department === dept.name).filter(m => m.pendingRequests > 0).length}</p>
                           <p className="text-gray-500">Pending</p>
                         </div>
                         <div className="text-center">
-                          <p className="font-medium text-green-600">{dept.approvedRequests}</p>
+                          <p className="font-medium text-green-600">{teamMembers.filter(m => m.department === dept.name).filter(m => m.approvedRequests > 0).length}</p>
                           <p className="text-gray-500">Approved</p>
                         </div>
                         <div className="text-center">
-                          <p className="font-medium text-blue-600">{dept.totalLeaveDays}</p>
+                          <p className="font-medium text-blue-600">{teamMembers.filter(m => m.department === dept.name).reduce((sum, m) => sum + m.totalLeaveDays, 0)}</p>
                           <p className="text-gray-500">Days</p>
                         </div>
                       </div>

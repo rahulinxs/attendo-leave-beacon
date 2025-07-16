@@ -144,7 +144,7 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
   };
 
   const fetchLeaveBalances = async () => {
-    if (!user) return;
+    if (!user || !currentCompany) return;
 
     try {
       const { data, error } = await supabase
@@ -154,10 +154,12 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
           allocated_days,
           used_days,
           leave_types (
-            name
+            name,
+            company_id
           )
         `)
         .eq('employee_id', user.id)
+        .eq('company_id', currentCompany.id)
         .eq('year', new Date().getFullYear());
 
       if (error) {
@@ -165,12 +167,12 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
         return;
       }
 
-      // Filter and format the data
+      // Filter and format the data to only include leave types for the current company
       const formattedData = (data as any[])
-        ?.filter(balance => balance.leave_types)
+        ?.filter(balance => balance.leave_types && balance.leave_types.company_id === currentCompany.id)
         ?.map(balance => ({
           ...balance,
-          leave_types: balance.leave_types as { name: string }
+          leave_types: balance.leave_types as { name: string; company_id: string }
         })) || [];
 
       setLeaveBalances(formattedData);

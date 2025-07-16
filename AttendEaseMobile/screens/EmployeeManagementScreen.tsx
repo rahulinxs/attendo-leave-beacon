@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Alert,
   RefreshControl,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useEmployees } from '../lib/useEmployees';
@@ -32,6 +33,17 @@ export default function EmployeeManagementScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const { profileData } = useUserProfile();
   const { getEmployees, deleteEmployee } = useEmployees();
+
+  // New state for modal/form fields
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newEmployee, setNewEmployee] = useState({
+    name: '',
+    email: '',
+    role: 'employee',
+    department: '',
+    team_id: '',
+  });
+  const [teams, setTeams] = useState([]);
 
   const loadEmployees = async () => {
     try {
@@ -106,31 +118,46 @@ export default function EmployeeManagementScreen({ navigation }: any) {
     ]);
   };
 
+  // Updated add employee handler
   const handleAddEmployee = () => {
-    Alert.prompt('Add Employee', 'Enter employee name', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Add',
-        onPress: async (name) => {
-          if (name) {
-            try {
-              setLoading(true);
-              const { error } = await supabase
-                .from('employees')
-                .insert([{ name }]);
-              if (error) throw error;
-              Alert.alert('Success', 'Employee added successfully');
-              loadEmployees();
-            } catch (error) {
-              Alert.alert('Error', 'Failed to add employee');
-            } finally {
-              setLoading(false);
-            }
-          }
-        },
-      },
-    ]);
+    setShowAddModal(true);
   };
+
+  const handleSubmitAddEmployee = async () => {
+    try {
+      setLoading(true);
+      const { error } = await supabase.from('employees').insert([
+        {
+          name: newEmployee.name,
+          email: newEmployee.email,
+          role: newEmployee.role,
+          department: newEmployee.department,
+          team_id: newEmployee.team_id || null,
+          company_id: profileData.profile.company_id, // Always set company_id
+        },
+      ]);
+      if (error) throw error;
+      Alert.alert('Success', 'Employee added successfully');
+      setShowAddModal(false);
+      setNewEmployee({ name: '', email: '', role: 'employee', department: '', team_id: '' });
+      loadEmployees();
+    } catch (error) {
+      Alert.alert('Error', 'Failed to add employee');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch teams for the current company
+  useEffect(() => {
+    if (profileData?.profile?.company_id) {
+      supabase
+        .from('teams')
+        .select('id, name')
+        .eq('company_id', profileData.profile.company_id)
+        .then(({ data }) => setTeams(data || []));
+    }
+  }, [profileData?.profile?.company_id]);
 
   useEffect(() => {
     loadEmployees();
@@ -242,6 +269,29 @@ export default function EmployeeManagementScreen({ navigation }: any) {
           ))
         )}
       </ScrollView>
+      {/* Add Employee Modal */}
+      {showAddModal && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#0008', justifyContent: 'center', alignItems: 'center', zIndex: 10 }}>
+          <View style={{ backgroundColor: 'white', padding: 20, borderRadius: 10, width: '90%' }}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 10 }}>Add Employee</Text>
+            <TextInput placeholder="Name" value={newEmployee.name} onChangeText={v => setNewEmployee(e => ({ ...e, name: v }))} style={{ borderWidth: 1, marginBottom: 8, padding: 8 }} />
+            <TextInput placeholder="Email" value={newEmployee.email} onChangeText={v => setNewEmployee(e => ({ ...e, email: v }))} style={{ borderWidth: 1, marginBottom: 8, padding: 8 }} />
+            <TextInput placeholder="Department" value={newEmployee.department} onChangeText={v => setNewEmployee(e => ({ ...e, department: v }))} style={{ borderWidth: 1, marginBottom: 8, padding: 8 }} />
+            <Text style={{ marginBottom: 4 }}>Team</Text>
+            <ScrollView horizontal style={{ marginBottom: 8 }}>
+              {teams.map(team => (
+                <TouchableOpacity key={team.id} onPress={() => setNewEmployee(e => ({ ...e, team_id: team.id }))} style={{ padding: 8, backgroundColor: newEmployee.team_id === team.id ? '#3b82f6' : '#eee', borderRadius: 6, marginRight: 8 }}>
+                  <Text style={{ color: newEmployee.team_id === team.id ? 'white' : '#333' }}>{team.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+              <TouchableOpacity onPress={() => setShowAddModal(false)} style={{ padding: 10 }}><Text>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity onPress={handleSubmitAddEmployee} style={{ backgroundColor: '#3b82f6', padding: 10, borderRadius: 6 }}><Text style={{ color: 'white' }}>Add</Text></TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }

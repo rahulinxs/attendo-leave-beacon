@@ -14,6 +14,8 @@ interface CreateEmployeeRequest {
   department?: string;
   position?: string;
   password: string;
+  company_id?: string;
+  team_id?: string;
 }
 
 serve(async (req) => {
@@ -70,7 +72,7 @@ serve(async (req) => {
       throw new Error('Only admins can create employees')
     }
 
-    const { name, email, role, department, position, password }: CreateEmployeeRequest = await req.json()
+    const { name, email, role, department, position, password, company_id, team_id }: CreateEmployeeRequest = await req.json()
 
     console.log('Creating employee:', email)
 
@@ -97,11 +99,32 @@ serve(async (req) => {
         .update({
           department: department || null,
           position: position || null,
+          company_id: company_id || null,
+          team_id: team_id || null,
         })
         .eq('id', authData.user.id)
 
       if (profileError) {
         console.error('Profile update error:', profileError)
+      }
+
+      // Also insert into employees table with all fields
+      const { error: employeeError } = await supabaseAdmin
+        .from('employees')
+        .insert([{
+          user_id: authData.user.id,
+          name,
+          email,
+          role,
+          department: department || null,
+          position: position || null,
+          company_id: company_id || null,
+          team_id: team_id || null,
+          is_active: true,
+        }])
+
+      if (employeeError) {
+        console.error('Employee insert error:', employeeError)
       }
 
       return new Response(

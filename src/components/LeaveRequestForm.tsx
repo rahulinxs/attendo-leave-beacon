@@ -36,14 +36,16 @@ const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSuccess, onCancel
 
   useEffect(() => {
     fetchLeaveTypes();
-  }, []);
+  }, [currentCompany]);
 
   const fetchLeaveTypes = async () => {
+    if (!currentCompany?.id) return;
     try {
       const { data, error } = await supabase
         .from('leave_types')
         .select('id, name, max_days_per_year')
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .eq('company_id', currentCompany.id);
 
       if (error) {
         console.error('Error fetching leave types:', error);
