@@ -76,12 +76,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   const handleResetPassword = async () => {
     if (!user?.email) return;
-    
+    // Use company domain if available, else fallback to company id
+    const tenantParam = currentCompany?.domain || currentCompany?.id || 'attendedge';
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
-        redirectTo: `${window.location.origin}/`,
+        redirectTo: 'https://attendedge.netlify.app/reset-password?tenant=attendedge'
       });
-      
       if (error) {
         toast({
           title: "Error",
