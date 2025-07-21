@@ -13,6 +13,7 @@ import HolidayManagement from '@/components/HolidayManagement';
 import SystemSettings from '@/components/SystemSettings';
 import EmployeeAttendance from '@/components/EmployeeAttendance';
 import Profile from '@/components/Profile';
+import CompanyProfile from '@/components/CompanyProfile';
 
 const Index = () => {
   const { user, isLoading } = useAuth();
@@ -106,6 +107,9 @@ const Index = () => {
         return (
           <Profile employeeId={user.id} />
         );
+      
+      case 'company-profile':
+        return <CompanyProfile />;
       
       case 'settings':
         return <SystemSettings />;

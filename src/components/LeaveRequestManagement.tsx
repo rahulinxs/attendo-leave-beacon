@@ -580,13 +580,11 @@ const LeaveRequestManagement: React.FC = () => {
                         <p className="text-xs text-gray-500">{request.reason}</p>
                       </div>
                       <div className="flex gap-2">
-                        <Button size="sm" onClick={() => approveLeaveRequest(request.id)}>
-                          <CheckCircle className="w-4 h-4 mr-1" />
-                          Approve
+                        <Button size="sm" variant="gradient" onClick={() => approveLeaveRequest(request.id)}>
+                          <CheckCircle className="w-4 h-4" />
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => rejectLeaveRequest(request.id)}>
-                          <XCircle className="w-4 h-4 mr-1" />
-                          Reject
+                        <Button size="sm" variant="gradient" onClick={() => rejectLeaveRequest(request.id)}>
+                          <XCircle className="w-4 h-4" />
                         </Button>
                       </div>
                     </div>
@@ -838,10 +836,10 @@ const LeaveRequestManagement: React.FC = () => {
                           <div className="flex gap-1">
                             {request.status === 'pending' && (
                               <>
-                                <Button size="sm" onClick={() => approveLeaveRequest(request.id)}>
+                                <Button size="sm" variant="gradient" onClick={() => approveLeaveRequest(request.id)}>
                                   <CheckCircle className="w-4 h-4" />
                                 </Button>
-                                <Button size="sm" variant="outline" onClick={() => rejectLeaveRequest(request.id)}>
+                                <Button size="sm" variant="gradient" onClick={() => rejectLeaveRequest(request.id)}>
                                   <XCircle className="w-4 h-4" />
                                 </Button>
                               </>

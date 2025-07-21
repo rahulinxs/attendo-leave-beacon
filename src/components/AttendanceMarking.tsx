@@ -99,16 +99,11 @@ const AttendanceMarking: React.FC = () => {
   const isCheckedOut = todayAttendance?.check_in_time && todayAttendance?.check_out_time;
 
   return (
-    <Card className="w-full max-w-md mx-auto border-0 shadow-lg">
-      <CardHeader className="text-center pb-3">
-        <CardTitle className="flex items-center justify-center space-x-2 text-lg">
-          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-            <Clock className="w-4 h-4 text-blue-600" />
-          </div>
-          <span>Attendance Tracking</span>
-        </CardTitle>
+    <Card className="gradient-primary text-white shadow-xl border-0">
+      <CardHeader>
+        <CardTitle className="text-2xl font-bold">Quick Clock In/Out</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent>
         {/* Manual Entry Toggle */}
         <div className="flex items-center justify-between p-3 bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg border border-gray-100">
           <div className="flex items-center space-x-2">
@@ -201,7 +196,8 @@ const AttendanceMarking: React.FC = () => {
             <Button
               onClick={handleCheckIn}
               disabled={isLoading}
-              className="w-full gradient-primary text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+              variant="gradient"
+              className="w-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
               size="lg"
             >
               <CheckCircle className="w-5 h-5 mr-2" />
@@ -211,7 +207,8 @@ const AttendanceMarking: React.FC = () => {
             <Button
               onClick={handleCheckOut}
               disabled={isLoading}
-              className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+              variant="gradient"
+              className="w-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
               size="lg"
             >
               <XCircle className="w-5 h-5 mr-2" />

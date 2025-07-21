@@ -1082,7 +1082,7 @@ const EmployeeLeaveView: React.FC = () => {
         </div>
         <Button 
           onClick={() => setShowRequestForm(!showRequestForm)}
-          className="gradient-primary text-white"
+          variant="gradient"
         >
           <Plus className="w-4 h-4 mr-2" />
           {showRequestForm ? 'Cancel' : 'Request Leave'}

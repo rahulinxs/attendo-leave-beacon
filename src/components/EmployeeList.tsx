@@ -206,7 +206,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onAddEmployee, refreshTrigg
         {canAddEmployee && (
           <Button 
             onClick={onAddEmployee}
-            className="gradient-primary text-white border-0"
+            variant="gradient"
           >
             <UserPlus className="w-4 h-4 mr-2" />
             Add Employee
@@ -223,7 +223,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onAddEmployee, refreshTrigg
             {canAddEmployee && (
               <Button 
                 onClick={onAddEmployee}
-                className="gradient-primary text-white border-0"
+                variant="gradient"
               >
                 <UserPlus className="w-4 h-4 mr-2" />
                 Add Employee

@@ -969,7 +969,7 @@ const ReportsAnalytics = () => {
                     </div>
                     <div className="flex space-x-2">
                       <Button
-                        variant="outline"
+                        variant="gradient"
                         size="sm"
                         onClick={() => handleExport('xlsx')}
                       >
@@ -977,7 +977,7 @@ const ReportsAnalytics = () => {
                         Export XLSX
                       </Button>
                       <Button
-                        variant="outline"
+                        variant="gradient"
                         size="sm"
                         onClick={() => handleExport('csv')}
                       >
@@ -1082,10 +1082,10 @@ const ReportsAnalytics = () => {
               <Input type="text" placeholder="Search name" value={leaveSearch} onChange={e => setLeaveSearch(e.target.value)} className="w-[180px]" />
             </div>
             <div className="ml-auto flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => handleExport('xlsx')}>
+              <Button variant="gradient" size="sm" onClick={() => handleExport('xlsx')}>
                 <FileSpreadsheet className="w-4 h-4 mr-2" /> Export XLSX
               </Button>
-              <Button variant="outline" size="sm" onClick={() => handleExport('csv')}>
+              <Button variant="gradient" size="sm" onClick={() => handleExport('csv')}>
                 <FileDown className="w-4 h-4 mr-2" /> Export CSV
               </Button>
             </div>

@@ -659,28 +659,28 @@ const AttendanceManagement: React.FC = () => {
                     <td className="px-4 py-2 flex gap-2">
                       <Button
                         size="sm"
-                        className={`bg-green-600 hover:bg-green-700 text-white rounded shadow focus:ring-2 focus:ring-green-400 ${dateAttendanceMap[emp.id]==='present' ? 'ring-2 ring-green-500' : ''}`}
+                        className="bg-green-600 hover:bg-green-700 text-white rounded shadow focus:ring-2 focus:ring-green-400"
                         onClick={() => markAttendanceForEmployee(emp.id, 'present')}
                       >
                         Present
                       </Button>
                       <Button
                         size="sm"
-                        className={`bg-red-600 hover:bg-red-700 text-white rounded shadow focus:ring-2 focus:ring-red-400 ${dateAttendanceMap[emp.id]==='absent' ? 'ring-2 ring-red-500' : ''}`}
+                        className="bg-red-600 hover:bg-red-700 text-white rounded shadow focus:ring-2 focus:ring-red-400"
                         onClick={() => markAttendanceForEmployee(emp.id, 'absent')}
                       >
                         Absent
                       </Button>
                       <Button
                         size="sm"
-                        className={`bg-yellow-500 hover:bg-yellow-600 text-white rounded shadow focus:ring-2 focus:ring-yellow-300 ${dateAttendanceMap[emp.id]==='late' ? 'ring-2 ring-yellow-500' : ''}`}
+                        className="bg-yellow-400 hover:bg-yellow-500 text-white rounded shadow focus:ring-2 focus:ring-yellow-300"
                         onClick={() => markAttendanceForEmployee(emp.id, 'late')}
                       >
                         Late
                       </Button>
                       <Button
                         size="sm"
-                        className={`bg-blue-600 hover:bg-blue-700 text-white rounded shadow focus:ring-2 focus:ring-blue-400 ${dateAttendanceMap[emp.id]==='half_day' ? 'ring-2 ring-blue-500' : ''}`}
+                        className="bg-blue-600 hover:bg-blue-700 text-white rounded shadow focus:ring-2 focus:ring-blue-400"
                         onClick={() => markAttendanceForEmployee(emp.id, 'half_day')}
                       >
                         Half Day

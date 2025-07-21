@@ -182,8 +182,12 @@ const Auth = () => {
         </div>
 
         {/* Auth Forms */}
-        <Card className="card-hover border-0 shadow-xl glass-effect">
+        <Card className="border-0 shadow-xl bg-white">
           <CardHeader className="space-y-1">
+            <CardTitle className="text-2xl text-center">Sign In</CardTitle>
+            <CardDescription className="text-center">
+              Sign in to your account to continue
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="login" className="w-full">
@@ -233,7 +237,8 @@ const Auth = () => {
                   </div>
                   <Button 
                     type="submit" 
-                    className="w-full h-11 gradient-primary text-white border-0"
+                    className="w-full h-11"
+                    variant="gradient"
                     disabled={isLoading}
                   >
                     {isLoading ? (
@@ -334,23 +339,23 @@ const Auth = () => {
               </TabsContent>
             </Tabs>
             {/* Demo Credentials (moved here, compact) */}
-            <div className="mt-4">
-              <div className="text-sm font-semibold mb-2 text-gray-700">Demo Credentials</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div className="p-2 bg-gray-50 rounded border text-xs flex flex-col gap-0.5">
-                  <span className="font-medium text-gray-800">Super Admin</span>
-                  <span>Email: rahul@nytp.com</span>
-                  <span>Password: password123</span>
+            <div className="mt-6">
+              <div className="font-semibold mb-2 text-sm">Demo Credentials</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="bg-white border rounded p-3 text-gray-800 text-xs">
+                  <div className="font-bold">Super Admin</div>
+                  <div>Email: rahul@nytp.com</div>
+                  <div>Password: password123</div>
                 </div>
-                <div className="p-2 bg-gray-50 rounded border text-xs flex flex-col gap-0.5">
-                  <span className="font-medium text-gray-800">Admin</span>
-                  <span>Email: admin@company.com</span>
-                  <span>Password: password123</span>
+                <div className="bg-white border rounded p-3 text-gray-800 text-xs">
+                  <div className="font-bold">Admin</div>
+                  <div>Email: admin@company.com</div>
+                  <div>Password: password123</div>
                 </div>
-                <div className="p-2 bg-gray-50 rounded border text-xs flex flex-col gap-0.5">
-                  <span className="font-medium text-gray-800">Employee</span>
-                  <span>Email: employee@company.com</span>
-                  <span>Password: password123</span>
+                <div className="bg-white border rounded p-3 text-gray-800 text-xs">
+                  <div className="font-bold">Employee</div>
+                  <div>Email: employee@company.com</div>
+                  <div>Password: password123</div>
                 </div>
               </div>
             </div>

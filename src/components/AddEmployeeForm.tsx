@@ -364,7 +364,7 @@ const AddEmployeeForm: React.FC<AddEmployeeFormProps> = ({ onSuccess, onCancel }
         )}
 
         <div className="flex gap-2">
-          <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={isLoading}>
+          <Button type="submit" variant="gradient" disabled={isLoading}>
             {isLoading ? 'Adding...' : 'Add Employee'}
           </Button>
           <Button type="button" variant="secondary" className="bg-secondary text-secondary-foreground hover:bg-secondary/90" onClick={onCancel}>

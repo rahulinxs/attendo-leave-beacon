@@ -26,7 +26,8 @@ import {
   Building,
   Network,
   FlaskConical,
-  ClipboardList
+  ClipboardList,
+  ChevronRight
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -59,6 +60,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
   const { currentCompany, companies, setCurrentCompany } = useCompany();
   const { sidebarPosition, theme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarVisible, setSidebarVisible] = useState(true); // new state for desktop
+  const [hrOpen, setHROpen] = useState(false);
+  const [managementOpen, setManagementOpen] = useState(false);
   const themeClass = THEME_OPTIONS.find(t => t.key === theme)?.className || '';
 
   // Enhanced navigation items with role-based access control
@@ -104,13 +108,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       roles: ['reporting_manager', 'admin', 'super_admin'],
       requiresPermission: true
     },
-    {
-      id: 'leave-type-management',
-      label: 'Leave Type Management',
-      icon: Calendar, // or ClipboardList
-      roles: ['admin', 'super_admin'],
-      requiresPermission: true
-    },
     
     // Admin features - for admins and super admins
     {
@@ -150,7 +147,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       roles: ['employee', 'reporting_manager', 'admin', 'super_admin'],
       requiresPermission: true
     }
-  ].filter(item => item.id !== 'dummy-attendance');
+  ].filter(item => item.id !== 'dummy-attendance' && item.id !== 'company-profile' && item.id !== 'leave-type-management');
 
   // Filter navigation items based on user role and enforce order for leave/leave-management
   const getFilteredNavigationItems = () => {
@@ -164,7 +161,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       result.push(manageLeaveTab);
     }
     result = [...result, ...restTabs];
-    return result;
+    // Remove Management-related tools from main nav for admin/super_admin
+    return result.filter(item => !['attendance', 'leave', 'manage-attendance', 'leave-management', 'employees', 'teams', 'leave-type-management'].includes(item.id));
   };
 
   const navItems = getFilteredNavigationItems();
@@ -218,6 +216,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       {/* Mobile Header */}
       <div className="lg:hidden header-theme shadow-sm border-b border-border">
         <div className="flex items-center justify-between p-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSidebarVisible(!sidebarVisible)}
+            className="order-first mr-2"
+            aria-label="Toggle sidebar"
+          >
+            <Menu className="w-5 h-5" />
+          </Button>
           <div className="flex items-center space-x-3">
             <CompanyLogo size="md" />
             <div className="flex flex-col">
@@ -249,74 +256,172 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
               )}
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="order-last"
-          >
-            <Menu className="w-5 h-5" />
-          </Button>
         </div>
       </div>
 
       <div className="flex">
         {/* Sidebar */}
+        {sidebarVisible && (
         <div
-          className={`
-            fixed inset-y-0 z-50 transition-all duration-300 ease-in-out transform lg:translate-x-0 lg:static lg:inset-0 ${themeClass} sidebar flex flex-col shadow-lg
-            left-0
-            ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-          `}
+            className={`fixed inset-y-0 z-50 transition-all duration-300 ease-in-out transform lg:translate-x-0 lg:static lg:inset-0 ${themeClass} sidebar flex flex-col shadow-lg left-0`}
           style={{ background: 'hsl(var(--background))', color: 'hsl(var(--foreground))', height: '100vh', width: '16rem', minWidth: '16rem', maxWidth: '16rem', position: 'fixed', top: 0, left: 0 }}
         >
           <div className="flex flex-col h-full">
             {/* Sidebar Header */}
-            <div className="flex items-center justify-between p-3 border-b border-border header-theme">
-              <div className="flex items-center space-x-2">
-                <CompanyLogo size="md" />
-                <div className="flex flex-col">
-                  <span className="font-bold">{APP_NAME}</span>
-                  {user?.platform_super_admin && companies.length > 1 ? (
-                    <Select
-                      value={currentCompany?.id || ''}
-                      onValueChange={id => {
-                        const selected = companies.find(c => c.id === id);
-                        if (selected) setCurrentCompany(selected);
-                      }}
-                    >
-                      <SelectTrigger className="w-full text-xs">
-                        <SelectValue placeholder="Select Company" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {companies.map(c => (
-                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    currentCompany && (
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Building className="w-3 h-3" />
-                      {currentCompany.name}
-                    </span>
-                    )
-                  )}
-                </div>
+            <div className="flex flex-col items-center p-4 border-b border-border header-theme bg-white">
+              {/* Product Branding */}
+              <div className="flex items-center space-x-2 mb-2">
+                <img src="/attendedge-logo.png" alt="Product Logo" className="w-8 h-8 object-contain" />
+                <span className="font-bold text-lg tracking-wide">AttendEdge</span>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSidebarOpen(false)}
-                className="lg:hidden"
-              >
-                <Menu className="w-4 h-4" />
-              </Button>
+              <div className="w-full border-t border-border my-2" />
+              {/* Company Branding */}
+              {currentCompany && (
+                <div className="flex items-center space-x-2 w-full">
+                  {currentCompany.logo_url ? (
+                    <img src={currentCompany.logo_url} alt={currentCompany.name + ' Logo'} className="w-7 h-7 rounded object-contain bg-white border" />
+                  ) : (
+                    <CompanyLogo size="sm" />
+                  )}
+                  <button
+                    className="text-sm font-medium truncate text-left hover:underline focus:outline-none"
+                    onClick={() => onTabChange('company-profile')}
+                    title="View Company Profile"
+                    style={{ background: 'none', border: 'none', padding: 0, margin: 0, cursor: 'pointer' }}
+                  >
+                    {currentCompany.name}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Navigation */}
             <nav className="flex-1 p-2 space-y-1">
-              {navItems.map((item) => {
+              {/* Render Dashboard first */}
+              {navItems.filter(item => item.id === 'dashboard').map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => onTabChange(item.id)}
+                    className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${isActive 
+                      ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold'
+                      : 'hover:bg-[rgba(0,0,0,0.02)]'
+                    }`}
+                    style={{ color: 'var(--card-text)' }}
+                    aria-label={item.label}
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span className="sidebar-label text-sm">{item.label}</span>
+                    {item.requiresPermission && (
+                      <Lock className="w-3 h-3 text-muted-foreground" />
+                    )}
+                  </button>
+                );
+              })}
+
+              {/* Human Resource retractable menu (admins only) */}
+              {['admin', 'super_admin'].includes(user?.role) && (
+                <>
+                  <button
+                    className="w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left font-semibold transition-colors sidebar-nav-btn bg-[rgba(0,0,0,0.03)] hover:bg-[rgba(0,0,0,0.06)]"
+                    onClick={() => {
+                      setHROpen((open) => {
+                        if (!open) setManagementOpen(false);
+                        return !open;
+                      });
+                    }}
+                    aria-expanded={hrOpen}
+                    aria-controls="hr-menu"
+                  >
+                    <Users className="w-5 h-5" />
+                    <span>Human Resource</span>
+                    {hrOpen ? <ChevronDown className="w-4 h-4 ml-auto" /> : <ChevronRight className="w-4 h-4 ml-auto" />}
+                  </button>
+                  <div
+                    id="hr-menu"
+                    className={`pl-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${hrOpen ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-2'}`}
+                    style={{ willChange: 'max-height, opacity, transform' }}
+                  >
+                    <button
+                      onClick={() => onTabChange('attendance')}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'attendance' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                    >
+                      <Clock className="w-5 h-5" />
+                      <span className="sidebar-label text-sm">Attendance</span>
+                    </button>
+                    <button
+                      onClick={() => onTabChange('leave')}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'leave' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                    >
+                      <Calendar className="w-5 h-5" />
+                      <span className="sidebar-label text-sm">Leave Requests</span>
+                    </button>
+                    <button
+                      onClick={() => onTabChange('manage-attendance')}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'manage-attendance' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                    >
+                      <UserCheck className="w-5 h-5" />
+                      <span className="sidebar-label text-sm">Manage Attendance</span>
+                    </button>
+                    <button
+                      onClick={() => onTabChange('leave-management')}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'leave-management' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                    >
+                      <ClipboardList className="w-5 h-5" />
+                      <span className="sidebar-label text-sm">Manage Leave Requests</span>
+                    </button>
+                  </div>
+
+                  {/* Management retractable menu immediately after HR */}
+                  <button
+                    className="w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left font-semibold transition-colors sidebar-nav-btn bg-[rgba(0,0,0,0.03)] hover:bg-[rgba(0,0,0,0.06)] mt-2"
+                    onClick={() => {
+                      setManagementOpen((open) => {
+                        if (!open) setHROpen(false);
+                        return !open;
+                      });
+                    }}
+                    aria-expanded={managementOpen}
+                    aria-controls="management-menu"
+                  >
+                    <Settings className="w-5 h-5" />
+                    <span>Management</span>
+                    {managementOpen ? <ChevronDown className="w-4 h-4 ml-auto" /> : <ChevronRight className="w-4 h-4 ml-auto" />}
+                  </button>
+                  <div
+                    id="management-menu"
+                    className={`pl-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${managementOpen ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-2'}`}
+                    style={{ willChange: 'max-height, opacity, transform' }}
+                  >
+                    <button
+                      onClick={() => onTabChange('employees')}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'employees' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                    >
+                      <Users className="w-5 h-5" />
+                      <span className="sidebar-label text-sm">Employee Management</span>
+                    </button>
+                    <button
+                      onClick={() => onTabChange('teams')}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'teams' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                    >
+                      <Network className="w-5 h-5" />
+                      <span className="sidebar-label text-sm">Team Management</span>
+                    </button>
+                    <button
+                      onClick={() => onTabChange('leave-type-management')}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'leave-type-management' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                    >
+                      <Calendar className="w-5 h-5" />
+                      <span className="sidebar-label text-sm">Leave Type Management</span>
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* Render the rest of the navigation items */}
+              {navItems.filter(item => item.id !== 'dashboard').map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
                 return (
@@ -388,9 +493,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
             </div>
           </div>
         </div>
+        )}
 
         {/* Main Content */}
-        <div className="flex-1" style={{ marginLeft: '16rem', height: '100vh', overflowY: 'auto' }}>
+        <div className="flex-1" style={{ marginLeft: sidebarVisible ? '16rem' : 0, height: '100vh', overflowY: 'auto', transition: 'margin-left 0.3s' }}>
           <div className="p-3 lg:p-4">
             {children}
           </div>

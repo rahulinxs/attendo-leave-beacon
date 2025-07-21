@@ -190,7 +190,8 @@ const EmployeeAttendance: React.FC = () => {
                     <Button
                       onClick={handleCheckIn}
                       disabled={isLoading}
-                      className="w-full gradient-primary text-white"
+                      variant="gradient"
+                      className="w-full"
                       size="lg"
                     >
                       <CheckCircle className="w-5 h-5 mr-2" />
@@ -200,7 +201,8 @@ const EmployeeAttendance: React.FC = () => {
                     <Button
                       onClick={handleCheckOut}
                       disabled={isLoading}
-                      className="w-full bg-red-600 hover:bg-red-700 text-white"
+                      variant="gradient"
+                      className="w-full"
                       size="lg"
                     >
                       <XCircle className="w-5 h-5 mr-2" />

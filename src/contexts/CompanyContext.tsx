@@ -8,6 +8,16 @@ interface Company {
   domain: string | null;
   created_at: string | null;
   updated_at: string | null;
+  description?: string | null;
+  website?: string | null;
+  industry?: string | null;
+  size?: string | null;
+  headquarters?: string | null;
+  type?: string | null;
+  founded?: string | null;
+  locations?: string | null;
+  logo_url?: string | null;
+  linkedin_url?: string | null;
 }
 
 interface CompanyContextType {

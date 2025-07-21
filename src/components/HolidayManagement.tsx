@@ -180,7 +180,7 @@ const HolidayManagement: React.FC = () => {
         {canManageHolidays && (
           <Button 
             onClick={() => setShowAddForm(true)}
-            className="gradient-primary text-white border-0"
+            variant="gradient"
           >
             <Plus className="w-4 h-4 mr-2" />
             Add Holiday

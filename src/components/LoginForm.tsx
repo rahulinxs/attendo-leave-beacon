@@ -67,7 +67,7 @@ const LoginForm = () => {
         </div>
 
         {/* Login Form */}
-        <Card className="card-hover border-0 shadow-xl glass-effect">
+        <Card className="border-0 shadow-xl bg-white">
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl text-center">Welcome back</CardTitle>
             <CardDescription className="text-center">
@@ -109,7 +109,8 @@ const LoginForm = () => {
               </div>
               <Button 
                 type="submit" 
-                className="w-full h-11 gradient-primary text-white border-0"
+                className="w-full h-11"
+                variant="gradient"
                 disabled={isLoading}
               >
                 {isLoading ? (
@@ -123,16 +124,24 @@ const LoginForm = () => {
               </Button>
             </form>
             {/* Demo Credentials (moved here, compact) */}
-            <div className="mt-4">
-              <div className="text-sm font-semibold mb-2 text-gray-700">Demo Credentials</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {demoCredentials.map((cred, index) => (
-                  <div key={index} className="p-2 bg-gray-50 rounded border text-xs flex flex-col gap-0.5">
-                    <span className="font-medium text-gray-800">{cred.role}</span>
-                    <span>Email: {cred.email}</span>
-                    <span>Password: {cred.password}</span>
-                  </div>
-                ))}
+            <div className="mt-6">
+              <div className="font-semibold mb-2">Demo Credentials</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="bg-white border rounded p-3 text-gray-800">
+                  <div className="font-bold">Super Admin</div>
+                  <div>Email: rahul@nytp.com</div>
+                  <div>Password: password123</div>
+                </div>
+                <div className="bg-white border rounded p-3 text-gray-800">
+                  <div className="font-bold">Admin</div>
+                  <div>Email: admin@company.com</div>
+                  <div>Password: password123</div>
+                </div>
+                <div className="bg-white border rounded p-3 text-gray-800">
+                  <div className="font-bold">Employee</div>
+                  <div>Email: employee@company.com</div>
+                  <div>Password: password123</div>
+                </div>
               </div>
             </div>
           </CardContent>

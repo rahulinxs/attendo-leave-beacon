@@ -239,7 +239,7 @@ const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSuccess, onCancel
             <Button 
               type="submit" 
               disabled={isLoading}
-              className="gradient-primary text-white"
+              variant="gradient"
             >
               <Send className="w-4 h-4 mr-2" />
               {isLoading ? 'Submitting...' : 'Submit Request'}
