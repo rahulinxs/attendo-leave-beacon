@@ -80,7 +80,12 @@ export const useEmployees = () => {
   };
 
   useEffect(() => {
-    if (user && (user.role === 'admin' || user.role === 'super_admin')) {
+    if (
+      user &&
+      (user.role === 'admin' ||
+       user.role === 'super_admin' ||
+       user.role === 'reporting_manager')
+    ) {
       fetchEmployees();
     }
   }, [user, currentCompany]);

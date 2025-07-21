@@ -96,7 +96,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       id: 'manage-attendance',
       label: 'Manage Attendance',
       icon: UserCheck,
-      roles: ['admin', 'super_admin'],
+      roles: ['reporting_manager', 'admin', 'super_admin'],
       requiresPermission: true
     },
     
@@ -161,8 +161,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       result.push(manageLeaveTab);
     }
     result = [...result, ...restTabs];
-    // Remove Management-related tools from main nav for admin/super_admin
-    return result.filter(item => !['attendance', 'leave', 'manage-attendance', 'leave-management', 'employees', 'teams', 'leave-type-management'].includes(item.id));
+    // Remove HR/Management tools from main nav for admin/super_admin, but keep Attendance/Leave as top-level for employee/reporting_manager
+    if (['admin', 'super_admin'].includes(user.role)) {
+      return result.filter(item => !['attendance', 'leave', 'manage-attendance', 'leave-management', 'employees', 'teams', 'leave-type-management'].includes(item.id));
+    } else {
+      // For employee/reporting_manager, only remove admin-only tools
+      return result.filter(item => !['employees', 'leave-type-management'].includes(item.id));
+    }
   };
 
   const navItems = getFilteredNavigationItems();

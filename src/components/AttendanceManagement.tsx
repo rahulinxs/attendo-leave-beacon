@@ -362,7 +362,13 @@ const AttendanceManagement: React.FC = () => {
   // Fetch attendance for selected date for all employees
   useEffect(() => {
     const fetchAllAttendance = async () => {
-      if (!user || (user.role !== 'admin' && user.role !== 'super_admin') || !currentCompany) return;
+      if (
+        !user ||
+        (user.role !== 'admin' &&
+         user.role !== 'super_admin' &&
+         user.role !== 'reporting_manager') ||
+        !currentCompany
+      ) return;
       const dateStr = selectedDate.toISOString().split('T')[0];
       const { data, error } = await supabase
         .from('attendance')
@@ -549,11 +555,17 @@ const AttendanceManagement: React.FC = () => {
     }
   };
 
+  // Determine which employees to show for attendance management
+  let managedEmployees = employees;
+  if (user?.role === 'reporting_manager') {
+    managedEmployees = employees.filter(emp => emp.reporting_manager_id === user.id);
+  }
+
   return (
     <div className="space-y-8">
-      {(!user || (user.role !== 'admin' && user.role !== 'super_admin')) ? (
+      {(!user || (user.role !== 'admin' && user.role !== 'super_admin' && user.role !== 'reporting_manager')) ? (
         <div className="p-8 text-center text-gray-500">
-          Attendance management is only available to admins and super admins.
+          Attendance management is only available to admins, super admins, and reporting managers.
         </div>
       ) : (
         <>
@@ -652,7 +664,7 @@ const AttendanceManagement: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {employees.map((emp) => (
+                {managedEmployees.map((emp) => (
                   <tr key={emp.id} className="border-b">
                     <td className="px-4 py-2">{emp.name}</td>
                     <td className="px-4 py-2">{getStatusBadge(dateAttendanceMap[emp.id])}</td>
