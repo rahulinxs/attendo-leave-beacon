@@ -14,6 +14,7 @@ import SystemSettings from '@/components/SystemSettings';
 import EmployeeAttendance from '@/components/EmployeeAttendance';
 import Profile from '@/components/Profile';
 import CompanyProfile from '@/components/CompanyProfile';
+import PerformanceReport from '@/components/PerformanceReport';
 
 const Index = () => {
   const { user, isLoading } = useAuth();
@@ -102,6 +103,9 @@ const Index = () => {
             <p className="text-gray-600">You don't have permission to access this section</p>
           </div>
         );
+      
+      case 'performance-report':
+        return <PerformanceReport />;
       
       case 'profile':
         return (

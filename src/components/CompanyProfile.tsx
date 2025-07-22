@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { Globe, MapPin, Users, Building, Calendar, Info, Camera } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Switch } from './ui/switch';
 
 const defaultFields = {
   name: '',
@@ -21,7 +22,7 @@ const defaultFields = {
 };
 
 const CompanyProfile: React.FC = () => {
-  const { currentCompany } = useCompany();
+  const { currentCompany, refreshCompanies } = useCompany();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
   const [fields, setFields] = useState({
@@ -33,6 +34,9 @@ const CompanyProfile: React.FC = () => {
   const [error, setError] = useState('');
   const [editMode, setEditMode] = useState(isAdmin ? false : undefined); // Only admins can edit
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [perfReportEnabled, setPerfReportEnabled] = useState(currentCompany?.moduleSettings?.performance_report_enabled ?? false);
+  const [perfReportLoading, setPerfReportLoading] = useState(false);
+  const [perfReportError, setPerfReportError] = useState('');
 
   // Placeholder for backend call
   const fetchFromLinkedIn = async () => {
@@ -122,6 +126,23 @@ const CompanyProfile: React.FC = () => {
     }
   };
 
+  const handlePerfReportToggle = async (checked: boolean) => {
+    setPerfReportLoading(true);
+    setPerfReportError('');
+    try {
+      const { error } = await supabase
+        .from('company_module_settings')
+        .upsert({ company_id: currentCompany?.id, performance_report_enabled: checked }, { onConflict: ['company_id'] });
+      if (error) throw error;
+      setPerfReportEnabled(checked);
+      if (refreshCompanies) await refreshCompanies();
+    } catch (err: any) {
+      setPerfReportError(err.message || 'Failed to update setting');
+    } finally {
+      setPerfReportLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen relative bg-gradient-to-br from-blue-50 to-purple-50 py-10 px-2 overflow-x-hidden">
       {/* Subtle background pattern */}
@@ -167,6 +188,19 @@ const CompanyProfile: React.FC = () => {
             )}
             <a href={fields.website} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline text-lg mt-1 transition-colors duration-200 hover:text-purple-700">{fields.website}</a>
           </div>
+          {isAdmin && (
+            <div className="flex items-center gap-3 mb-4">
+              <span className="font-medium text-sm">Performance Report Module</span>
+              <Switch
+                checked={perfReportEnabled}
+                onCheckedChange={handlePerfReportToggle}
+                disabled={perfReportLoading}
+              />
+              <span className="text-xs text-gray-500">{perfReportEnabled ? 'Enabled' : 'Disabled'}</span>
+              {perfReportLoading && <span className="text-xs text-blue-500 ml-2">Saving...</span>}
+              {perfReportError && <span className="text-xs text-red-500 ml-2">{perfReportError}</span>}
+            </div>
+          )}
           {editMode ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>

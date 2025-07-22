@@ -2,6 +2,11 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 
+export interface CompanyModuleSettings {
+  performance_report_enabled: boolean;
+  // Add more feature flags as needed
+}
+
 interface Company {
   id: string;
   name: string;
@@ -18,6 +23,7 @@ interface Company {
   locations?: string | null;
   logo_url?: string | null;
   linkedin_url?: string | null;
+  moduleSettings?: CompanyModuleSettings;
 }
 
 interface CompanyContextType {
@@ -49,6 +55,7 @@ export const CompanyProvider: React.FC<CompanyProviderProps> = ({ children }) =>
   const [currentCompany, setCurrentCompanyState] = useState<Company | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
+  const [companyModuleSettings, setCompanyModuleSettings] = useState<CompanyModuleSettings | null>(null);
 
   const setCurrentCompany = (company: Company | null) => {
     setCurrentCompanyState(company);
@@ -111,6 +118,21 @@ export const CompanyProvider: React.FC<CompanyProviderProps> = ({ children }) =>
     } catch (error) {
       console.error('[CompanyContext] Error in fetchCompanies:', error);
       return [];
+    }
+  };
+
+  const fetchCompanyModuleSettings = async (companyId: string) => {
+    const { data, error } = await supabase
+      .from('company_module_settings')
+      .select('*')
+      .eq('company_id', companyId)
+      .single();
+    if (!error && data) {
+      setCompanyModuleSettings(data);
+      return data;
+    } else {
+      setCompanyModuleSettings(null);
+      return null;
     }
   };
 
@@ -223,6 +245,11 @@ export const CompanyProvider: React.FC<CompanyProviderProps> = ({ children }) =>
           if (companyError || !company) {
             console.error('[CompanyContext] Error getting company details:', companyError);
             return null;
+          }
+
+          if (company && company.id) {
+            const moduleSettings = await fetchCompanyModuleSettings(company.id);
+            company.moduleSettings = moduleSettings;
           }
 
           console.log('[CompanyContext] Using company from user profile:', company);

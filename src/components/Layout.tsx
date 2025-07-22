@@ -131,6 +131,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       roles: ['admin', 'super_admin', 'reporting_manager'],
       requiresPermission: true
     },
+    {
+      id: 'performance-report',
+      label: 'Performance Report',
+      icon: BarChart3,
+      roles: ['admin', 'super_admin', 'reporting_manager'],
+      requiresPermission: true
+    },
     
     // User profile - available to all
     {
@@ -152,12 +159,16 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
   // Filter navigation items based on user role and enforce order for leave/leave-management
   const getFilteredNavigationItems = () => {
     if (!user) return [];
+    // Remove performance-report if not enabled for the company
+    const filteredNavItems = currentCompany?.moduleSettings?.performance_report_enabled
+      ? navigationItems
+      : navigationItems.filter(item => item.id !== 'performance-report');
     // Always keep the first 4 tabs in order, then conditionally add the 5th
-    const baseTabs = navigationItems.slice(0, 4).filter(item => item.roles.includes(user.role || 'employee'));
-    const manageLeaveTab = navigationItems[4];
-    const restTabs = navigationItems.slice(5).filter(item => item.roles.includes(user.role || 'employee'));
+    const baseTabs = filteredNavItems.slice(0, 4).filter(item => item.roles.includes(user.role || 'employee'));
+    const manageLeaveTab = filteredNavItems[4];
+    const restTabs = filteredNavItems.slice(5).filter(item => item.roles.includes(user.role || 'employee'));
     let result = [...baseTabs];
-    if (manageLeaveTab.roles.includes(user.role || 'employee')) {
+    if (manageLeaveTab && manageLeaveTab.roles.includes(user.role || 'employee')) {
       result.push(manageLeaveTab);
     }
     result = [...result, ...restTabs];
@@ -277,7 +288,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
               {/* Product Branding */}
               <div className="flex items-center space-x-2 mb-2">
                 <img src="/attendedge-logo.png" alt="Product Logo" className="w-8 h-8 object-contain" />
-                <span className="font-bold text-lg tracking-wide">AttendEdge</span>
+                <span className="font-['Cambria'] text-[27px] font-bold tracking-wide">
+                  <span className="text-blue-600">Attend</span>
+                  <span className="text-green-400">Edge</span>
+                </span>
               </div>
               <div className="w-full border-t border-border my-2" />
               {/* Company Branding */}
