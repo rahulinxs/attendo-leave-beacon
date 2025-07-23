@@ -97,7 +97,7 @@ const PerformanceReport: React.FC = () => {
       if (!currentCompany?.id) return;
       setLoading(true);
       const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
-      const endDate = `${year}-${month.toString().padStart(2, '0')}-31`;
+      const endDate = `${year}-${month.toString().padStart(2, '0')}-28`;
       console.log('Fetching reports for:', startDate, endDate, currentCompany.id);
       const { data, error } = await supabase
         .from('performance_reports')
