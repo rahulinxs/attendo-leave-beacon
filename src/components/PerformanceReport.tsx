@@ -3,6 +3,8 @@ import { useCompany } from '@/contexts/CompanyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Button } from './ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import PerformanceDashboard from './PerformanceDashboard';
 import { supabase } from '@/integrations/supabase/client';
 import * as XLSX from 'xlsx';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
@@ -26,13 +28,21 @@ const getYearOptions = () => {
   return [currentYear - 1, currentYear, currentYear + 1];
 };
 
+type PeriodType = 'monthly' | 'quarterly' | 'half-yearly' | 'yearly';
+
 const PerformanceReport: React.FC = () => {
   const { currentCompany } = useCompany();
   const { user } = useAuth();
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
+  const [periodType, setPeriodType] = useState<PeriodType>('monthly');
+  const [quarter, setQuarter] = useState<number>(1);
+  const [half, setHalf] = useState<number>(1);
   const [reportData, setReportData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedTeam, setSelectedTeam] = useState<string>('');
+  const [selectedUser, setSelectedUser] = useState<string>('');
+  const [filterMode, setFilterMode] = useState<'team' | 'individual'>('team');
   const [teamLookup, setTeamLookup] = useState<Record<string, string>>({});
   const [userLookup, setUserLookup] = useState<Record<string, string>>({});
   const [userNameToUserId, setUserNameToUserId] = useState<Record<string, string>>({});
@@ -48,6 +58,8 @@ const PerformanceReport: React.FC = () => {
   const [reviewMode, setReviewMode] = useState<'replace' | 'upsert' | null>(null);
   const [saving, setSaving] = useState(false);
   const [addEmployeeIdx, setAddEmployeeIdx] = useState<number | null>(null);
+  const [editingCell, setEditingCell] = useState<{rowIndex: number, field: string} | null>(null);
+  const [editValue, setEditValue] = useState<string>('');
   const [addEmployeeForm, setAddEmployeeForm] = useState({
     name: '',
     email: '',
@@ -96,21 +108,68 @@ const PerformanceReport: React.FC = () => {
     const fetchReports = async () => {
       if (!currentCompany?.id) return;
       setLoading(true);
-      const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
-      const endDate = `${year}-${month.toString().padStart(2, '0')}-28`;
-      console.log('Fetching reports for:', startDate, endDate, currentCompany.id);
-      const { data, error } = await supabase
+      let startDate: string, endDate: string;
+      if (periodType === 'monthly') {
+        startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
+        endDate = `${year}-${month.toString().padStart(2, '0')}-28`;
+      } else if (periodType === 'quarterly') {
+        // Q1: Jan 1 - Mar 31, Q2: Apr 1 - Jun 30, Q3: Jul 1 - Sep 30, Q4: Oct 1 - Dec 31
+        if (quarter === 1) {
+          startDate = `${year}-01-01`;
+          endDate = `${year}-03-31`;
+        } else if (quarter === 2) {
+          startDate = `${year}-04-01`;
+          endDate = `${year}-06-30`;
+        } else if (quarter === 3) {
+          startDate = `${year}-07-01`;
+          endDate = `${year}-09-30`;
+        } else if (quarter === 4) {
+          startDate = `${year}-10-01`;
+          endDate = `${year}-12-31`;
+        } else {
+          startDate = `${year}-01-01`;
+          endDate = `${year}-12-31`;
+        }
+      } else if (periodType === 'half-yearly') {
+        // First Half: Jan 1 – Jun 30, Second Half: Jul 1 – Dec 31
+        if (half === 1) {
+          startDate = `${year}-01-01`;
+          endDate = `${year}-06-30`;
+        } else if (half === 2) {
+          startDate = `${year}-07-01`;
+          endDate = `${year}-12-31`;
+        } else {
+          startDate = `${year}-01-01`;
+          endDate = `${year}-12-31`;
+        }
+      } else if (periodType === 'yearly') {
+        startDate = `${year}-01-01`;
+        endDate = `${year}-12-31`;
+      } else {
+        // fallback
+        startDate = `${year}-01-01`;
+        endDate = `${year}-12-31`;
+      }
+      console.log('Fetching reports for:', periodType, startDate, endDate, currentCompany.id);
+      let query = supabase
         .from('performance_reports')
         .select('*')
         .eq('company_id', currentCompany.id)
         .gte('report_date', startDate)
         .lte('report_date', endDate);
+      if (filterMode === 'team' && selectedTeam) {
+        query = query.eq('team_id', selectedTeam);
+      }
+      if (filterMode === 'individual' && selectedUser) {
+        query = query.eq('user_id', selectedUser);
+      }
+      const { data, error } = await query;
       if (!error && data) setReportData(data);
       else setReportData([]);
       setLoading(false);
     };
     fetchReports();
-  }, [currentCompany, month, year]);
+  }, [currentCompany, month, year, periodType, quarter, half, selectedTeam, selectedUser, filterMode]);
 
   if (!currentCompany?.moduleSettings?.performance_report_enabled) {
     return null;
@@ -204,6 +263,53 @@ const PerformanceReport: React.FC = () => {
       }
       return updated;
     });
+  };
+
+  // Handle cell edit
+  const handleCellEdit = (rowIndex: number, field: string, value: any) => {
+    setReportData(prev => {
+      const newData = [...prev];
+      newData[rowIndex] = { ...newData[rowIndex], [field]: value };
+      return newData;
+    });
+  };
+
+  // Save edited cell to Supabase
+  const saveCellEdit = async (rowIndex: number, field: string) => {
+    if (!reportData[rowIndex]) return;
+    
+    const row = reportData[rowIndex];
+    setSaving(true);
+    
+    try {
+      const { error } = await supabase
+        .from('performance_reports')
+        .update({ [field]: row[field] })
+        .eq('id', row.id);
+      
+      if (error) throw error;
+      
+      toast({
+        title: 'Success',
+        description: 'Update successful',
+      });
+    } catch (error) {
+      console.error('Error updating record:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update record',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+      setEditingCell(null);
+    }
+  };
+
+  // Start editing a cell
+  const startEditing = (rowIndex: number, field: string, value: any) => {
+    setEditingCell({ rowIndex, field });
+    setEditValue(value !== null && value !== undefined ? value.toString() : '');
   };
 
   // Save reviewed data to Supabase
@@ -337,16 +443,134 @@ const PerformanceReport: React.FC = () => {
     }
   };
 
+  // Render editable cell
+  const renderEditableCell = (rowIndex: number, field: string, value: any, row: any) => {
+    if (editingCell?.rowIndex === rowIndex && editingCell?.field === field) {
+      return (
+        <input
+          type={field === 'total_call_duration' ? 'text' : 'number'}
+          className="w-full p-1 border rounded"
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={() => {
+            handleCellEdit(rowIndex, field, field === 'total_call_duration' ? editValue : Number(editValue));
+            saveCellEdit(rowIndex, field);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              handleCellEdit(rowIndex, field, field === 'total_call_duration' ? editValue : Number(editValue));
+              saveCellEdit(rowIndex, field);
+            } else if (e.key === 'Escape') {
+              setEditingCell(null);
+            }
+          }}
+          autoFocus
+        />
+      );
+    }
+    
+    return (
+      <div 
+        className="w-full h-full p-1 hover:bg-gray-100 rounded cursor-pointer"
+        onClick={() => startEditing(rowIndex, field, value)}
+      >
+        {value !== null && value !== undefined ? value.toString() : ''}
+      </div>
+    );
+  };
+
   return (
     <Card className="shadow-lg border-0">
       <CardHeader>
-        <CardTitle>Performance Report</CardTitle>
+        <div className="flex justify-between items-center">
+          <CardTitle>Performance Report</CardTitle>
+          {saving && (
+            <div className="flex items-center text-sm text-gray-500">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900 mr-2"></div>
+              Saving...
+            </div>
+          )}
+        </div>
         <div className="flex gap-4 mt-2 items-center">
-          <select value={month} onChange={e => setMonth(Number(e.target.value))} className="border rounded px-2 py-1">
-            {getMonthOptions().map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
+          <div className="flex gap-2 items-center">
+            <label>
+              <input
+                type="radio"
+                name="filterMode"
+                value="team"
+                checked={filterMode === 'team'}
+                onChange={() => setFilterMode('team')}
+              />
+              Team
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="filterMode"
+                value="individual"
+                checked={filterMode === 'individual'}
+                onChange={() => setFilterMode('individual')}
+              />
+              Individual
+            </label>
+          </div>
+          {filterMode === 'team' ? (
+            <select
+              value={selectedTeam}
+              onChange={e => setSelectedTeam(e.target.value)}
+              className="border rounded px-2 py-1"
+              style={{ minWidth: 120 }}
+            >
+              <option value="">All Teams</option>
+              {Object.entries(teamLookup).map(([id, name]) => (
+                <option key={id} value={id}>{name}</option>
+              ))}
+            </select>
+          ) : (
+            <select
+              value={selectedUser}
+              onChange={e => setSelectedUser(e.target.value)}
+              className="border rounded px-2 py-1"
+              style={{ minWidth: 120 }}
+            >
+              <option value="">All Individuals</option>
+              {Object.entries(userLookup).map(([id, name]) => (
+                <option key={id} value={id}>{name}</option>
+              ))}
+            </select>
+          )}
+          <select
+            value={periodType}
+            onChange={e => setPeriodType(e.target.value as PeriodType)}
+            className="border rounded px-2 py-1"
+            style={{ minWidth: 120 }}
+          >
+            <option value="monthly">Monthly</option>
+            <option value="quarterly">Quarterly</option>
+            <option value="half-yearly">Half-Yearly</option>
+            <option value="yearly">Yearly</option>
           </select>
+          {periodType === 'monthly' && (
+            <select value={month} onChange={e => setMonth(Number(e.target.value))} className="border rounded px-2 py-1">
+              {getMonthOptions().map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          )}
+          {periodType === 'quarterly' && (
+            <select value={quarter} onChange={e => setQuarter(Number(e.target.value))} className="border rounded px-2 py-1">
+              <option value={1}>Q1 (Jan-Mar)</option>
+              <option value={2}>Q2 (Apr-Jun)</option>
+              <option value={3}>Q3 (Jul-Sep)</option>
+              <option value={4}>Q4 (Oct-Dec)</option>
+            </select>
+          )}
+          {periodType === 'half-yearly' && (
+            <select value={half} onChange={e => setHalf(Number(e.target.value))} className="border rounded px-2 py-1">
+              <option value={1}>First Half (Jan-Jun)</option>
+              <option value={2}>Second Half (Jul-Dec)</option>
+            </select>
+          )}
           <select value={year} onChange={e => setYear(Number(e.target.value))} className="border rounded px-2 py-1">
             {getYearOptions().map(y => (
               <option key={y} value={y}>{y}</option>
@@ -363,50 +587,83 @@ const PerformanceReport: React.FC = () => {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="overflow-x-auto">
-          {loading ? (
-            <div className="p-4 text-center">Loading...</div>
-          ) : (
-            <table className="min-w-full border text-xs">
-              <thead>
-                <tr>
-                  {columns.map(col => (
-                    <th key={col} className="border px-2 py-1 bg-gray-100 text-left">{col}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {reportData.length === 0 ? (
-                  <tr>
-                    <td colSpan={columns.length} className="text-center p-4 text-red-600 font-semibold">
-                      No data found for this period. Please check your import and date selection.<br />
-                      <span className="text-xs font-normal text-gray-700">
-                        (Checked range: {`${year}-${month.toString().padStart(2, '0')}-01`} to {`${year}-${month.toString().padStart(2, '0')}-31`}<br />
-                        Company ID: {currentCompany?.id})
-                      </span>
-                    </td>
-                  </tr>
-                ) : reportData.map((row, idx) => (
-                  <tr key={row.id || idx}>
-                    <td className="border px-2 py-1">{teamLookup[row.team_id] || 'Unknown'}</td>
-                    <td className="border px-2 py-1">{userLookup[row.user_id] || 'Unknown'}</td>
-                    <td className="border px-2 py-1">{row.monster}</td>
-                    <td className="border px-2 py-1">{row.dice}</td>
-                    <td className="border px-2 py-1">{row.linkedin_profiles_viewed}</td>
-                    <td className="border px-2 py-1">{row.linkedin_inmails_sent}</td>
-                    <td className="border px-2 py-1">{row.total_calls}</td>
-                    <td className="border px-2 py-1">{row.total_call_duration}</td>
-                    <td className="border px-2 py-1">{row.total_submissions}</td>
-                    <td className="border px-2 py-1">{row.total_interviews}</td>
-                    <td className="border px-2 py-1">{row.offers}</td>
-                    <td className="border px-2 py-1">{row.starts}</td>
-                    <td className="border px-2 py-1">{row.placed}</td>
-                    <td className="border px-2 py-1">{row.offered}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+        <div className="space-y-4">
+          <Tabs defaultValue="table" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <TabsList>
+                <TabsTrigger value="table">Table View</TabsTrigger>
+                <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+              </TabsList>
+            </div>
+            <TabsContent value="table" className="space-y-4">
+              {loading ? (
+                <div className="flex items-center justify-center h-64">
+                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+                </div>
+              ) : reportData.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-muted-foreground">No report data available for the selected period.</p>
+                </div>
+              ) : (
+                <table className="min-w-full border text-xs">
+                  <thead>
+                    <tr>
+                      {columns.map(col => (
+                        <th key={col} className="border px-2 py-1 bg-gray-100 text-left">{col}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reportData.map((row, idx) => (
+                      <tr key={row.id || idx}>
+                        <td className="border px-2 py-1">
+                          {renderEditableCell(idx, 'team', teamLookup[row.team_id] || 'Unknown', row)}
+                        </td>
+                        <td className="border px-2 py-1">
+                          {renderEditableCell(idx, 'user', userLookup[row.user_id] || 'Unknown', row)}
+                        </td>
+                        <td className="border px-2 py-1">
+                          {renderEditableCell(idx, 'monster', row.monster, row)}
+                        </td>
+                        <td className="border px-2 py-1">
+                          {renderEditableCell(idx, 'dice', row.dice, row)}
+                        </td>
+                        <td className="border px-2 py-1">
+                          {renderEditableCell(idx, 'linkedin_profiles_viewed', row.linkedin_profiles_viewed, row)}
+                        </td>
+                        <td className="border px-2 py-1">
+                          {renderEditableCell(idx, 'linkedin_inmails_sent', row.linkedin_inmails_sent, row)}
+                        </td>
+                        <td className="border px-2 py-1">
+                          {renderEditableCell(idx, 'total_calls', row.total_calls, row)}
+                        </td>
+                        <td className="border px-2 py-1">
+                          {renderEditableCell(idx, 'total_call_duration', row.total_call_duration, row)}
+                        </td>
+                        <td className="border px-2 py-1">
+                          {renderEditableCell(idx, 'total_submissions', row.total_submissions, row)}
+                        </td>
+                        <td className="border px-2 py-1">
+                          {renderEditableCell(idx, 'total_interviews', row.total_interviews, row)}
+                        </td>
+                        <td className="border px-2 py-1">
+                          {renderEditableCell(idx, 'offers', row.offers, row)}
+                        </td>
+                        <td className="border px-2 py-1">
+                          {renderEditableCell(idx, 'starts', row.starts, row)}
+                        </td>
+                        <td className="border px-2 py-1">{row.placed}</td>
+                        <td className="border px-2 py-1">{row.offered}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </TabsContent>
+            <TabsContent value="dashboard">
+              <PerformanceDashboard reportData={reportData} />
+            </TabsContent>
+          </Tabs>
         </div>
         {/* Import Mode Dialog */}
         <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
