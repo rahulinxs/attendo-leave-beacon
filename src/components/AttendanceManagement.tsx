@@ -21,8 +21,10 @@ import { useCompany } from '@/contexts/CompanyContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { THEME_OPTIONS } from '@/contexts/ThemeContext';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import BulkAttendanceImport from './BulkAttendanceImport';
 
 const AttendanceManagement: React.FC = () => {
+  const [showBulkImport, setShowBulkImport] = useState(false);
   const { user } = useAuth();
   const { todayAttendance, recentAttendance, checkIn, checkOut, isLoading } = useAttendance();
   const { employees, isLoading: isEmployeesLoading, fetchEmployees } = useEmployees();
@@ -571,10 +573,15 @@ const AttendanceManagement: React.FC = () => {
         <>
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold">Attendance Management</h1>
-            <Button variant="outline" onClick={exportAttendanceReport}>
-          <Download className="w-4 h-4 mr-2" />
-          Export Report
-        </Button>
+            <div className="flex gap-2">
+  <Button variant="outline" onClick={exportAttendanceReport}>
+    <Download className="w-4 h-4 mr-2" />
+    Export Report
+  </Button>
+  <Button variant="outline" onClick={() => setShowBulkImport(true)}>
+    Bulk Import Attendance
+  </Button>
+</div>
       </div>
 
           {/* Pending Approvals Section */}
@@ -707,6 +714,18 @@ const AttendanceManagement: React.FC = () => {
           {/* Status Change Modal and Backdate Modal can be added here if needed */}
                   </>
                 )}
+          {/* Bulk Import Attendance Dialog */}
+      {currentCompany && (
+        <BulkAttendanceImport
+          open={showBulkImport}
+          setOpen={setShowBulkImport}
+          companyId={currentCompany.id}
+          onImportComplete={() => {
+            // Refresh attendance data if needed
+            if (typeof window !== 'undefined') window.location.reload();
+          }}
+        />
+      )}
     </div>
   );
 };

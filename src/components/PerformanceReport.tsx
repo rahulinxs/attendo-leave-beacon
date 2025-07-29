@@ -153,10 +153,11 @@ const PerformanceReport: React.FC = () => {
       console.log('Fetching reports for:', periodType, startDate, endDate, currentCompany.id);
       let query = supabase
         .from('performance_reports')
-        .select('*')
+        .select('*, employee:employees!performance_reports_user_id_fkey(id, is_active)')
         .eq('company_id', currentCompany.id)
         .gte('report_date', startDate)
-        .lte('report_date', endDate);
+        .lte('report_date', endDate)
+        .eq('employee.is_active', true);
       if (filterMode === 'team' && selectedTeam) {
         query = query.eq('team_id', selectedTeam);
       }
@@ -164,8 +165,48 @@ const PerformanceReport: React.FC = () => {
         query = query.eq('user_id', selectedUser);
       }
       const { data, error } = await query;
-      if (!error && data) setReportData(data);
-      else setReportData([]);
+      if (!error && data) {
+        if (periodType === 'monthly') {
+          setReportData(data);
+        } else {
+          // Aggregate by user_id (and team_id)
+          const aggMap: Record<string, any> = {};
+          data.forEach((row: any) => {
+            // Always aggregate by user_id (one row per user)
+            const key = row.user_id;
+            if (!aggMap[key]) {
+              aggMap[key] = { ...row };
+            } else {
+              // Sum numeric fields
+              aggMap[key].monster += row.monster || 0;
+              aggMap[key].dice += row.dice || 0;
+              aggMap[key].linkedin_profiles_viewed += row.linkedin_profiles_viewed || 0;
+              aggMap[key].linkedin_inmails_sent += row.linkedin_inmails_sent || 0;
+              aggMap[key].total_calls += row.total_calls || 0;
+              aggMap[key].total_submissions += row.total_submissions || 0;
+              aggMap[key].total_interviews += row.total_interviews || 0;
+              aggMap[key].offers += row.offers || 0;
+              aggMap[key].starts += row.starts || 0;
+              aggMap[key].placed += row.placed || 0;
+              aggMap[key].offered += row.offered || 0;
+              // For durations, add as seconds then format back
+              function durationToSeconds(d:string) {
+                if (!d) return 0;
+                const [h,m,s] = d.split(':').map(Number);
+                return (h||0)*3600 + (m||0)*60 + (s||0);
+              }
+              function secondsToDuration(sec:number) {
+                const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
+                return `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+              }
+              const prevSec = durationToSeconds(aggMap[key].total_call_duration);
+              const addSec = durationToSeconds(row.total_call_duration);
+              aggMap[key].total_call_duration = secondsToDuration(prevSec + addSec);
+            }
+          });
+          setReportData(Object.values(aggMap));
+        }
+      } else setReportData([]);
       setLoading(false);
     };
     fetchReports();

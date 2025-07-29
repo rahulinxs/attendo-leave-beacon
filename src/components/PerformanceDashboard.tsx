@@ -31,7 +31,12 @@ const PerformanceDashboard = ({ reportData }) => {
           offers: 0,
           starts: 0,
           calls: 0,
-          linkedin: 0
+          linkedin: 0,
+          monster: 0,
+          dice: 0,
+          linkedin_profiles_viewed: 0,
+          linkedin_inmails_sent: 0,
+          total_call_duration: 0, // store as seconds
         };
       }
       acc[curr.user_id].submissions += curr.total_submissions || 0;
@@ -40,9 +45,25 @@ const PerformanceDashboard = ({ reportData }) => {
       acc[curr.user_id].starts += curr.starts || 0;
       acc[curr.user_id].calls += curr.total_calls || 0;
       acc[curr.user_id].linkedin += (curr.linkedin_profiles_viewed || 0) + (curr.linkedin_inmails_sent || 0);
+      acc[curr.user_id].monster += curr.monster || 0;
+      acc[curr.user_id].dice += curr.dice || 0;
+      acc[curr.user_id].linkedin_profiles_viewed += curr.linkedin_profiles_viewed || 0;
+      acc[curr.user_id].linkedin_inmails_sent += curr.linkedin_inmails_sent || 0;
+      // Convert duration to seconds and sum
+      function durationToSeconds(d:string) {
+        if (!d) return 0;
+        const [h,m,s] = d.split(':').map(Number);
+        return (h||0)*3600 + (m||0)*60 + (s||0);
+      }
+      acc[curr.user_id].total_call_duration += durationToSeconds(curr.total_call_duration);
       return acc;
     }, {});
-
+    // Convert total_call_duration back to hh:mm:ss for display
+    Object.values(userData).forEach((user: any) => {
+      const sec = user.total_call_duration || 0;
+      const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
+      user.total_call_duration_display = `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+    });
     return Object.values(userData);
   };
 
@@ -60,107 +81,126 @@ const PerformanceDashboard = ({ reportData }) => {
     <div className="space-y-6">
       <h2 className="text-2xl font-bold tracking-tight">Performance Dashboard</h2>
       
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Submissions</CardTitle>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              className="h-4 w-4 text-muted-foreground"
-            >
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {chartData.reduce((sum, curr) => sum + (curr.submissions || 0), 0)}
+      {/* Compact Metric Pallets Row */}
+      {/* Resource Metrics Row */}
+      <div className="flex flex-row flex-wrap gap-2 mb-2">
+        {[
+          {
+            label: 'Monster',
+            value: chartData.reduce((sum, curr) => sum + (curr.monster || 0), 0),
+            icon: <span role="img" aria-label="Monster">👾</span>,
+          },
+          {
+            label: 'Dice',
+            value: chartData.reduce((sum, curr) => sum + (curr.dice || 0), 0),
+            icon: <span role="img" aria-label="Dice">🎲</span>,
+          },
+          {
+            label: 'LinkedIn Profiles Viewed',
+            value: chartData.reduce((sum, curr) => sum + (curr.linkedin_profiles_viewed || 0), 0),
+            icon: <span role="img" aria-label="LinkedIn">🔍</span>,
+          },
+          {
+            label: 'LinkedIn InMails Sent',
+            value: chartData.reduce((sum, curr) => sum + (curr.linkedin_inmails_sent || 0), 0),
+            icon: <span role="img" aria-label="Mail">✉️</span>,
+          },
+          {
+            label: 'Total Calls',
+            value: chartData.reduce((sum, curr) => sum + (curr.calls || 0), 0),
+            icon: <span role="img" aria-label="Phone">📞</span>,
+          },
+          {
+            label: 'Total Call Duration',
+            value: chartData.reduce((sum, curr) => sum + (curr.total_call_duration || 0), 0) === 0
+              ? '0:00:00'
+              : (() => {
+                const sec = chartData.reduce((sum, curr) => sum + (curr.total_call_duration || 0), 0);
+                const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
+                return `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+              })(),
+            icon: <span role="img" aria-label="Timer">⏱️</span>,
+          },
+        ].map((metric, idx) => (
+          <div
+            key={metric.label}
+            className="flex items-center bg-white rounded shadow-sm px-4 py-2 min-w-[180px] min-h-[60px] border border-gray-200 flex-grow"
+            style={{ fontSize: '0.95rem', flex: '1 1 180px' }}
+          >
+            <span className="mr-2 text-lg">{metric.icon}</span>
+            <div>
+              <div className="font-semibold text-base leading-tight">{metric.value}</div>
+              <div className="text-xs text-gray-500 whitespace-nowrap">{metric.label}</div>
             </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Interviews</CardTitle>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              className="h-4 w-4 text-muted-foreground"
-            >
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {chartData.reduce((sum, curr) => sum + (curr.interviews || 0), 0)}
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Offers</CardTitle>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              className="h-4 w-4 text-muted-foreground"
-            >
-              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-            </svg>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {chartData.reduce((sum, curr) => sum + (curr.offers || 0), 0)}
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Starts</CardTitle>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              className="h-4 w-4 text-muted-foreground"
-            >
-              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-            </svg>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {chartData.reduce((sum, curr) => sum + (curr.starts || 0), 0)}
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        ))}
       </div>
+      {/* Performance Metrics Row */}
+      <div className="flex flex-row flex-wrap gap-2 mb-6">
+        {[
+          {
+            label: 'Total Submissions',
+            value: chartData.reduce((sum, curr) => sum + (curr.submissions || 0), 0),
+            icon: <span role="img" aria-label="Submit">📤</span>,
+          },
+          {
+            label: 'Total Interviews',
+            value: chartData.reduce((sum, curr) => sum + (curr.interviews || 0), 0),
+            icon: <span role="img" aria-label="Interview">🎤</span>,
+          },
+          {
+            label: 'Total Offers',
+            value: chartData.reduce((sum, curr) => sum + (curr.offers || 0), 0),
+            icon: <span role="img" aria-label="Offer">💼</span>,
+          },
+          {
+            label: 'Total Starts',
+            value: chartData.reduce((sum, curr) => sum + (curr.starts || 0), 0),
+            icon: <span role="img" aria-label="Start">🚀</span>,
+          },
+        ].map((metric, idx) => (
+          <div
+            key={metric.label}
+            className="flex items-center bg-white rounded shadow-sm px-4 py-2 min-w-[180px] min-h-[60px] border border-gray-200 flex-grow"
+            style={{ fontSize: '0.95rem', flex: '1 1 180px' }}
+          >
+            <span className="mr-2 text-lg">{metric.icon}</span>
+            <div>
+              <div className="font-semibold text-base leading-tight">{metric.value}</div>
+              <div className="text-xs text-gray-500 whitespace-nowrap">{metric.label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* End Compact Metric Pallets Row */}
 
       {/* Charts */}
       <div className="grid gap-4 md:grid-cols-2">
+        {/* Resource Usage by User */}
+        <Card className="p-4">
+          <CardHeader>
+            <CardTitle>Resource Usage by User</CardTitle>
+          </CardHeader>
+          <CardContent className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={chartData}
+                margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" angle={-45} textAnchor="end" height={60} />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="monster" fill="#8884d8" name="Monster" />
+                <Bar dataKey="dice" fill="#82ca9d" name="Dice" />
+                <Bar dataKey="linkedin_profiles_viewed" fill="#ffc658" name="LinkedIn Profiles Viewed" />
+                <Bar dataKey="linkedin_inmails_sent" fill="#ff8042" name="LinkedIn InMails Sent" />
+                <Bar dataKey="calls" fill="#0088FE" name="Total Calls" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
         {/* Submissions by User */}
         <Card className="p-4">
           <CardHeader>
