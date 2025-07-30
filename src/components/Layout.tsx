@@ -138,6 +138,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       roles: ['admin', 'super_admin', 'reporting_manager'],
       requiresPermission: true
     },
+    {
+      id: 'recruitment-report',
+      label: 'Recruitment Report',
+      icon: BarChart3,
+      roles: ['admin', 'super_admin', 'reporting_manager', 'recruiter'],
+      requiresPermission: true
+    },
     
     // User profile - available to all
     {
@@ -160,9 +167,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
   const getFilteredNavigationItems = () => {
     if (!user) return [];
     // Remove performance-report if not enabled for the company
-    const filteredNavItems = currentCompany?.moduleSettings?.performance_report_enabled
+    let filteredNavItems = currentCompany?.moduleSettings?.performance_report_enabled
       ? navigationItems
       : navigationItems.filter(item => item.id !== 'performance-report');
+    
+    // Remove recruitment-report if not enabled for the company (uses performance report module)
+    filteredNavItems = currentCompany?.moduleSettings?.performance_report_enabled
+      ? filteredNavItems
+      : filteredNavItems.filter(item => item.id !== 'recruitment-report');
     // Always keep the first 4 tabs in order, then conditionally add the 5th
     const baseTabs = filteredNavItems.slice(0, 4).filter(item => item.roles.includes(user.role || 'employee'));
     const manageLeaveTab = filteredNavItems[4];

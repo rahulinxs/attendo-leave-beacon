@@ -15,6 +15,7 @@ import EmployeeAttendance from '@/components/EmployeeAttendance';
 import Profile from '@/components/Profile';
 import CompanyProfile from '@/components/CompanyProfile';
 import PerformanceReport from '@/components/PerformanceReport';
+import RecruitmentReport from '@/components/RecruitmentReport';
 
 const Index = () => {
   const { user, isLoading } = useAuth();
@@ -106,6 +107,9 @@ const Index = () => {
       
       case 'performance-report':
         return <PerformanceReport />;
+      
+      case 'recruitment-report':
+        return <RecruitmentReport />;
       
       case 'profile':
         return (

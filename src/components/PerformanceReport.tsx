@@ -12,7 +12,7 @@ import { toast } from '@/hooks/use-toast';
 
 const columns = [
   'Team', 'USER NAME', 'Monster', 'Dice', 'LinkedIn Profiles viewed', 'LinkedIn InMails sent',
-  'Total Calls', 'Total Call Duration', 'Total Submissions', 'Total Interviews', 'Offers', 'Starts', 'Placed', 'Offered'
+  'Total Calls', 'Total Call Duration', 'Total Submissions', 'Total Interviews', 'Offers', 'Starts'
 ];
 
 const getMonthOptions = () => {
@@ -273,8 +273,6 @@ const PerformanceReport: React.FC = () => {
         total_interviews: parseNumber(row['Total Interviews']),
         offers: parseNumber(row['Offers']),
         starts: parseNumber(row['Starts']),
-        placed: parseNumber(row['Placed']),
-        offered: parseNumber(row['Offered']),
         report_date: `${year}-${month.toString().padStart(2, '0')}-01`,
         company_id: currentCompany.id,
       };
@@ -693,8 +691,6 @@ const PerformanceReport: React.FC = () => {
                         <td className="border px-2 py-1">
                           {renderEditableCell(idx, 'starts', row.starts, row)}
                         </td>
-                        <td className="border px-2 py-1">{row.placed}</td>
-                        <td className="border px-2 py-1">{row.offered}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -747,8 +743,6 @@ const PerformanceReport: React.FC = () => {
                     <th className="border px-2 py-1">Total Interviews</th>
                     <th className="border px-2 py-1">Offers</th>
                     <th className="border px-2 py-1">Starts</th>
-                    <th className="border px-2 py-1">Placed</th>
-                    <th className="border px-2 py-1">Offered</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -830,8 +824,6 @@ const PerformanceReport: React.FC = () => {
                       <td className="border px-2 py-1"><input className="w-12 border rounded px-1" value={row.total_interviews} onChange={e => handleReviewEdit(idx, 'total_interviews', e.target.value)} /></td>
                       <td className="border px-2 py-1"><input className="w-12 border rounded px-1" value={row.offers} onChange={e => handleReviewEdit(idx, 'offers', e.target.value)} /></td>
                       <td className="border px-2 py-1"><input className="w-12 border rounded px-1" value={row.starts} onChange={e => handleReviewEdit(idx, 'starts', e.target.value)} /></td>
-                      <td className="border px-2 py-1"><input className="w-12 border rounded px-1" value={row.placed} onChange={e => handleReviewEdit(idx, 'placed', e.target.value)} /></td>
-                      <td className="border px-2 py-1"><input className="w-12 border rounded px-1" value={row.offered} onChange={e => handleReviewEdit(idx, 'offered', e.target.value)} /></td>
                     </tr>
                   ))}
                 </tbody>
