@@ -10,7 +10,7 @@ import { Calendar, Plus, Trash2, CalendarDays } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -284,7 +284,7 @@ const HolidayManagement: React.FC = () => {
                     <div>
                       <h3 className="font-medium">{holiday.name}</h3>
                       <p className="text-sm text-gray-600">
-                        {format(new Date(holiday.date), 'EEEE, MMMM dd, yyyy')}
+                        {format(parseISO(holiday.date), 'EEEE, MMMM dd, yyyy')}
                       </p>
                       {holiday.description && (
                         <p className="text-sm text-gray-500 mt-1">{holiday.description}</p>
@@ -293,7 +293,7 @@ const HolidayManagement: React.FC = () => {
                   </div>
                   <div className="flex items-center space-x-2">
                     <Badge variant="secondary">
-                      {new Date(holiday.date) > new Date() ? 'Upcoming' : 'Past'}
+                      {parseISO(holiday.date) > new Date() ? 'Upcoming' : 'Past'}
                     </Badge>
                     {holiday.is_recurring && (
                       <Badge variant="outline">Recurring</Badge>

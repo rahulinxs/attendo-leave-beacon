@@ -36,8 +36,11 @@ type PeriodType = 'monthly' | 'quarterly' | 'half-yearly' | 'yearly';
 const RecruitmentReport: React.FC = () => {
   const { currentCompany } = useCompany();
   const { user } = useAuth();
-  const [month, setMonth] = useState(new Date().getMonth() + 1);
-  const [year, setYear] = useState(new Date().getFullYear());
+  const today = new Date();
+  const prevMonth = today.getMonth() === 0 ? 12 : today.getMonth();
+  const prevMonthYear = today.getMonth() === 0 ? today.getFullYear() - 1 : today.getFullYear();
+  const [month, setMonth] = useState(prevMonth);
+  const [year, setYear] = useState(prevMonthYear);
   const [periodType, setPeriodType] = useState<PeriodType>('monthly');
   const [quarter, setQuarter] = useState<number>(1);
   const [half, setHalf] = useState<number>(1);
@@ -100,7 +103,6 @@ const RecruitmentReport: React.FC = () => {
   // Fetch performance data for recruitment dashboard
   const fetchReports = async () => {
     if (!currentCompany?.id) return;
-    
     setLoading(true);
     try {
       let query = supabase
@@ -108,45 +110,41 @@ const RecruitmentReport: React.FC = () => {
         .select('*')
         .eq('company_id', currentCompany.id);
 
-      // Apply date filters based on period type
-      const startDate = new Date();
-      const endDate = new Date();
-      
-             switch (periodType) {
-         case 'monthly':
-           startDate.setMonth(month - 1);
-           startDate.setDate(1);
-           endDate.setMonth(month - 1);
-           endDate.setDate(28); // Use consistent date range
-           break;
-                 case 'quarterly':
-           const quarterStartMonth = (quarter - 1) * 3;
-           startDate.setMonth(quarterStartMonth);
-           startDate.setDate(1);
-           endDate.setMonth(quarterStartMonth + 2);
-           endDate.setDate(28);
-           break;
-         case 'half-yearly':
-           const halfStartMonth = (half - 1) * 6;
-           startDate.setMonth(halfStartMonth);
-           startDate.setDate(1);
-           endDate.setMonth(halfStartMonth + 5);
-           endDate.setDate(28);
-           break;
-         case 'yearly':
-           startDate.setMonth(0);
-           startDate.setDate(1);
-           endDate.setMonth(11);
-           endDate.setDate(28);
-          break;
+      // Apply date filters based on period type (copy logic from PerformanceReport)
+      let startDate, endDate;
+      if (periodType === 'monthly') {
+        startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
+        endDate = `${year}-${month.toString().padStart(2, '0')}-28`;
+      } else if (periodType === 'quarterly') {
+        if (quarter === 1) {
+          startDate = `${year}-01-01`;
+          endDate = `${year}-03-31`;
+        } else if (quarter === 2) {
+          startDate = `${year}-04-01`;
+          endDate = `${year}-06-30`;
+        } else if (quarter === 3) {
+          startDate = `${year}-07-01`;
+          endDate = `${year}-09-30`;
+        } else if (quarter === 4) {
+          startDate = `${year}-10-01`;
+          endDate = `${year}-12-31`;
+        }
+      } else if (periodType === 'half-yearly') {
+        if (half === 1) {
+          startDate = `${year}-01-01`;
+          endDate = `${year}-06-30`;
+        } else if (half === 2) {
+          startDate = `${year}-07-01`;
+          endDate = `${year}-12-31`;
+        }
+      } else if (periodType === 'yearly') {
+        startDate = `${year}-01-01`;
+        endDate = `${year}-12-31`;
       }
-      
-      startDate.setFullYear(year);
-      endDate.setFullYear(year);
 
       query = query
-        .gte('report_date', startDate.toISOString().split('T')[0])
-        .lte('report_date', endDate.toISOString().split('T')[0]);
+        .gte('report_date', startDate)
+        .lte('report_date', endDate);
 
       // Apply filters
       if (selectedTeam && selectedTeam !== 'all') {
@@ -157,7 +155,6 @@ const RecruitmentReport: React.FC = () => {
       }
 
       const { data, error } = await query;
-
       if (error) {
         console.error('Error fetching performance reports:', error);
         toast({
@@ -167,7 +164,6 @@ const RecruitmentReport: React.FC = () => {
         });
         return;
       }
-
       setReportData(data || []);
     } catch (error) {
       console.error('Error fetching performance reports:', error);
@@ -226,7 +222,7 @@ const RecruitmentReport: React.FC = () => {
                  total_interviews: parseNumber(row['Total Interviews']),
                  offers: parseNumber(row['Offers']),
                  starts: parseNumber(row['Starts']),
-                 report_date: `${year}-${month.toString().padStart(2, '0')}-28`,
+                 report_date: `${year}-${month.toString().padStart(1, '0')}-28`,
                  company_id: currentCompany?.id,
                };
              });

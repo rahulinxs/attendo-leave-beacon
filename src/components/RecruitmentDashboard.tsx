@@ -217,24 +217,24 @@ const RecruitmentDashboard = ({ performanceData }) => {
           </CardHeader>
           <CardContent className="h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
+          <PieChart>
+            <Pie
                   data={funnelData}
-                  cx="50%"
-                  cy="50%"
+              cx="50%"
+              cy="50%"
                   labelLine={false}
                   outerRadius={80}
-                  fill="#8884d8"
+              fill="#8884d8"
                   dataKey="value"
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                >
+              label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+            >
                   {funnelData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
+              ))}
+            </Pie>
+            <Tooltip />
+            <Legend />
+          </PieChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
@@ -250,11 +250,11 @@ const RecruitmentDashboard = ({ performanceData }) => {
                 data={sourceData}
                 margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
               >
-                <CartesianGrid strokeDasharray="3 3" />
+            <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" angle={-45} textAnchor="end" height={60} />
-                <YAxis />
-                <Tooltip />
-                <Legend />
+            <YAxis />
+            <Tooltip />
+            <Legend />
                 <Bar dataKey="applications" fill="#8884d8" name="Applications" />
                 <Bar dataKey="hires" fill="#82ca9d" name="Hires" />
               </BarChart>
@@ -333,4 +333,4 @@ const RecruitmentDashboard = ({ performanceData }) => {
   );
 };
 
-export default RecruitmentDashboard; 
+export default RecruitmentDashboard;
