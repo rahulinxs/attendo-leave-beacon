@@ -119,25 +119,25 @@ const RecruitmentReport: React.FC = () => {
            endDate.setMonth(month - 1);
            endDate.setDate(new Date(year, month, 0).getDate()); // Get last day of the month
            break;
-        case 'quarterly':
-          const quarterStartMonth = (quarter - 1) * 3;
-          startDate.setMonth(quarterStartMonth);
-          startDate.setDate(1);
-          endDate.setMonth(quarterStartMonth + 2);
-          endDate.setDate(31);
-          break;
-        case 'half-yearly':
-          const halfStartMonth = (half - 1) * 6;
-          startDate.setMonth(halfStartMonth);
-          startDate.setDate(1);
-          endDate.setMonth(halfStartMonth + 5);
-          endDate.setDate(31);
-          break;
-        case 'yearly':
-          startDate.setMonth(0);
-          startDate.setDate(1);
-          endDate.setMonth(11);
-          endDate.setDate(31);
+                 case 'quarterly':
+           const quarterStartMonth = (quarter - 1) * 3;
+           startDate.setMonth(quarterStartMonth);
+           startDate.setDate(1);
+           endDate.setMonth(quarterStartMonth + 2);
+           endDate.setDate(28);
+           break;
+         case 'half-yearly':
+           const halfStartMonth = (half - 1) * 6;
+           startDate.setMonth(halfStartMonth);
+           startDate.setDate(1);
+           endDate.setMonth(halfStartMonth + 5);
+           endDate.setDate(28);
+           break;
+         case 'yearly':
+           startDate.setMonth(0);
+           startDate.setDate(1);
+           endDate.setMonth(11);
+           endDate.setDate(28);
           break;
       }
       
@@ -220,7 +220,7 @@ const RecruitmentReport: React.FC = () => {
          total_interviews: parseNumber(row['Total Interviews']),
          offers: parseNumber(row['Offers']),
          starts: parseNumber(row['Starts']),
-         report_date: new Date().toISOString().split('T')[0],
+                   report_date: `${year}-${month.toString().padStart(2, '0')}-28`,
          company_id: currentCompany?.id,
        }));
 
@@ -292,9 +292,9 @@ const RecruitmentReport: React.FC = () => {
     setSaving(true);
     try {
       if (reviewMode === 'replace') {
-        // Delete existing data for the period
-        const startDate = new Date(year, month - 1, 1);
-        const endDate = new Date(year, month, 0);
+                 // Delete existing data for the period
+         const startDate = new Date(year, month - 1, 1);
+         const endDate = new Date(year, month - 1, 28);
         
         await supabase
           .from('performance_reports')

@@ -273,7 +273,7 @@ const PerformanceReport: React.FC = () => {
         total_interviews: parseNumber(row['Total Interviews']),
         offers: parseNumber(row['Offers']),
         starts: parseNumber(row['Starts']),
-        report_date: `${year}-${month.toString().padStart(2, '0')}-01`,
+        report_date: `${year}-${month.toString().padStart(2, '0')}-28`,
         company_id: currentCompany.id,
       };
     });
@@ -371,8 +371,8 @@ const PerformanceReport: React.FC = () => {
           .from('performance_reports')
           .delete()
           .eq('company_id', currentCompany.id)
-          .gte('report_date', `${year}-${month.toString().padStart(2, '0')}-01`)
-          .lte('report_date', `${year}-${month.toString().padStart(2, '0')}-31`);
+                  .gte('report_date', `${year}-${month.toString().padStart(2, '0')}-01`)
+        .lte('report_date', `${year}-${month.toString().padStart(2, '0')}-28`);
       }
       let success = 0, fail = 0;
       for (const record of reviewData) {
