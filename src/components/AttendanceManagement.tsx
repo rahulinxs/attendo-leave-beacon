@@ -574,15 +574,15 @@ const AttendanceManagement: React.FC = () => {
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold">Attendance Management</h1>
             <div className="flex gap-2">
-  <Button variant="outline" onClick={exportAttendanceReport}>
-    <Download className="w-4 h-4 mr-2" />
-    Export Report
-  </Button>
-  <Button variant="outline" onClick={() => setShowBulkImport(true)}>
-    Bulk Import Attendance
-  </Button>
-</div>
-      </div>
+              <Button variant="outline" onClick={exportAttendanceReport}>
+                <Download className="w-4 h-4 mr-2" />
+                Export Report
+              </Button>
+              <Button variant="outline" onClick={() => setShowBulkImport(true)}>
+                Bulk Import Attendance
+              </Button>
+            </div>
+          </div>
 
           {/* Pending Approvals Section */}
           <div className="mb-8">
@@ -604,7 +604,7 @@ const AttendanceManagement: React.FC = () => {
                     const employee = employees.find(e => e.id === entry.employee_id);
                     const canApprove = canApproveRequest(entry.requestor_role);
                     return (
-                      <tr key={entry.id} className="border-b bg-gray-50 hover:bg-gray-100 transition-colors">
+                      <tr key={entry.id} className="hover:bg-blue-50 transition-all duration-150">
                         <td className="px-4 py-2 font-medium text-gray-900">{employee ? employee.name : <span className="italic text-gray-400">Unknown</span>}</td>
                         <td className="px-4 py-2 text-gray-700">{entry.date}</td>
                         <td className="px-4 py-2">{getStatusBadge(entry.status)}</td>
@@ -650,7 +650,7 @@ const AttendanceManagement: React.FC = () => {
 
           {/* Employee Attendance List Section */}
           <div className="mb-8">
-            <div className="flex items-center gap-4 mb-4">
+            <div className="flex items-center justify-between gap-4">
               <h2 className="text-xl font-semibold">Employee Attendance</h2>
               <div className="flex items-center gap-2">
                 <span className="text-gray-600">Date:</span>
@@ -658,7 +658,7 @@ const AttendanceManagement: React.FC = () => {
                   mode="single"
                   selected={selectedDate}
                   onSelect={(date) => setSelectedDate(date as Date)}
-                  className="rounded border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-400"
+                  className="rounded-full shadow ring-2 ring-blue-100 animate-pulse"
                 />
               </div>
             </div>
@@ -672,7 +672,7 @@ const AttendanceManagement: React.FC = () => {
               </thead>
               <tbody>
                 {managedEmployees.map((emp) => (
-                  <tr key={emp.id} className="border-b">
+                  <tr key={emp.id} className="border-b bg-gradient-to-r from-blue-50 to-green-50">
                     <td className="px-4 py-2">{emp.name}</td>
                     <td className="px-4 py-2">{getStatusBadge(dateAttendanceMap[emp.id])}</td>
                     <td className="px-4 py-2 flex gap-2">

@@ -159,22 +159,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   return (
     <div className="min-h-screen w-full flex flex-col items-stretch justify-start" style={{ background: '#fff' }}>
-      <div className={`max-w-7xl mx-auto mb-8 p-6 md:p-10 rounded-3xl shadow-xl space-y-4 ${themeClass}`} style={{ background: 'hsl(var(--background))', color: 'hsl(var(--foreground))' }}>
+      <div className={`max-w-7xl mx-auto mb-8 p-6 md:p-10 rounded-3xl shadow-xl space-y-6 ${themeClass}`} style={{ background: 'hsl(var(--background))', color: 'hsl(var(--foreground))' }}>
         {/* Welcome Header as Card */}
-        <Card className={`${themeClass} card-theme rounded-2xl shadow p-4 mb-4`}>
+        <Card className={`${themeClass} card-theme rounded-3xl shadow-2xl p-6 mb-6 bg-gradient-to-r from-blue-50 to-purple-50 border-0`}>
           <CardContent className="p-0">
             {/* Welcome Header content START */}
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
               <div>
-                <div className="text-lg font-bold mb-1">Welcome back, {user?.name}{currentCompany ? ` (${currentCompany.name})` : ''}</div>
-                <div className="text-2xl font-bold text-primary mb-1">{currentTime}</div>
-                <div className="text-muted-foreground mb-1">{currentDate}</div>
-                <div className="text-purple-600 font-medium">{user?.position}</div>
+                <div className="text-lg font-bold mb-1 text-blue-800">Welcome back, {user?.name}{currentCompany ? ` (${currentCompany.name})` : ''}</div>
+                <div className="text-4xl font-extrabold text-blue-700 mb-1 flex items-center gap-2">
+                  <Clock className="w-7 h-7 text-blue-400 bg-white rounded-full p-1 shadow mr-2" />
+                  {currentTime}
+                </div>
+                <div className="text-gray-500 mb-1 text-lg">{currentDate}</div>
+                <div className="text-purple-700 font-semibold text-md">{user?.position}</div>
               </div>
-              <div className="flex flex-col md:flex-row gap-2 md:items-center">
-                <Button variant="gradient" onClick={handleCheckInOut}>{todayAttendance?.check_in_time && !todayAttendance?.check_out_time ? 'Check Out' : 'Check In'}</Button>
-                <Button variant="gradient" onClick={() => onNavigate?.('leave')}>Request Leave</Button>
-                <Button variant="gradient" onClick={handleResetPassword}>Reset Password</Button>
+              <div className="flex flex-col md:flex-row gap-3 md:items-center">
+                <Button variant="gradient" className="transition-transform hover:scale-105 shadow-lg" onClick={handleCheckInOut}>{todayAttendance?.check_in_time && !todayAttendance?.check_out_time ? 'Check Out' : 'Check In'}</Button>
+                <Button variant="gradient" className="transition-transform hover:scale-105 shadow-lg" onClick={() => onNavigate?.('leave')}>Request Leave</Button>
+                <Button variant="gradient" className="transition-transform hover:scale-105 shadow-lg" onClick={handleResetPassword}>Reset Password</Button>
               </div>
             </div>
             {/* Welcome Header content END */}
@@ -182,18 +185,23 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         </Card>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          <Card className={`${themeClass} card-theme card-hover border-0 shadow-lg`}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Card className="rounded-2xl shadow-lg border-0 bg-gradient-to-br from-green-100 to-blue-50 hover:shadow-2xl transition-all duration-150 group">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="rounded-full bg-green-200 p-3 shadow-lg ring-4 ring-green-100">
+                  <StatusIcon className={`w-7 h-7 text-green-700`} />
+                </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Today's Status</p>
-                  <div className="flex items-center mt-1">
-                    <StatusIcon className={`w-5 h-5 mr-2 text-primary`} />
-                    <span className="font-bold text-foreground">{attendanceStatus.status}</span>
+                  <p className="text-md font-semibold text-gray-600">Today's Status</p>
+                  <div className="flex items-center mt-2">
+                    <span className="text-xl font-extrabold text-green-800 mr-2">{attendanceStatus.status}</span>
+                    {todayAttendance?.check_in_time && (
+                      <Badge className="ml-1 bg-green-500 text-white">Checked In</Badge>
+                    )}
                   </div>
                   {todayAttendance?.check_in_time && (
-                    <p className="text-sm text-muted-foreground mt-1">
+                    <p className="text-sm text-gray-500 mt-1">
                       at {new Date(todayAttendance.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   )}
@@ -202,14 +210,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             </CardContent>
           </Card>
 
-          <Card className={`${themeClass} card-theme card-hover border-0 shadow-lg`}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
+          <Card className="rounded-2xl shadow-lg border-0 bg-gradient-to-br from-blue-100 to-cyan-50 hover:shadow-2xl transition-all duration-150 group">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="rounded-full bg-blue-200 p-3 shadow-lg ring-4 ring-blue-100">
+                  <Clock className="w-7 h-7 text-blue-700" />
+                </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Working Hours</p>
-                  <div className="flex items-center mt-1">
-                    <Clock className="w-5 h-5 text-primary mr-2" />
-                    <span className="font-bold text-foreground">
+                  <p className="text-md font-semibold text-gray-600">Working Hours</p>
+                  <div className="flex items-center mt-2">
+                    <span className="text-xl font-extrabold text-blue-800 mr-2">
                       {todayAttendance?.check_in_time && todayAttendance?.check_out_time 
                         ? `${Math.round((new Date(todayAttendance.check_out_time).getTime() - new Date(todayAttendance.check_in_time).getTime()) / (1000 * 60 * 60) * 10) / 10}h`
                         : todayAttendance?.check_in_time 
@@ -218,37 +228,41 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                       }
                     </span>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">Today</p>
+                  <p className="text-sm text-gray-500 mt-1">Today</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className={`${themeClass} card-theme card-hover border-0 shadow-lg`}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
+          <Card className="rounded-2xl shadow-lg border-0 bg-gradient-to-br from-yellow-100 to-orange-50 hover:shadow-2xl transition-all duration-150 group">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="rounded-full bg-yellow-200 p-3 shadow-lg ring-4 ring-yellow-100">
+                  <Calendar className="w-7 h-7 text-yellow-700" />
+                </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Leave Balance</p>
-                  <div className="flex items-center mt-1">
-                    <Calendar className="w-5 h-5 text-primary mr-2" />
-                    <span className="font-bold text-foreground">{totalLeaveBalance} days</span>
+                  <p className="text-md font-semibold text-gray-600">Leave Balance</p>
+                  <div className="flex items-center mt-2">
+                    <span className="text-xl font-extrabold text-yellow-800 mr-2">{totalLeaveBalance} days</span>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">Remaining</p>
+                  <p className="text-sm text-gray-500 mt-1">Remaining</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className={`${themeClass} card-theme card-hover border-0 shadow-lg`}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
+          <Card className="rounded-2xl shadow-lg border-0 bg-gradient-to-br from-pink-100 to-red-50 hover:shadow-2xl transition-all duration-150 group">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="rounded-full bg-pink-200 p-3 shadow-lg ring-4 ring-pink-100">
+                  <AlertCircle className="w-7 h-7 text-pink-700" />
+                </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Pending Requests</p>
-                  <div className="flex items-center mt-1">
-                    <AlertCircle className="w-5 h-5 text-primary mr-2" />
-                    <span className="font-bold text-foreground">{pendingLeaveRequests}</span>
+                  <p className="text-md font-semibold text-gray-600">Pending Requests</p>
+                  <div className="flex items-center mt-2">
+                    <span className="text-xl font-extrabold text-pink-800 mr-2">{pendingLeaveRequests}</span>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">Leave request(s)</p>
+                  <p className="text-sm text-gray-500 mt-1">Leave request(s)</p>
                 </div>
               </div>
             </CardContent>
