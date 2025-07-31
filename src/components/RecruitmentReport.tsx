@@ -117,7 +117,7 @@ const RecruitmentReport: React.FC = () => {
            startDate.setMonth(month - 1);
            startDate.setDate(1);
            endDate.setMonth(month - 1);
-           endDate.setDate(new Date(year, month, 0).getDate()); // Get last day of the month
+           endDate.setDate(28); // Use consistent date range
            break;
                  case 'quarterly':
            const quarterStartMonth = (quarter - 1) * 3;
@@ -207,22 +207,29 @@ const RecruitmentReport: React.FC = () => {
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-             const processedData = jsonData.map((row: any) => ({
-         team: row['Team'] || '',
-         user: row['USER NAME'] || '',
-         monster: parseNumber(row['Monster']),
-         dice: parseNumber(row['Dice']),
-         linkedin_profiles_viewed: parseNumber(row['LinkedIn Profiles viewed']),
-         linkedin_inmails_sent: parseNumber(row['LinkedIn InMails sent']),
-         total_calls: parseNumber(row['Total Calls']),
-         total_call_duration: row['Total Call Duration'] || '',
-         total_submissions: parseNumber(row['Total Submissions']),
-         total_interviews: parseNumber(row['Total Interviews']),
-         offers: parseNumber(row['Offers']),
-         starts: parseNumber(row['Starts']),
-                   report_date: `${year}-${month.toString().padStart(2, '0')}-28`,
-         company_id: currentCompany?.id,
-       }));
+             const processedData = jsonData.map((row: any) => {
+               const teamName = row['Team'] || '';
+               const userName = row['USER NAME'] || '';
+               const teamId = Object.keys(teamLookup).find(key => teamLookup[key] === teamName) || '';
+               const userId = userNameToUserId[userName] || '';
+               
+               return {
+                 team_id: teamId,
+                 user_id: userId,
+                 monster: parseNumber(row['Monster']),
+                 dice: parseNumber(row['Dice']),
+                 linkedin_profiles_viewed: parseNumber(row['LinkedIn Profiles viewed']),
+                 linkedin_inmails_sent: parseNumber(row['LinkedIn InMails sent']),
+                 total_calls: parseNumber(row['Total Calls']),
+                 total_call_duration: row['Total Call Duration'] || '',
+                 total_submissions: parseNumber(row['Total Submissions']),
+                 total_interviews: parseNumber(row['Total Interviews']),
+                 offers: parseNumber(row['Offers']),
+                 starts: parseNumber(row['Starts']),
+                 report_date: `${year}-${month.toString().padStart(2, '0')}-28`,
+                 company_id: currentCompany?.id,
+               };
+             });
 
       setImportPreview(processedData);
       setReviewData(processedData);
