@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import Auth from '@/components/Auth';
 import Layout from '@/components/Layout';
 import Dashboard from '@/components/Dashboard';
+import ProfileManagement from '@/components/ProfileManagement';
 import EmployeeManagement from '@/components/EmployeeManagement';
 import AttendanceManagement from '@/components/AttendanceManagement';
 import LeaveManagement, { EmployeeLeaveView } from '@/components/LeaveManagement';
@@ -116,6 +117,8 @@ const Index = () => {
           <Profile employeeId={user.id} />
         );
       
+      case 'profile-management':
+        return <ProfileManagement />;
       case 'company-profile':
         return <CompanyProfile />;
       

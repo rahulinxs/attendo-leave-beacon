@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Calendar as CalendarIcon, Plus, Trash2, CalendarDays } from 'lucide-react';
 import { CustomCalendar } from '@/components/CustomCalendar';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCompany } from '@/contexts/CompanyContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { format, parseISO } from 'date-fns';
@@ -46,20 +47,25 @@ const HolidayManagement: React.FC = () => {
     return date.getFullYear() === selectedMonth.getFullYear() && date.getMonth() === selectedMonth.getMonth();
   });
   const { user } = useAuth();
+  const { currentCompany } = useCompany();
   const [showAddForm, setShowAddForm] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     date: '',
     description: '',
-    is_recurring: false
+    is_recurring: false,
+    company_id: ''
   });
 
   const fetchHolidays = async () => {
+    if (!currentCompany?.id) return;
+    
     try {
       setIsLoading(true);
       const { data, error } = await supabase
         .from('holidays')
         .select('*')
+        .eq('company_id', currentCompany.id)
         .order('date', { ascending: true });
 
       if (error) {
@@ -95,7 +101,8 @@ const HolidayManagement: React.FC = () => {
           name: formData.name,
           date: formData.date,
           description: formData.description,
-          is_recurring: formData.is_recurring
+          is_recurring: formData.is_recurring,
+          company_id: currentCompany?.id
         }]);
 
       if (error) {
@@ -113,7 +120,13 @@ const HolidayManagement: React.FC = () => {
         description: "Holiday added successfully"
       });
 
-      setFormData({ name: '', date: '', description: '', is_recurring: false });
+      setFormData({ 
+        name: '', 
+        date: '', 
+        description: '', 
+        is_recurring: false,
+        company_id: ''
+      });
       setShowAddForm(false);
       fetchHolidays();
     } catch (error) {
@@ -174,8 +187,10 @@ const HolidayManagement: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchHolidays();
-  }, []);
+    if (currentCompany?.id) {
+      fetchHolidays();
+    }
+  }, [currentCompany?.id]);
 
   const canManageHolidays = user?.role === 'admin' || user?.role === 'super_admin';
 

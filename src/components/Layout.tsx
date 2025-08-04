@@ -27,7 +27,10 @@ import {
   Network,
   FlaskConical,
   ClipboardList,
-  ChevronRight
+  ChevronRight,
+  BarChart,
+  PieChart,
+  FileText
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -61,8 +64,19 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
   const { sidebarPosition, theme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(true); // new state for desktop
-  const [hrOpen, setHROpen] = useState(false);
-  const [managementOpen, setManagementOpen] = useState(false);
+  
+  // Track which section is currently open (null if none)
+  const [openSection, setOpenSection] = useState<string | null>(null);
+  
+  // Helper function to handle section toggling
+  const toggleSection = (section: string) => {
+    setOpenSection(current => current === section ? null : section);
+  };
+  
+  // Derived states for each section
+  const hrOpen = openSection === 'hr';
+  const managementOpen = openSection === 'management';
+  const reportsOpen = openSection === 'reports';
   const themeClass = THEME_OPTIONS.find(t => t.key === theme)?.className || '';
 
   // Enhanced navigation items with role-based access control
@@ -75,65 +89,99 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       roles: ['employee', 'reporting_manager', 'admin', 'super_admin']
     },
     {
-      id: 'attendance',
-      label: 'Attendance',
-      icon: Clock,
-      roles: ['employee', 'reporting_manager', 'admin', 'super_admin']
-    },
-    {
-      id: 'leave',
-      label: 'Leave Requests',
-      icon: Calendar,
-      roles: ['employee', 'reporting_manager', 'admin', 'super_admin']
-    },
-    {
       id: 'holidays',
       label: 'Holidays',
       icon: CalendarDays,
       roles: ['employee', 'reporting_manager', 'admin', 'super_admin']
     },
+    
+    // Human Resource section - for all employees
     {
-      id: 'manage-attendance',
-      label: 'Manage Attendance',
-      icon: UserCheck,
-      roles: ['reporting_manager', 'admin', 'super_admin'],
-      requiresPermission: true
+      id: 'human-resource',
+      label: 'Human Resource',
+      icon: Users,
+      roles: ['employee', 'reporting_manager', 'admin', 'super_admin'],
+      isGroup: true,
+      children: [
+        {
+          id: 'attendance',
+          label: 'Attendance',
+          icon: Clock,
+          roles: ['employee', 'reporting_manager', 'admin', 'super_admin']
+        },
+        {
+          id: 'leave',
+          label: 'Leave Requests',
+          icon: Calendar,
+          roles: ['employee', 'reporting_manager', 'admin', 'super_admin']
+        },
+        {
+          id: 'manage-attendance',
+          label: 'Manage Attendance',
+          icon: UserCheck,
+          roles: ['reporting_manager', 'admin', 'super_admin'],
+          requiresPermission: true
+        },
+        {
+          id: 'leave-management',
+          label: 'Manage Leave Requests',
+          icon: ClipboardList,
+          roles: ['reporting_manager', 'admin', 'super_admin'],
+          requiresPermission: true
+        }
+      ]
     },
     
     // Management features - for managers and above
     {
-      id: 'leave-management',
-      label: 'Manage Leave Requests',
-      icon: ClipboardList,
+      id: 'management',
+      label: 'Management',
+      icon: Settings,
       roles: ['reporting_manager', 'admin', 'super_admin'],
-      requiresPermission: true
+      isGroup: true,
+      children: [
+        {
+          id: 'teams',
+          label: 'Team Management',
+          icon: Network,
+          roles: ['admin', 'super_admin', 'reporting_manager'],
+          requiresPermission: true
+        },
+        {
+          id: 'employees',
+          label: 'Employee Management',
+          icon: Users,
+          roles: ['admin', 'super_admin'],
+          requiresPermission: true
+        },
+        {
+          id: 'profile-management',
+          label: 'Profile Management',
+          icon: UserCog,
+          roles: ['admin', 'super_admin'],
+          requiresPermission: true
+        },
+        {
+          id: 'performance-report',
+          label: 'Performance Report',
+          icon: BarChart3,
+          roles: ['admin', 'super_admin', 'reporting_manager'],
+          requiresPermission: true
+        },
+        {
+          id: 'leave-type-management',
+          label: 'Leave Type Management',
+          icon: Calendar,
+          roles: ['admin', 'super_admin'],
+          requiresPermission: true
+        }
+      ]
     },
     
-    // Admin features - for admins and super admins
-    {
-      id: 'teams',
-      label: 'Team Management',
-      icon: Network,
-      roles: ['admin', 'super_admin', 'reporting_manager'],
-      requiresPermission: true
-    },
-    {
-      id: 'employees',
-      label: 'Employee Management',
-      icon: Users,
-      roles: ['admin', 'super_admin'],
-      requiresPermission: true
-    },
+    // Reports section
     {
       id: 'reports',
       label: 'Reports & Analytics',
-      icon: BarChart3,
-      roles: ['admin', 'super_admin', 'reporting_manager'],
-      requiresPermission: true
-    },
-    {
-      id: 'performance-report',
-      label: 'Performance Report',
       icon: BarChart3,
       roles: ['admin', 'super_admin', 'reporting_manager'],
       requiresPermission: true
@@ -163,34 +211,46 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
     }
   ].filter(item => item.id !== 'dummy-attendance' && item.id !== 'company-profile' && item.id !== 'leave-type-management');
 
-  // Filter navigation items based on user role and enforce order for leave/leave-management
+  // Filter navigation items based on user role and handle nested navigation items
   const getFilteredNavigationItems = () => {
     if (!user) return [];
-    // Remove performance-report if not enabled for the company
-    let filteredNavItems = currentCompany?.moduleSettings?.performance_report_enabled
-      ? navigationItems
-      : navigationItems.filter(item => item.id !== 'performance-report');
-    
-    // Remove recruitment-report if not enabled for the company (uses performance report module)
-    filteredNavItems = currentCompany?.moduleSettings?.performance_report_enabled
-      ? filteredNavItems
-      : filteredNavItems.filter(item => item.id !== 'recruitment-report');
-    // Always keep the first 4 tabs in order, then conditionally add the 5th
-    const baseTabs = filteredNavItems.slice(0, 4).filter(item => item.roles.includes(user.role || 'employee'));
-    const manageLeaveTab = filteredNavItems[4];
-    const restTabs = filteredNavItems.slice(5).filter(item => item.roles.includes(user.role || 'employee'));
-    let result = [...baseTabs];
-    if (manageLeaveTab && manageLeaveTab.roles.includes(user.role || 'employee')) {
-      result.push(manageLeaveTab);
-    }
-    result = [...result, ...restTabs];
-    // Remove HR/Management tools from main nav for admin/super_admin, but keep Attendance/Leave as top-level for employee/reporting_manager
-    if (['admin', 'super_admin'].includes(user.role)) {
-      return result.filter(item => !['attendance', 'leave', 'manage-attendance', 'leave-management', 'employees', 'teams', 'leave-type-management'].includes(item.id));
-    } else {
-      // For employee/reporting_manager, only remove admin-only tools
-      return result.filter(item => !['employees', 'leave-type-management'].includes(item.id));
-    }
+
+    // Define items that are now in the Human Resource, Management, or Reports sections
+    const sectionItems = [
+      'attendance', 'leave', 'manage-attendance', 'leave-management', // HR section
+      'employees', 'teams', 'profile-management', 'leave-type-management', // Management section
+      'performance-report', 'reports', 'recruitment-report' // Reports section
+    ];
+
+    // Process navigation items to handle nested children
+    const processItems = (items: any[]) => {
+      return items
+        .filter(item => item.roles.includes(user.role || 'employee'))
+        .filter(item => !sectionItems.includes(item.id)) // Skip items in sections
+        .filter(item => !['management', 'human-resource'].includes(item.id)) // Skip section headers
+        .map(item => {
+          // Skip if performance report is disabled for the company
+          if (item.id === 'performance-report' || item.id === 'recruitment-report') {
+            if (!currentCompany?.moduleSettings?.performance_report_enabled) {
+              return null;
+            }
+          }
+          
+          // Process children if they exist
+          if (item.children) {
+            const filteredChildren = item.children
+              .filter((child: any) => child.roles.includes(user.role || 'employee'))
+              .filter((child: any) => !sectionItems.includes(child.id));
+            return { ...item, children: filteredChildren };
+          }
+          
+          return item;
+        })
+        .filter(Boolean); // Remove any null entries
+    };
+
+    // Get all items not in sections
+    return processItems(navigationItems);
   };
 
   const navItems = getFilteredNavigationItems();
@@ -352,43 +412,38 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                 );
               })}
 
-              {/* Human Resource retractable menu (admins only) */}
-              {['admin', 'super_admin'].includes(user?.role) && (
-                <>
-                  <button
-                    className="w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left font-semibold transition-colors sidebar-nav-btn bg-[rgba(0,0,0,0.03)] hover:bg-[rgba(0,0,0,0.06)]"
-                    onClick={() => {
-                      setHROpen((open) => {
-                        if (!open) setManagementOpen(false);
-                        return !open;
-                      });
-                    }}
-                    aria-expanded={hrOpen}
-                    aria-controls="hr-menu"
-                  >
-                    <Users className="w-5 h-5" />
-                    <span>Human Resource</span>
-                    {hrOpen ? <ChevronDown className="w-4 h-4 ml-auto" /> : <ChevronRight className="w-4 h-4 ml-auto" />}
-                  </button>
-                  <div
-                    id="hr-menu"
-                    className={`pl-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${hrOpen ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-2'}`}
-                    style={{ willChange: 'max-height, opacity, transform' }}
-                  >
-                    <button
-                      onClick={() => onTabChange('attendance')}
-                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'attendance' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
-                    >
-                      <Clock className="w-5 h-5" />
-                      <span className="sidebar-label text-sm">Attendance</span>
-                    </button>
-                    <button
-                      onClick={() => onTabChange('leave')}
-                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'leave' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
-                    >
-                      <Calendar className="w-5 h-5" />
-                      <span className="sidebar-label text-sm">Leave Requests</span>
-                    </button>
+              {/* Render Human Resource section for all employees */}
+              <button
+                className="w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left font-semibold transition-colors sidebar-nav-btn bg-[rgba(0,0,0,0.03)] hover:bg-[rgba(0,0,0,0.06)] mt-2"
+                onClick={() => toggleSection('hr')}
+                aria-expanded={hrOpen}
+                aria-controls="hr-menu"
+              >
+                <Users className="w-5 h-5" />
+                <span>Human Resource</span>
+                {hrOpen ? <ChevronDown className="w-4 h-4 ml-auto" /> : <ChevronRight className="w-4 h-4 ml-auto" />}
+              </button>
+              <div
+                id="hr-menu"
+                className={`pl-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${hrOpen ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-2'}`}
+                style={{ willChange: 'max-height, opacity, transform' }}
+              >
+                <button
+                  onClick={() => onTabChange('attendance')}
+                  className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'attendance' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                >
+                  <Clock className="w-5 h-5" />
+                  <span className="sidebar-label text-sm">Attendance</span>
+                </button>
+                <button
+                  onClick={() => onTabChange('leave')}
+                  className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'leave' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                >
+                  <Calendar className="w-5 h-5" />
+                  <span className="sidebar-label text-sm">Leave Requests</span>
+                </button>
+                {(user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'reporting_manager') && (
+                  <>
                     <button
                       onClick={() => onTabChange('manage-attendance')}
                       className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'manage-attendance' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
@@ -403,17 +458,16 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                       <ClipboardList className="w-5 h-5" />
                       <span className="sidebar-label text-sm">Manage Leave Requests</span>
                     </button>
-                  </div>
+                  </>
+                )}
+              </div>
 
-                  {/* Management retractable menu immediately after HR */}
+              {/* Management section - for managers and above */}
+              {['admin', 'super_admin', 'reporting_manager'].includes(user?.role) && (
+                <>
                   <button
                     className="w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left font-semibold transition-colors sidebar-nav-btn bg-[rgba(0,0,0,0.03)] hover:bg-[rgba(0,0,0,0.06)] mt-2"
-                    onClick={() => {
-                      setManagementOpen((open) => {
-                        if (!open) setHROpen(false);
-                        return !open;
-                      });
-                    }}
+                    onClick={() => toggleSection('management')}
                     aria-expanded={managementOpen}
                     aria-controls="management-menu"
                   >
@@ -426,33 +480,87 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                     className={`pl-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${managementOpen ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-2'}`}
                     style={{ willChange: 'max-height, opacity, transform' }}
                   >
+                    {(user.role === 'admin' || user.role === 'super_admin') && (
+                      <>
+                        <button
+                          onClick={() => onTabChange('employees')}
+                          className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'employees' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                        >
+                          <Users className="w-5 h-5" />
+                          <span className="sidebar-label text-sm">Employee Management</span>
+                        </button>
+                        <button
+                          onClick={() => onTabChange('teams')}
+                          className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'teams' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                        >
+                          <Network className="w-5 h-5" />
+                          <span className="sidebar-label text-sm">Team Management</span>
+                        </button>
+                        <button
+                          onClick={() => onTabChange('profile-management')}
+                          className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'profile-management' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                        >
+                          <UserCog className="w-5 h-5" />
+                          <span className="sidebar-label text-sm">Profile Management</span>
+                        </button>
+                        <button
+                          onClick={() => onTabChange('leave-type-management')}
+                          className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'leave-type-management' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                        >
+                          <Calendar className="w-5 h-5" />
+                          <span className="sidebar-label text-sm">Leave Type Management</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* Reports Section */}
+              {['admin', 'super_admin', 'reporting_manager'].includes(user?.role) && (
+                <>
+                  <button
+                    className="w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left font-semibold transition-colors sidebar-nav-btn bg-[rgba(0,0,0,0.03)] hover:bg-[rgba(0,0,0,0.06)] mt-2"
+                    onClick={() => toggleSection('reports')}
+                    aria-expanded={reportsOpen}
+                    aria-controls="reports-menu"
+                  >
+                    <BarChart3 className="w-5 h-5" />
+                    <span>Reports</span>
+                    {reportsOpen ? <ChevronDown className="w-4 h-4 ml-auto" /> : <ChevronRight className="w-4 h-4 ml-auto" />}
+                  </button>
+                  <div
+                    id="reports-menu"
+                    className={`pl-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${reportsOpen ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-2'}`}
+                    style={{ willChange: 'max-height, opacity, transform' }}
+                  >
                     <button
-                      onClick={() => onTabChange('employees')}
-                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'employees' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                      onClick={() => onTabChange('performance-report')}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'performance-report' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
                     >
-                      <Users className="w-5 h-5" />
-                      <span className="sidebar-label text-sm">Employee Management</span>
+                      <BarChart className="w-5 h-5" />
+                      <span className="sidebar-label text-sm">Performance Report</span>
                     </button>
                     <button
-                      onClick={() => onTabChange('teams')}
-                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'teams' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                      onClick={() => onTabChange('reports')}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'reports' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
                     >
-                      <Network className="w-5 h-5" />
-                      <span className="sidebar-label text-sm">Team Management</span>
+                      <PieChart className="w-5 h-5" />
+                      <span className="sidebar-label text-sm">Reports & Analytics</span>
                     </button>
                     <button
-                      onClick={() => onTabChange('leave-type-management')}
-                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'leave-type-management' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                      onClick={() => onTabChange('recruitment-report')}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'recruitment-report' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
                     >
-                      <Calendar className="w-5 h-5" />
-                      <span className="sidebar-label text-sm">Leave Type Management</span>
+                      <FileText className="w-5 h-5" />
+                      <span className="sidebar-label text-sm">Recruitment Report</span>
                     </button>
                   </div>
                 </>
               )}
 
               {/* Render the rest of the navigation items */}
-              {navItems.filter(item => item.id !== 'dashboard').map((item) => {
+              {navItems.filter(item => item.id !== 'dashboard' && !['reports', 'performance-report', 'recruitment-report'].includes(item.id)).map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
                 return (

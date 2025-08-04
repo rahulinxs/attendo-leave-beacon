@@ -958,13 +958,21 @@ const Profile: React.FC<ProfileProps> = ({ employeeId }) => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Document Type</label>
-                <input
-                  type="text"
-                  value={docType}
-                  onChange={e => setDocType(e.target.value)}
-                  className="w-full border rounded px-3 py-2"
-                  placeholder="e.g. ID Card, Address Proof"
-                />
+                <select
+                value={docType}
+                onChange={e => setDocType(e.target.value)}
+                className="w-full border rounded px-3 py-2"
+                required
+              >
+                <option value="">Select Document Type</option>
+                <option value="Aadhaar Card">Aadhaar Card</option>
+                <option value="PAN Card">PAN Card</option>
+                <option value="SSC Marksheet">SSC Marksheet</option>
+                <option value="HSC Marksheet">HSC Marksheet</option>
+                <option value="Graduation Marksheet">Graduation Marksheet</option>
+                <option value="Residential Address Proof">Residential Address Proof</option>
+                <option value="Other">Other</option>
+              </select>  
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">File</label>
