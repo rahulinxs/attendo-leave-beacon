@@ -37,6 +37,41 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const { theme } = useTheme();
   const themeClass = THEME_OPTIONS.find(t => t.key === theme)?.className || '';
   
+  // Debug log leave balances
+  useEffect(() => {
+    console.log('Leave Balances:', leaveBalances);
+    if (leaveBalances) {
+      console.log('Leave Balances Details:', 
+        leaveBalances.map(b => ({
+          type: b.leave_types?.name,
+          allocated: b.allocated_days,
+          used: b.used_days,
+          remaining: b.allocated_days - (b.used_days || 0)
+        }))
+      );
+    }
+  }, [leaveBalances]);
+
+  // Calculate total leave balance (sum of all leave types' remaining days)
+  const totalLeaveBalance = leaveBalances?.reduce((total, balance) => {
+    return total + (balance.remaining_days || 0);
+  }, 0) || 0;
+  
+  // Calculate total allocated days (sum of max_days_per_year for active leave types)
+  const totalAllocatedDays = leaveBalances?.reduce((total, balance) => {
+    return total + (balance.allocated_days || 0);
+  }, 0) || 0;
+  
+  // Calculate total used days
+  const totalUsedDays = leaveBalances?.reduce((total, balance) => {
+    return total + (balance.used_days || 0);
+  }, 0) || 0;
+  
+  // Count active leave types (those with max_days_per_year > 0)
+  const totalActiveLeaveTypes = leaveBalances?.filter(balance => 
+    (balance.leave_types?.max_days_per_year || 0) > 0
+  ).length || 0;
+  
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString());
   const currentDate = new Date().toLocaleDateString('en-US', { 
     weekday: 'long', 
@@ -135,7 +170,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     return { status: 'Not Checked In', color: 'text-gray-500', icon: XCircle };
   };
 
-  const totalLeaveBalance = (leaveBalances || []).reduce((total, balance) => total + (balance.allocated_days - balance.used_days), 0);
   const pendingLeaveRequests = (leaveRequests || []).filter(req => req.status === 'pending').length;
 
   const getRoleDisplayName = (role: string) => {
@@ -234,18 +268,26 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl shadow-lg border-0 bg-gradient-to-br from-yellow-100 to-orange-50 hover:shadow-2xl transition-all duration-150 group">
+          {/* Leave Balance Card - Show if there are active leave types */}
+          <Card className="rounded-2xl shadow-lg border-0 bg-gradient-to-br from-purple-100 to-indigo-50 hover:shadow-2xl transition-all duration-150 group">
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
-                <div className="rounded-full bg-yellow-200 p-3 shadow-lg ring-4 ring-yellow-100">
-                  <Calendar className="w-7 h-7 text-yellow-700" />
+                <div className="rounded-full bg-purple-200 p-3 shadow-lg ring-4 ring-purple-100">
+                  <Calendar className="w-7 h-7 text-purple-700" />
                 </div>
                 <div>
                   <p className="text-md font-semibold text-gray-600">Leave Balance</p>
                   <div className="flex items-center mt-2">
-                    <span className="text-xl font-extrabold text-yellow-800 mr-2">{totalLeaveBalance} days</span>
+                    <span className="text-2xl font-extrabold text-purple-800 mr-2">
+                      {totalLeaveBalance} {totalLeaveBalance === 1 ? 'day' : 'days'}
+                    </span>
+                    <Badge className="ml-1 bg-purple-500 text-white">
+                      {totalActiveLeaveTypes} {totalActiveLeaveTypes === 1 ? 'type' : 'types'}
+                    </Badge>
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">Remaining</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {totalUsedDays} of {totalAllocatedDays} days used
+                  </p>
                 </div>
               </div>
             </CardContent>

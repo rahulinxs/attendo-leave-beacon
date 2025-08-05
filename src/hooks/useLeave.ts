@@ -29,9 +29,20 @@ interface LeaveBalance {
   leave_type_id: string;
   allocated_days: number;
   used_days: number;
+  remaining_days: number;
   leave_types: {
     name: string;
+    max_days_per_year: number;
+    is_active: boolean;
   };
+}
+
+interface LeaveType {
+  id: string;
+  name: string;
+  max_days_per_year: number;
+  is_active: boolean;
+  company_id: string;
 }
 
 export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
@@ -41,6 +52,7 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
   const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([]);
   const [pendingRequests, setPendingRequests] = useState<LeaveRequest[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
 
   const fetchLeaveRequests = async () => {
     if (!user || !currentCompany) return;
@@ -143,42 +155,95 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
     }
   };
 
-  const fetchLeaveBalances = async () => {
+  const fetchLeaveTypes = async () => {
+    if (!currentCompany) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('leave_types')
+        .select('*')
+        .eq('company_id', currentCompany.id)
+        .eq('is_active', true);
+      
+      if (error) throw error;
+      
+      setLeaveTypes(data || []);
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching leave types:', error);
+      return [];
+    }
+  };
+
+  const fetchUserLeaveRequests = async () => {
+    if (!user || !currentCompany) return [];
+    
+    try {
+      const currentYear = new Date().getFullYear();
+      const { data, error } = await supabase
+        .from('leave_requests')
+        .select('*, leave_types(*)')
+        .eq('employee_id', user.id)
+        .eq('company_id', currentCompany.id)
+        .eq('status', 'approved')
+        .gte('start_date', `${currentYear}-01-01`)
+        .lte('end_date', `${currentYear}-12-31`);
+      
+      if (error) throw error;
+      
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching user leave requests:', error);
+      return [];
+    }
+  };
+
+  const calculateLeaveBalances = async () => {
     if (!user || !currentCompany) return;
 
     try {
-      const { data, error } = await supabase
-        .from('leave_balances')
-        .select(`
-          leave_type_id,
-          allocated_days,
-          used_days,
-          leave_types (
-            name,
-            company_id
-          )
-        `)
-        .eq('employee_id', user.id)
-        .eq('company_id', currentCompany.id)
-        .eq('year', new Date().getFullYear());
+      const [types, requests] = await Promise.all([
+        fetchLeaveTypes(),
+        fetchUserLeaveRequests()
+      ]);
 
-      if (error) {
-        console.error('Error fetching leave balances:', error);
-        return;
-      }
+      // Calculate used days per leave type
+      const usedDaysByType = new Map<string, number>();
+      
+      requests.forEach((req: any) => {
+        if (req.leave_type_id) {
+          const current = usedDaysByType.get(req.leave_type_id) || 0;
+          usedDaysByType.set(req.leave_type_id, current + (req.total_days || 0));
+        }
+      });
 
-      // Filter and format the data to only include leave types for the current company
-      const formattedData = (data as any[])
-        ?.filter(balance => balance.leave_types && balance.leave_types.company_id === currentCompany.id)
-        ?.map(balance => ({
-          ...balance,
-          leave_types: balance.leave_types as { name: string; company_id: string }
-        })) || [];
+      // Create leave balances based on active leave types
+      const balances: LeaveBalance[] = types.map((type: any) => {
+        const usedDays = usedDaysByType.get(type.id) || 0;
+        const allocatedDays = type.max_days_per_year || 0;
+        
+        return {
+          leave_type_id: type.id,
+          allocated_days: allocatedDays,
+          used_days: usedDays,
+          remaining_days: Math.max(0, allocatedDays - usedDays),
+          leave_types: {
+            name: type.name,
+            max_days_per_year: type.max_days_per_year,
+            is_active: type.is_active
+          }
+        };
+      });
 
-      setLeaveBalances(formattedData);
+      console.log('Calculated leave balances:', balances);
+      setLeaveBalances(balances);
     } catch (error) {
-      console.error('Error fetching leave balances:', error);
+      console.error('Error calculating leave balances:', error);
     }
+  };
+
+  const fetchLeaveBalances = async () => {
+    await calculateLeaveBalances();
   };
 
   const submitLeaveRequest = async (
