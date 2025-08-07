@@ -15,7 +15,8 @@ import { Label } from './ui/label';
 
 const columns = [
   'Team', 'USER NAME', 'Monster', 'Dice', 'LinkedIn Profiles viewed', 'LinkedIn InMails sent',
-  'Total Calls', 'Total Call Duration', 'Total Submissions', 'Total Interviews', 'Offers', 'Starts'
+  'Total Calls', 'Total Call Duration', 'Total Submissions', 'Total Interviews', 'Offers', 'Starts',
+  'Placed', 'Offered'
 ];
 
 const getMonthOptions = () => {
@@ -65,6 +66,31 @@ const RecruitmentReport: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [editingCell, setEditingCell] = useState<{rowIndex: number, field: string} | null>(null);
   const [editValue, setEditValue] = useState<string>('');
+  
+  // Column visibility state
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(
+    columns.reduce((acc, col) => ({ ...acc, [col]: true }), {})
+  );
+  
+  // Sorting state
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+  const [showColumnMenu, setShowColumnMenu] = useState(false);
+  const [hideZeroRecords, setHideZeroRecords] = useState(true);
+  const columnMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (columnMenuRef.current && !columnMenuRef.current.contains(event.target as Node)) {
+        setShowColumnMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Fetch teams and users for lookup
   useEffect(() => {
@@ -122,6 +148,8 @@ const RecruitmentReport: React.FC = () => {
           total_interviews: 0,
           offers: 0,
           starts: 0,
+          placed: [], // Initialize as array to collect placed names
+          offered: [], // Initialize as array to collect offered names
           report_date: record.report_date,
           company_id: record.company_id,
           user_name: record.user_name || userLookup[userId] || 'Unknown User',
@@ -143,9 +171,113 @@ const RecruitmentReport: React.FC = () => {
       if (record.total_call_duration) {
         userAggregates[userId].total_call_duration = record.total_call_duration;
       }
+      
+      // Handle Placed and Offered as text fields (comma-separated names)
+      // Skip if the value is 0, '0', empty, or not a string
+      if (record.placed && 
+          record.placed !== 0 && 
+          record.placed !== '0' &&
+          typeof record.placed === 'string' && 
+          record.placed.trim() !== '') {
+        const placedNames = record.placed.split(',')
+          .map((name: string) => name.trim())
+          .filter(name => name && name !== '0');
+        userAggregates[userId].placed = [...new Set([...userAggregates[userId].placed, ...placedNames])];
+      }
+      
+      if (record.offered && 
+          record.offered !== 0 && 
+          record.offered !== '0' &&
+          typeof record.offered === 'string' && 
+          record.offered.trim() !== '') {
+        const offeredNames = record.offered.split(',')
+          .map((name: string) => name.trim())
+          .filter(name => name && name !== '0');
+        userAggregates[userId].offered = [...new Set([...userAggregates[userId].offered, ...offeredNames])];
+      }
     });
     
-    return Object.values(userAggregates);
+    // Convert arrays of names back to comma-separated strings
+    return Object.values(userAggregates).map(user => ({
+      ...user,
+      placed: user.placed?.join(', ') || '',
+      offered: user.offered?.join(', ') || ''
+    }));
+  };
+
+  // Format team name by removing 'Recruitment' prefix
+  const formatTeamName = (name: string) => {
+    if (!name) return '';
+    return name.replace(/^Recruitment\s*/i, '');
+  };
+
+  // Handle column sorting
+  const requestSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  // Get sort indicator for column header
+  const getSortIndicator = (key: string) => {
+    if (!sortConfig || sortConfig.key !== key) return null;
+    return sortConfig.direction === 'asc' ? ' ↑' : ' ↓';
+  };
+
+  // Filter out records with zero values
+  const filterZeroRecords = (data: any[]) => {
+    if (!hideZeroRecords) return data;
+    
+    return data.filter(record => {
+      const totalCalls = record['total_calls'] || 0;
+      const totalSubmissions = record['total_submissions'] || 0;
+      const callDuration = record['total_call_duration'] || '00:00:00';
+      
+      // Keep record if either condition is met:
+      // 1. Total calls is greater than 0, or
+      // 2. Total submissions is greater than 0, or
+      // 3. Call duration is not "00:00:00"
+      return totalCalls > 0 || totalSubmissions > 0 || callDuration !== '00:00:00';
+    });
+  };
+
+  // Sort data based on sortConfig
+  const getSortedData = (data: any[]) => {
+    if (!sortConfig) return data;
+    
+    return [...data].sort((a, b) => {
+      let field = sortConfig.key.toLowerCase().replace(/\s+/g, '_').replace(/[()$]/g, '');
+      let aValue = a[field];
+      let bValue = b[field];
+      
+      // Special handling for team names to sort by display name
+      if (sortConfig.key === 'Team') {
+        aValue = formatTeamName(teamLookup[a.team_id] || '');
+        bValue = formatTeamName(teamLookup[b.team_id] || '');
+      }
+      
+      // Handle undefined/null values
+      if (aValue === undefined || aValue === null) aValue = '';
+      if (bValue === undefined || bValue === null) bValue = '';
+      
+      if (aValue < bValue) {
+        return sortConfig.direction === 'asc' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortConfig.direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+  };
+
+  // Toggle column visibility
+  const toggleColumnVisibility = (column: string) => {
+    setVisibleColumns(prev => ({
+      ...prev,
+      [column]: !prev[column]
+    }));
   };
 
   // Fetch performance data for recruitment dashboard
@@ -410,8 +542,9 @@ const RecruitmentReport: React.FC = () => {
 
   const renderEditableCell = (rowIndex: number, field: string, value: any, row: any) => {
     const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.field === field;
+    const isReadOnly = periodType !== 'monthly';
     
-    if (isEditing) {
+    if (isEditing && !isReadOnly) {
       return (
         <div className="flex items-center space-x-2">
           <Input
@@ -451,8 +584,8 @@ const RecruitmentReport: React.FC = () => {
 
     return (
       <div
-        className="cursor-pointer hover:bg-gray-100 p-1 rounded"
-        onClick={() => startEditing(rowIndex, field, value)}
+        className={`p-1 rounded ${isReadOnly ? '' : 'cursor-pointer hover:bg-gray-100'}`}
+        onClick={() => !isReadOnly && startEditing(rowIndex, field, value)}
       >
         {value || 0}
       </div>
@@ -649,8 +782,62 @@ const RecruitmentReport: React.FC = () => {
 
         <TabsContent value="data" className="space-y-4">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row justify-between items-center">
               <CardTitle>Performance Data</CardTitle>
+              <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 border-r border-gray-200 pr-3">
+                  <input
+                    type="checkbox"
+                    id="hideZeroRecords"
+                    checked={hideZeroRecords}
+                    onChange={() => setHideZeroRecords(!hideZeroRecords)}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="hideZeroRecords" className="text-sm text-gray-700 cursor-pointer">
+                    Hide Zero Records
+                  </label>
+                </div>
+                <div className="relative" ref={columnMenuRef}>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setShowColumnMenu(!showColumnMenu)}
+                  >
+                    <span className="mr-2">Columns</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </Button>
+                {showColumnMenu && (
+                  <div 
+                    className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200"
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
+                    <div className="px-4 py-2 text-sm font-medium text-gray-700 border-b border-gray-200">
+                      Show/Hide Columns
+                    </div>
+                    <div className="max-h-60 overflow-y-auto">
+                      {columns.map((column) => (
+                        <label 
+                          key={column} 
+                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={visibleColumns[column]}
+                            onChange={() => toggleColumnVisibility(column)}
+                            className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <span className="truncate">{column}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -658,46 +845,60 @@ const RecruitmentReport: React.FC = () => {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse border border-gray-300">
-                    <thead>
-                      <tr className="bg-gray-50">
-                        {columns.map((column) => (
-                          <th key={column} className="border border-gray-300 px-4 py-2 text-left text-sm font-medium">
-                            {column}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
+                <div className="overflow-x-auto max-w-full -mx-4 md:mx-0">
+                  <div className="min-w-max md:w-full px-4 md:px-0">
+                    <table className="w-full border-collapse border border-gray-300">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          {columns.map((column) => (
+                            visibleColumns[column] && (
+                              <th 
+                                key={column} 
+                                className="border border-gray-300 px-2 py-1 text-left text-xs font-bold whitespace-nowrap bg-gray-100 cursor-pointer hover:bg-gray-200"
+                                onClick={() => requestSort(column)}
+                              >
+                                {column}{getSortIndicator(column)}
+                              </th>
+                            )
+                          ))}
+                        </tr>
+                      </thead>
                     <tbody>
-                      {reportData.map((row, rowIndex) => (
+                      {filterZeroRecords(getSortedData(reportData)).map((row, rowIndex) => (
                         <tr key={rowIndex} className="hover:bg-gray-50">
-                                                     {columns.map((column) => {
-                             const field = column.toLowerCase().replace(/\s+/g, '_').replace(/[()$]/g, '');
-                             let value = row[field];
-                             
-                             // Map team_id and user_id to names
-                             if (column === 'Team') {
-                               value = teamLookup[row.team_id] || 'Unknown';
-                             } else if (column === 'USER NAME') {
-                               value = userLookup[row.user_id] || 'Unknown';
-                             }
-                             
-                             return (
-                               <td key={column} className="border border-gray-300 px-4 py-2 text-sm">
-                                 {['monster', 'dice', 'linkedin_profiles_viewed', 'linkedin_inmails_sent',
-                                   'total_calls', 'total_submissions', 'total_interviews', 'offers', 'starts'].includes(field)
-                                   ? renderEditableCell(rowIndex, field, value, row)
-                                   : (value || '')
-                                 }
-                               </td>
-                             );
-                           })}
+                          {columns.map((column) => {
+                            if (!visibleColumns[column]) return null;
+                            
+                            const field = column.toLowerCase().replace(/\s+/g, '_').replace(/[()$]/g, '');
+                            let value = row[field];
+                            
+                            // Map team_id and user_id to names
+                            if (column === 'Team') {
+                              value = formatTeamName(teamLookup[row.team_id] || 'Unknown');
+                            } else if (column === 'USER NAME') {
+                              value = userLookup[row.user_id] || 'Unknown';
+                            }
+                            
+                            return (
+                              <td 
+                                key={column} 
+                                className="border border-gray-300 px-2 py-1 text-xs whitespace-nowrap"
+                              >
+                                {['monster', 'dice', 'linkedin_profiles_viewed', 'linkedin_inmails_sent',
+                                  'total_calls', 'total_submissions', 'total_interviews', 'offers', 'starts',
+                                  'placed', 'offered'].includes(field)
+                                  ? renderEditableCell(rowIndex, field, value, row)
+                                  : (value || '')
+                                }
+                              </td>
+                            );
+                          })}
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
+              </div>
               )}
             </CardContent>
           </Card>

@@ -34,6 +34,8 @@ const RecruitmentDashboard = ({ performanceData }) => {
           offers_made: 0, // Offers
           offers_accepted: 0, // Starts (accepted offers)
           candidates_hired: 0, // Starts
+          placed: 0, // Placed candidates
+          offered: 0, // Offered candidates
           time_to_fill: 0, // Will calculate based on activity
           cost_per_hire: 0, // Will estimate based on activity
           positions_open: 0, // Will calculate based on activity
@@ -54,6 +56,8 @@ const RecruitmentDashboard = ({ performanceData }) => {
       acc[curr.user_id].offers_made += curr.offers || 0;
       acc[curr.user_id].offers_accepted += curr.starts || 0;
       acc[curr.user_id].candidates_hired += curr.starts || 0;
+      acc[curr.user_id].placed += curr.placed || 0;
+      acc[curr.user_id].offered += curr.offered || 0;
       acc[curr.user_id].positions_filled += curr.starts || 0;
       acc[curr.user_id].monster_activity += curr.monster || 0;
       acc[curr.user_id].dice_activity += curr.dice || 0;
@@ -89,6 +93,8 @@ const RecruitmentDashboard = ({ performanceData }) => {
     { name: 'Interviews Scheduled', value: chartData.reduce((sum, curr) => sum + (curr.interviews_scheduled || 0), 0) },
     { name: 'Interviews Completed', value: chartData.reduce((sum, curr) => sum + (curr.interviews_completed || 0), 0) },
     { name: 'Offers Made', value: chartData.reduce((sum, curr) => sum + (curr.offers_made || 0), 0) },
+    { name: 'Offered', value: chartData.reduce((sum, curr) => sum + (curr.offered || 0), 0) },
+    { name: 'Placed', value: chartData.reduce((sum, curr) => sum + (curr.placed || 0), 0) },
     { name: 'Hired', value: chartData.reduce((sum, curr) => sum + (curr.candidates_hired || 0), 0) },
   ];
 
