@@ -23,11 +23,26 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ email, onSuccess, onCance
     
     setIsLoading(true);
     try {
+      // Get the current URL parameters to preserve any tenant information
+      const urlParams = new URLSearchParams(window.location.search);
+      const tenant = urlParams.get('tenant') || 'attendedge';
+      
+      // Construct the redirect URL with the correct parameters
+      const redirectUrl = new URL(window.location.origin);
+      redirectUrl.pathname = '/update-password';
+      redirectUrl.searchParams.set('tenant', tenant);
+      
+      console.log('Sending password reset email to:', emailInput);
+      console.log('Redirect URL:', redirectUrl.toString());
+      
       const { error } = await supabase.auth.resetPasswordForEmail(emailInput, {
-        redirectTo: `${window.location.origin}/update-password`,
+        redirectTo: redirectUrl.toString(),
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Password reset error:', error);
+        throw error;
+      }
       
       setShowConfirmation(true);
       if (onSuccess) onSuccess();

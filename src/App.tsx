@@ -25,14 +25,18 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/update-password" element={
-                <div className="min-h-screen flex items-center justify-center p-4">
-                  <UpdatePassword />
-                </div>
+                <AuthProvider>
+                  <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
+                    <UpdatePassword />
+                  </div>
+                </AuthProvider>
               } />
               <Route path="/reset-password" element={
-                <div className="min-h-screen flex items-center justify-center p-4">
-                  <ResetPassword email="" onSuccess={() => {}} onCancel={() => {}} />
-                </div>
+                <AuthProvider>
+                  <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
+                    <ResetPassword email="" onSuccess={() => {}} onCancel={() => {}} />
+                  </div>
+                </AuthProvider>
               } />
               <Route path="*" element={<NotFound />} />
             </Routes>
