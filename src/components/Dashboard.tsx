@@ -23,7 +23,8 @@ import {
 import { useTheme } from '@/contexts/ThemeContext';
 import { THEME_OPTIONS } from '@/contexts/ThemeContext';
 import { OnboardingModal } from './OnboardingModal';
-import ResetPassword from "./pages/ResetPassword";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
+import ResetPassword from './ResetPassword';
 
 interface DashboardProps {
   onNavigate?: (tab: string) => void;
@@ -80,6 +81,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     day: 'numeric' 
   });
   const [showOnboarding, setShowOnboarding] = useState(true);
+  const [showResetPassword, setShowResetPassword] = useState(false);
 
   // Update clock every second
   useEffect(() => {
@@ -110,33 +112,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     }
   };
 
-  const handleResetPassword = async () => {
-    if (!user?.email) return;
-    // Use company domain if available, else fallback to company id
-    const tenantParam = currentCompany?.domain || currentCompany?.id || 'attendedge';
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
-        redirectTo: 'https://attendedge.netlify.app/reset-password?tenant=attendedge'
-      });
-      if (error) {
-        toast({
-          title: "Error",
-          description: error.message,
-          variant: "destructive"
-        });
-      } else {
-        toast({
-          title: "Password Reset Email Sent",
-          description: "Check your email for password reset instructions",
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to send password reset email",
-        variant: "destructive"
-      });
-    }
+  const handleResetPasswordClick = () => {
+    setShowResetPassword(true);
+  };
+
+  const handleResetPasswordClose = () => {
+    setShowResetPassword(false);
   };
 
   const handleApproveLeave = async (requestId: string) => {
@@ -209,14 +190,39 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 <div className="text-purple-700 font-semibold text-md">{user?.position}</div>
               </div>
               <div className="flex flex-col md:flex-row gap-3 md:items-center">
-                <Button variant="gradient" className="transition-transform hover:scale-105 shadow-lg" onClick={handleCheckInOut}>{todayAttendance?.check_in_time && !todayAttendance?.check_out_time ? 'Check Out' : 'Check In'}</Button>
-                <Button variant="gradient" className="transition-transform hover:scale-105 shadow-lg" onClick={() => onNavigate?.('leave')}>Request Leave</Button>
-                <Button variant="gradient" className="transition-transform hover:scale-105 shadow-lg" onClick={handleResetPassword}>Reset Password</Button>
+                <Button variant="gradient" className="transition-transform hover:scale-105 shadow-lg" onClick={handleCheckInOut}>
+                  {todayAttendance?.check_in_time && !todayAttendance?.check_out_time ? 'Check Out' : 'Check In'}
+                </Button>
+                <Button variant="gradient" className="transition-transform hover:scale-105 shadow-lg" onClick={() => onNavigate?.('leave')}>
+                  Request Leave
+                </Button>
+                <Button 
+                  variant="gradient" 
+                  className="transition-transform hover:scale-105 shadow-lg flex items-center gap-1"
+                  onClick={handleResetPasswordClick}
+                >
+                  <Key className="w-4 h-4" />
+                  Reset Password
+                </Button>
               </div>
             </div>
             {/* Welcome Header content END */}
           </CardContent>
         </Card>
+
+        {/* Reset Password Dialog */}
+        <Dialog open={showResetPassword} onOpenChange={setShowResetPassword}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Reset Password</DialogTitle>
+            </DialogHeader>
+            <ResetPassword 
+              email={user?.email || ''} 
+              onCancel={handleResetPasswordClose}
+              onSuccess={handleResetPasswordClose}
+            />
+          </DialogContent>
+        </Dialog>
 
         {/* Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

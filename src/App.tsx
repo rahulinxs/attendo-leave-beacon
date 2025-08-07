@@ -7,6 +7,8 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { CompanyProvider } from "./contexts/CompanyContext";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
+import UpdatePassword from "./components/UpdatePassword";
+import ResetPassword from "./components/ResetPassword";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 
 const queryClient = new QueryClient();
@@ -22,6 +24,16 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<Index />} />
+              <Route path="/update-password" element={
+                <div className="min-h-screen flex items-center justify-center p-4">
+                  <UpdatePassword />
+                </div>
+              } />
+              <Route path="/reset-password" element={
+                <div className="min-h-screen flex items-center justify-center p-4">
+                  <ResetPassword email="" onSuccess={() => {}} onCancel={() => {}} />
+                </div>
+              } />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
