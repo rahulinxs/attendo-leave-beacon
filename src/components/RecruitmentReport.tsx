@@ -100,6 +100,54 @@ const RecruitmentReport: React.FC = () => {
     fetchLookups();
   }, [currentCompany?.id]);
 
+  // Aggregate data by user for the selected period
+  const aggregateDataByUser = (data: any[]) => {
+    const userAggregates: Record<string, any> = {};
+    
+    data.forEach(record => {
+      const userId = record.user_id;
+      
+      if (!userAggregates[userId]) {
+        userAggregates[userId] = {
+          id: record.id,
+          user_id: userId,
+          team_id: record.team_id,
+          monster: 0,
+          dice: 0,
+          linkedin_profiles_viewed: 0,
+          linkedin_inmails_sent: 0,
+          total_calls: 0,
+          total_call_duration: 0,
+          total_submissions: 0,
+          total_interviews: 0,
+          offers: 0,
+          starts: 0,
+          report_date: record.report_date,
+          company_id: record.company_id,
+          user_name: record.user_name || userLookup[userId] || 'Unknown User',
+          team_name: record.team_name || teamLookup[record.team_id] || 'Unknown Team'
+        };
+      }
+      
+      // Sum up all numeric fields
+      const numericFields = [
+        'monster', 'dice', 'linkedin_profiles_viewed', 'linkedin_inmails_sent',
+        'total_calls', 'total_submissions', 'total_interviews', 'offers', 'starts'
+      ];
+      
+      numericFields.forEach(field => {
+        userAggregates[userId][field] += parseFloat(record[field] || 0);
+      });
+      
+      // For call duration, we'll keep the latest value or sum if needed
+      if (record.total_call_duration) {
+        userAggregates[userId].total_call_duration = record.total_call_duration;
+      }
+    });
+    
+    return Object.values(userAggregates);
+  };
+
   // Fetch performance data for recruitment dashboard
   const fetchReports = async () => {
     if (!currentCompany?.id) return;
@@ -107,10 +155,14 @@ const RecruitmentReport: React.FC = () => {
     try {
       let query = supabase
         .from('performance_reports')
-        .select('*')
+        .select(`
+          *,
+          user:user_id (id, name, team_id),
+          team:team_id (id, name)
+        `)
         .eq('company_id', currentCompany.id);
 
-      // Apply date filters based on period type (copy logic from PerformanceReport)
+      // Apply date filters based on period type
       let startDate, endDate;
       if (periodType === 'monthly') {
         startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
@@ -164,7 +216,20 @@ const RecruitmentReport: React.FC = () => {
         });
         return;
       }
-      setReportData(data || []);
+
+      // Process the data to include user and team names
+      const processedData = data?.map(record => ({
+        ...record,
+        user_name: record.user?.name || userLookup[record.user_id] || 'Unknown User',
+        team_name: record.team?.name || teamLookup[record.team_id] || 'Unknown Team'
+      })) || [];
+
+      // For monthly view, show individual records; for other periods, aggregate by user
+      const displayData = periodType === 'monthly' 
+        ? processedData 
+        : aggregateDataByUser(processedData);
+
+      setReportData(displayData);
     } catch (error) {
       console.error('Error fetching performance reports:', error);
       toast({

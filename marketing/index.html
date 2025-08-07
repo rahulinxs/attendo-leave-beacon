@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AttendEase - Modern Workforce Management Solution</title>
+    <meta name="description" content="Streamline your workforce management with AttendEase. The all-in-one solution for attendance tracking, leave management, and employee scheduling.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4F46E5',
+                        secondary: '#7C3AED',
+                        dark: '#1F2937',
+                        light: '#F9FAFB',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+        }
+        .feature-card {
+            transition: all 0.3s ease;
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="font-sans bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 flex items-center">
+                        <span class="text-xl font-bold text-primary">AttendEase</span>
+                    </div>
+                    <div class="hidden sm:ml-10 sm:flex sm:space-x-8">
+                        <a href="#features" class="text-gray-700 hover:text-primary px-3 py-2 text-sm font-medium">Features</a>
+                        <a href="#solutions" class="text-gray-700 hover:text-primary px-3 py-2 text-sm font-medium">Solutions</a>
+                        <a href="#pricing" class="text-gray-700 hover:text-primary px-3 py-2 text-sm font-medium">Pricing</a>
+                        <a href="#testimonials" class="text-gray-700 hover:text-primary px-3 py-2 text-sm font-medium">Testimonials</a>
+                    </div>
+                </div>
+                <div class="hidden sm:ml-6 sm:flex sm:items-center space-x-4">
+                    <a href="/login" class="text-gray-700 hover:text-primary px-3 py-2 text-sm font-medium">Log in</a>
+                    <a href="/register" class="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-opacity-90 transition">Get Started</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <div class="gradient-bg text-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 md:py-32">
+            <div class="lg:grid lg:grid-cols-2 lg:gap-12 items-center">
+                <div>
+                    <h1 class="text-4xl md:text-5xl font-bold leading-tight mb-6">
+                        Modern Workforce Management Made Simple
+                    </h1>
+                    <p class="text-xl text-gray-100 mb-8">
+                        Streamline your HR processes with our all-in-one attendance and leave management solution. Focus on what matters most - your people.
+                    </p>
+                    <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
+                        <a href="/register" class="bg-white text-primary px-8 py-3 rounded-md text-lg font-semibold text-center hover:bg-opacity-90 transition">
+                            Start Free Trial
+                        </a>
+                        <a href="#demo" class="bg-transparent border-2 border-white text-white px-8 py-3 rounded-md text-lg font-semibold text-center hover:bg-white hover:bg-opacity-10 transition">
+                            Request Demo
+                        </a>
+                    </div>
+                </div>
+                <div class="mt-12 lg:mt-0">
+                    <div class="bg-white rounded-xl shadow-2xl overflow-hidden">
+                        <img src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80" alt="AttendEase Dashboard" class="w-full h-auto">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Trusted By -->
+    <div class="bg-white py-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <p class="text-center text-gray-500 text-sm mb-8">TRUSTED BY LEADING COMPANIES WORLDWIDE</p>
+            <div class="grid grid-cols-2 gap-8 md:grid-cols-6 lg:grid-cols-5">
+                <div class="col-span-1 flex justify-center">
+                    <img class="h-12" src="https://tailwindui.com/img/logos/tuple-logo-gray-400.svg" alt="Tuple">
+                </div>
+                <div class="col-span-1 flex justify-center">
+                    <img class="h-12" src="https://tailwindui.com/img/logos/mirage-logo-gray-400.svg" alt="Mirage">
+                </div>
+                <div class="col-span-1 flex justify-center">
+                    <img class="h-12" src="https://tailwindui.com/img/logos/statickit-logo-gray-400.svg" alt="StaticKit">
+                </div>
+                <div class="col-span-1 flex justify-center">
+                    <img class="h-12" src="https://tailwindui.com/img/logos/transistor-logo-gray-400.svg" alt="Transistor">
+                </div>
+                <div class="col-span-1 flex justify-center">
+                    <img class="h-12" src="https://tailwindui.com/img/logos/workcation-logo-gray-400.svg" alt="Workcation">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Features Section -->
+    <div id="features" class="py-16 bg-gray-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl font-extrabold text-gray-900 sm:text-4xl">
+                    Everything you need to manage your workforce
+                </h2>
+                <p class="mt-4 text-xl text-gray-600">
+                    Powerful features designed to make HR management a breeze
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- Feature 1 -->
+                <div class="bg-white p-8 rounded-xl shadow-sm feature-card">
+                    <div class="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mb-6">
+                        <i class="fas fa-fingerprint text-primary text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Biometric Integration</h3>
+                    <p class="text-gray-600">Seamlessly integrate with biometric devices for accurate attendance tracking.</p>
+                </div>
+
+                <!-- Feature 2 -->
+                <div class="bg-white p-8 rounded-xl shadow-sm feature-card">
+                    <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-6">
+                        <i class="fas fa-calendar-alt text-purple-600 text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Leave Management</h3>
+                    <p class="text-gray-600">Streamline leave requests, approvals, and tracking in one centralized platform.</p>
+                </div>
+
+                <!-- Feature 3 -->
+                <div class="bg-white p-8 rounded-xl shadow-sm feature-card">
+                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-6">
+                        <i class="fas fa-mobile-alt text-blue-600 text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Mobile App</h3>
+                    <p class="text-gray-600">Manage your attendance and leave on the go with our intuitive mobile application.</p>
+                </div>
+
+                <!-- Feature 4 -->
+                <div class="bg-white p-8 rounded-xl shadow-sm feature-card">
+                    <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-6">
+                        <i class="fas fa-chart-line text-green-600 text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Real-time Analytics</h3>
+                    <p class="text-gray-600">Gain valuable insights with comprehensive reports and analytics dashboard.</p>
+                </div>
+
+                <!-- Feature 5 -->
+                <div class="bg-white p-8 rounded-xl shadow-sm feature-card">
+                    <div class="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center mb-6">
+                        <i class="fas fa-bell text-yellow-600 text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Smart Notifications</h3>
+                    <p class="text-gray-600">Automated alerts and reminders for important events and deadlines.</p>
+                </div>
+
+                <!-- Feature 6 -->
+                <div class="bg-white p-8 rounded-xl shadow-sm feature-card">
+                    <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mb-6">
+                        <i class="fas fa-lock text-red-600 text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Enterprise Security</h3>
+                    <p class="text-gray-600">Bank-grade security to protect your sensitive employee data.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Solutions Section -->
+    <div id="solutions" class="py-16 bg-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl font-extrabold text-gray-900 sm:text-4xl">
+                    Solutions for Every Business Need
+                </h2>
+                <p class="mt-4 text-xl text-gray-600">
+                    Tailored solutions designed to meet the unique challenges of your industry
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="bg-gray-50 p-8 rounded-xl">
+                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-6">
+                        <i class="fas fa-building text-blue-600 text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Small Business</h3>
+                    <p class="text-gray-600 mb-4">Perfect for growing teams that need an all-in-one solution for attendance and leave management.</p>
+                    <ul class="space-y-2 text-gray-600">
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Up to 50 employees</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Basic reporting</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Email support</li>
+                    </ul>
+                </div>
+
+                <div class="bg-gray-50 p-8 rounded-xl border-2 border-primary relative">
+                    <div class="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                        <span class="bg-primary text-white text-xs font-semibold px-3 py-1 rounded-full">MOST POPULAR</span>
+                    </div>
+                    <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-6">
+                        <i class="fas fa-warehouse text-purple-600 text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Enterprise</h3>
+                    <p class="text-gray-600 mb-4">Comprehensive solution for large organizations with complex workforce management needs.</p>
+                    <ul class="space-y-2 text-gray-600">
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Unlimited employees</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Advanced analytics</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> 24/7 Priority support</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Custom integrations</li>
+                    </ul>
+                </div>
+
+                <div class="bg-gray-50 p-8 rounded-xl">
+                    <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-6">
+                        <i class="fas fa-industry text-green-600 text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Manufacturing</h3>
+                    <p class="text-gray-600 mb-4">Specialized solution for manufacturing with shift management and compliance features.</p>
+                    <ul class="space-y-2 text-gray-600">
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Shift scheduling</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Overtime tracking</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Compliance reporting</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pricing Section -->
+    <div id="pricing" class="py-16 bg-gray-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl font-extrabold text-gray-900 sm:text-4xl">
+                    Simple, Transparent Pricing
+                </h2>
+                <p class="mt-4 text-xl text-gray-600">
+                    Choose the plan that's right for your business
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+                <!-- Basic Plan -->
+                <div class="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
+                    <h3 class="text-2xl font-bold text-gray-900 mb-2">Starter</h3>
+                    <p class="text-gray-600 mb-6">Perfect for small teams getting started</p>
+                    <div class="mb-8">
+                        <span class="text-4xl font-bold text-gray-900">$9</span>
+                        <span class="text-gray-600">/user/month</span>
+                        <p class="text-sm text-gray-500 mt-1">Billed annually</p>
+                    </div>
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Up to 50 employees</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Basic attendance tracking</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Leave management</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Email support</li>
+                    </ul>
+                    <button class="w-full bg-gray-100 text-gray-800 py-3 rounded-md font-medium hover:bg-gray-200 transition">
+                        Get Started
+                    </button>
+                </div>
+
+                <!-- Popular Plan -->
+                <div class="bg-white p-8 rounded-xl shadow-lg border-2 border-primary relative">
+                    <div class="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                        <span class="bg-primary text-white text-xs font-semibold px-3 py-1 rounded-full">BEST VALUE</span>
+                    </div>
+                    <h3 class="text-2xl font-bold text-gray-900 mb-2">Professional</h3>
+                    <p class="text-gray-600 mb-6">For growing businesses that need more</p>
+                    <div class="mb-8">
+                        <span class="text-4xl font-bold text-gray-900">$19</span>
+                        <span class="text-gray-600">/user/month</span>
+                        <p class="text-sm text-gray-500 mt-1">Billed annually</p>
+                    </div>
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Up to 200 employees</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Advanced reporting</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Shift scheduling</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Priority support</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> API access</li>
+                    </ul>
+                    <button class="w-full bg-primary text-white py-3 rounded-md font-medium hover:bg-opacity-90 transition">
+                        Start Free Trial
+                    </button>
+                </div>
+
+                <!-- Enterprise Plan -->
+                <div class="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
+                    <h3 class="text-2xl font-bold text-gray-900 mb-2">Enterprise</h3>
+                    <p class="text-gray-600 mb-6">For large organizations with complex needs</p>
+                    <div class="mb-8">
+                        <span class="text-4xl font-bold text-gray-900">Custom</span>
+                        <p class="text-sm text-gray-500 mt-1">Tailored to your needs</p>
+                    </div>
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Unlimited employees</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Custom reporting</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Dedicated account manager</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> 24/7 Premium support</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Custom integrations</li>
+                    </ul>
+                    <button class="w-full bg-gray-100 text-gray-800 py-3 rounded-md font-medium hover:bg-gray-200 transition">
+                        Contact Sales
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Testimonials Section -->
+    <div id="testimonials" class="py-16 bg-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl font-extrabold text-gray-900 sm:text-4xl">
+                    Trusted by Companies Worldwide
+                </h2>
+                <p class="mt-4 text-xl text-gray-600">
+                    Don't just take our word for it. Here's what our customers say.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- Testimonial 1 -->
+                <div class="bg-gray-50 p-8 rounded-xl">
+                    <div class="flex items-center mb-4">
+                        <div class="text-yellow-400 text-xl">
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                        </div>
+                    </div>
+                    <p class="text-gray-700 italic mb-6">"AttendEase has completely transformed how we manage our workforce. The time savings alone have been incredible."</p>
+                    <div class="flex items-center">
+                        <div class="h-12 w-12 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold text-xl">JD</div>
+                        <div class="ml-4">
+                            <p class="font-semibold text-gray-900">John Doe</p>
+                            <p class="text-sm text-gray-500">HR Director, TechCorp</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Testimonial 2 -->
+                <div class="bg-gray-50 p-8 rounded-xl">
+                    <div class="flex items-center mb-4">
+                        <div class="text-yellow-400 text-xl">
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                        </div>
+                    </div>
+                    <p class="text-gray-700 italic mb-6">"The customer support team is exceptional. They've been incredibly helpful throughout our implementation process."</p>
+                    <div class="flex items-center">
+                        <div class="h-12 w-12 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold text-xl">AS</div>
+                        <div class="ml-4">
+                            <p class="font-semibold text-gray-900">Alex Smith</p>
+                            <p class="text-sm text-gray-500">Operations Manager, RetailPlus</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Testimonial 3 -->
+                <div class="bg-gray-50 p-8 rounded-xl">
+                    <div class="flex items-center mb-4">
+                        <div class="text-yellow-400 text-xl">
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="far fa-star text-gray-300"></i>
+                        </div>
+                    </div>
+                    <p class="text-gray-700 italic mb-6">"We've reduced our administrative workload by 40% since implementing AttendEase. Highly recommended!"</p>
+                    <div class="flex items-center">
+                        <div class="h-12 w-12 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold text-xl">MJ</div>
+                        <div class="ml-4">
+                            <p class="font-semibold text-gray-900">Maria Garcia</p>
+                            <p class="text-sm text-gray-500">CEO, DesignHub</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CTA Section -->
+    <div class="bg-primary text-white">
+        <div class="max-w-7xl mx-auto px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+            <div class="text-center">
+                <h2 class="text-3xl font-extrabold sm:text-4xl">
+                    Ready to transform your workforce management?
+                </h2>
+                <p class="mt-4 text-xl text-indigo-100">
+                    Join thousands of companies that trust AttendEase for their HR needs.
+                </p>
+                <div class="mt-8 flex flex-col sm:flex-row justify-center gap-4">
+                    <a href="/register" class="bg-white text-primary px-8 py-3 rounded-md text-lg font-semibold hover:bg-opacity-90 transition text-center">
+                        Start Your Free Trial
+                    </a>
+                    <a href="#contact" class="bg-transparent border-2 border-white text-white px-8 py-3 rounded-md text-lg font-semibold hover:bg-white hover:bg-opacity-10 transition text-center">
+                        Request Demo
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-gray-300">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
+                <div>
+                    <h3 class="text-white font-semibold mb-4">Product</h3>
+                    <ul class="space-y-2">
+                        <li><a href="#" class="hover:text-white">Features</a></li>
+                        <li><a href="#" class="hover:text-white">Pricing</a></li>
+                        <li><a href="#" class="hover:text-white">Integrations</a></li>
+                        <li><a href="#" class="hover:text-white">Updates</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-white font-semibold mb-4">Company</h3>
+                    <ul class="space-y-2">
+                        <li><a href="#" class="hover:text-white">About Us</a></li>
+                        <li><a href="#" class="hover:text-white">Careers</a></li>
+                        <li><a href="#" class="hover:text-white">Blog</a></li>
+                        <li><a href="#" class="hover:text-white">Contact</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-white font-semibold mb-4">Resources</h3>
+                    <ul class="space-y-2">
+                        <li><a href="#" class="hover:text-white">Documentation</a></li>
+                        <li><a href="#" class="hover:text-white">Guides</a></li>
+                        <li><a href="#" class="hover:text-white">Help Center</a></li>
+                        <li><a href="#" class="hover:text-white">API Status</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-white font-semibold mb-4">Legal</h3>
+                    <ul class="space-y-2">
+                        <li><a href="#" class="hover:text-white">Privacy Policy</a></li>
+                        <li><a href="#" class="hover:text-white">Terms of Service</a></li>
+                        <li><a href="#" class="hover:text-white">Cookie Policy</a></li>
+                        <li><a href="#" class="hover:text-white">GDPR</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="mt-12 pt-8 border-t border-gray-800">
+                <p class="text-center text-gray-400">&copy; 2023 AttendEase. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
