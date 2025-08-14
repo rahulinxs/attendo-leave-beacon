@@ -98,6 +98,8 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
           check_out_time: checkOut,
           status: 'present', // Default to present for biometric import
           notes: 'Imported from biometric device',
+        }, {
+          onConflict: 'employee_id,date'
         });
         if (error) {
           errors.push(`Import failed for ${name} on ${date}: ${error.message}`);

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, FlatList, ScrollView } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useUserProfile } from '../lib/useUserProfile';
 import { APP_NAME } from '../branding';
@@ -145,8 +145,8 @@ const ReportsScreen = () => {
     );
   }
 
-  return (
-    <ScrollView style={styles.container}>
+  const listHeader = (
+    <View>
       <Text style={styles.title}>{APP_NAME} Reports</Text>
       <Text style={styles.subtitle}>{getScopeText()}</Text>
       <View style={styles.filterRow}>
@@ -170,7 +170,6 @@ const ReportsScreen = () => {
           </>
         )}
       </View>
-      {/* Analytics Cards */}
       <View style={styles.card}>
         <Text style={styles.metricTitle}>Attendance Rate</Text>
         <Text style={styles.metricValue}>{analytics.attendanceRate ?? 0}%</Text>
@@ -197,7 +196,17 @@ const ReportsScreen = () => {
         <Text style={styles.metricValue}>{analytics.userRole ?? ''}</Text>
         <Text style={styles.metricDetail}>Access level</Text>
       </View>
-    </ScrollView>
+    </View>
+  );
+
+  return (
+    <FlatList
+      style={styles.container}
+      data={[1]}
+      keyExtractor={() => 'header'}
+      renderItem={() => null}
+      ListHeaderComponent={listHeader}
+    />
   );
 };
 

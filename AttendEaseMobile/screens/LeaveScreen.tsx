@@ -1,23 +1,33 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, ActivityIndicator, Alert } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { supabase } from '../lib/supabase';
 import { useUserProfile } from '../lib/useUserProfile';
 import { APP_NAME } from '../branding';
+import Collapsible from 'react-native-collapsible';
+import { Ionicons } from '@expo/vector-icons';
 
 const LeaveScreen = () => {
   const { profileData } = useUserProfile();
-  const [leaveBalance, setLeaveBalance] = useState(0);
-  const [leaveHistory, setLeaveHistory] = useState([]);
-  const [leaveTypes, setLeaveTypes] = useState([]);
+  const [leaveBalances, setLeaveBalances] = useState<any[]>([]);
+  const [leaveHistory, setLeaveHistory] = useState<any[]>([]);
+  const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [requesting, setRequesting] = useState(false);
   
   // Form state
-  const [leaveType, setLeaveType] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [selectedLeaveTypeId, setSelectedLeaveTypeId] = useState('');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [reason, setReason] = useState('');
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
+
+  // Collapsible sections
+  const [balancesOpen, setBalancesOpen] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(true);
+  const [requestOpen, setRequestOpen] = useState(true);
 
   useEffect(() => {
     fetchLeaveData();
@@ -34,19 +44,19 @@ const LeaveScreen = () => {
       const userRole = profileData.profile.role;
       const companyId = profileData.profile.company_id;
 
-      // Fetch leave balance
-      const { data: balanceData } = await supabase
+      // Fetch leave balances per type
+      const { data: balancesData } = await supabase
         .from('leave_balances')
-        .select('*')
+        .select('leave_type_id, allocated_days, used_days, remaining_days, leave_types(name)')
         .eq('employee_id', userId)
-        .single();
-      
-      setLeaveBalance(balanceData?.balance || 0);
+        .eq('company_id', companyId);
+      setLeaveBalances(balancesData || []);
 
       // Fetch leave history
       let leaveQuery = supabase
         .from('leave_requests')
         .select('*')
+        .eq('company_id', companyId)
         .order('created_at', { ascending: false });
 
       // Apply role-based filtering
@@ -91,7 +101,7 @@ const LeaveScreen = () => {
   };
 
   const submitLeaveRequest = async () => {
-    if (!leaveType || !startDate || !endDate || !reason) {
+    if (!selectedLeaveTypeId || !startDate || !endDate || !reason) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
@@ -102,7 +112,7 @@ const LeaveScreen = () => {
         .from('leave_requests')
         .insert({
           employee_id: profileData.profile.id,
-          leave_type: leaveType,
+          leave_type_id: selectedLeaveTypeId,
           start_date: startDate,
           end_date: endDate,
           reason: reason,
@@ -113,7 +123,7 @@ const LeaveScreen = () => {
       if (error) throw error;
 
       Alert.alert('Success', 'Leave request submitted successfully');
-      setLeaveType('');
+      setSelectedLeaveTypeId('');
       setStartDate('');
       setEndDate('');
       setReason('');
@@ -157,46 +167,84 @@ const LeaveScreen = () => {
     <View style={styles.container}>
       <Text style={styles.title}>{APP_NAME} Leave</Text>
       
-      <View style={styles.balanceCard}>
-        <Text style={styles.balanceTitle}>Leave Balance</Text>
-        <Text style={styles.balanceValue}>{leaveBalance} days</Text>
+      {/* Leave Balances (Collapsible) */}
+      <TouchableOpacity style={styles.sectionHeader} onPress={() => setBalancesOpen(o => !o)}>
+        <Text style={styles.sectionTitle}>My Leave Balances</Text>
+        <Ionicons name={balancesOpen ? 'chevron-up' : 'chevron-down'} size={18} color="#334155" />
+      </TouchableOpacity>
+      <Collapsible collapsed={!balancesOpen}>
+        <FlatList
+          data={leaveBalances}
+          keyExtractor={(item) => item.leave_type_id}
+          numColumns={2}
+          columnWrapperStyle={{ justifyContent: 'space-between' }}
+          renderItem={({ item }) => (
+            <View style={styles.balanceCardGrid}>
+              <Text style={styles.balanceType}>{item.leave_types?.name || 'Leave'}</Text>
+              <View style={{ marginTop: 6 }}>
+                <Text style={styles.balanceRemaining}>{item.remaining_days ?? Math.max((item.allocated_days || 0) - (item.used_days || 0), 0)}</Text>
+                <Text style={styles.balanceLabel}>Remaining</Text>
+              </View>
+              <View style={styles.progressBar}>
+                <View style={[styles.progressFill, { width: `${Math.min(((item.used_days || 0) / Math.max(item.allocated_days || 1, 1)) * 100, 100)}%` }]} />
+              </View>
+              <Text style={styles.balanceMeta}>{item.used_days || 0} of {item.allocated_days || 0} days used</Text>
+            </View>
+          )}
+          ListEmptyComponent={<Text style={styles.emptyText}>No leave balances found</Text>}
+        />
+      </Collapsible>
+
+      <TouchableOpacity style={styles.sectionHeader} onPress={() => setHistoryOpen(o => !o)}>
+        <Text style={styles.sectionTitle}>My Leave History</Text>
+        <Ionicons name={historyOpen ? 'chevron-up' : 'chevron-down'} size={18} color="#334155" />
+      </TouchableOpacity>
+      <Collapsible collapsed={!historyOpen}>
+        <FlatList
+          data={leaveHistory}
+          keyExtractor={item => item.id}
+          renderItem={({ item }) => (
+            <View style={styles.historyItem}>
+              <Text style={styles.historyDate}>{item.start_date} - {item.end_date}</Text>
+              <Text style={styles.historyType}>{item.leave_type || item.leave_type_name}</Text>
+              <Text style={[styles.historyStatus, { color: getStatusColor(item.status) }]}>
+                {item.status}
+              </Text>
+            </View>
+          )}
+          ListEmptyComponent={<Text style={styles.emptyText}>No leave history found</Text>}
+        />
+      </Collapsible>
+
+      <TouchableOpacity style={styles.sectionHeader} onPress={() => setRequestOpen(o => !o)}>
+        <Text style={styles.sectionTitle}>Request Leave</Text>
+        <Ionicons name={requestOpen ? 'chevron-up' : 'chevron-down'} size={18} color="#334155" />
+      </TouchableOpacity>
+      <Collapsible collapsed={!requestOpen}>
+      {/* Leave type chips */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+        {leaveTypes.map((lt) => (
+          <TouchableOpacity
+            key={lt.id}
+            onPress={() => setSelectedLeaveTypeId(lt.id)}
+            style={[styles.chip, selectedLeaveTypeId === lt.id && styles.chipSelected]}
+          >
+            <Text style={[styles.chipText, selectedLeaveTypeId === lt.id && styles.chipTextSelected]}>{lt.name}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
-
-      <Text style={styles.sectionTitle}>Leave History</Text>
-      <FlatList
-        data={leaveHistory}
-        keyExtractor={item => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.historyItem}>
-            <Text style={styles.historyDate}>{item.start_date} - {item.end_date}</Text>
-            <Text style={styles.historyType}>{item.leave_type}</Text>
-            <Text style={[styles.historyStatus, { color: getStatusColor(item.status) }]}>
-              {item.status}
-            </Text>
-          </View>
-        )}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>No leave history found</Text>
-        }
-      />
-
-      <Text style={styles.sectionTitle}>Request Leave</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Leave Type (e.g. Sick, Casual)"
-        value={leaveType}
-        onChangeText={setLeaveType}
-      />
       <TextInput
         style={styles.input}
         placeholder="Start Date (YYYY-MM-DD)"
         value={startDate}
+        onFocus={() => setShowStartPicker(true)}
         onChangeText={setStartDate}
       />
       <TextInput
         style={styles.input}
         placeholder="End Date (YYYY-MM-DD)"
         value={endDate}
+        onFocus={() => setShowEndPicker(true)}
         onChangeText={setEndDate}
       />
       <TextInput
@@ -206,6 +254,23 @@ const LeaveScreen = () => {
         onChangeText={setReason}
         multiline
       />
+      {showStartPicker && (
+        <DateTimePicker
+          value={startDate ? new Date(startDate) : new Date()}
+          mode="date"
+          display="default"
+          onChange={(e, d) => { setShowStartPicker(false); if (d) setStartDate(d.toISOString().slice(0,10)); }}
+        />
+      )}
+      {showEndPicker && (
+        <DateTimePicker
+          value={endDate ? new Date(endDate) : new Date()}
+          mode="date"
+          display="default"
+          onChange={(e, d) => { setShowEndPicker(false); if (d) setEndDate(d.toISOString().slice(0,10)); }}
+        />
+      )}
+      </Collapsible>
       <TouchableOpacity 
         style={[styles.button, requesting && styles.buttonDisabled]} 
         onPress={submitLeaveRequest}

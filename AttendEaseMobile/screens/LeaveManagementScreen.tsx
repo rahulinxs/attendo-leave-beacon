@@ -3,14 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Alert,
-  RefreshControl,
   FlatList,
   TextInput,
   Modal,
   Dimensions,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -201,7 +200,8 @@ export default function LeaveManagementScreen({ navigation }: any) {
           approved_by: profileData.profile.id,
           approved_at: new Date().toISOString()
         })
-        .eq('id', requestId);
+        .eq('id', requestId)
+        .eq('company_id', profileData.profile.company_id);
 
       if (error) throw error;
       Alert.alert('Success', 'Leave request approved');
@@ -226,7 +226,8 @@ export default function LeaveManagementScreen({ navigation }: any) {
           approved_by: profileData.profile.id,
           approved_at: new Date().toISOString()
         })
-        .eq('id', requestId);
+        .eq('id', requestId)
+        .eq('company_id', profileData.profile.company_id);
 
       if (error) throw error;
       Alert.alert('Success', 'Leave request rejected');
@@ -362,147 +363,142 @@ export default function LeaveManagementScreen({ navigation }: any) {
         )}
       </View>
 
-      {/* Tabs */}
-      <View style={styles.tabContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'requests' && styles.activeTab]}
-            onPress={() => setActiveTab('requests')}
-          >
-            <Text style={[styles.tabText, activeTab === 'requests' && styles.activeTabText]}>
-              Requests
-            </Text>
-          </TouchableOpacity>
-          {isEmployee && (
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'balances' && styles.activeTab]}
-              onPress={() => setActiveTab('balances')}
-            >
-              <Text style={[styles.tabText, activeTab === 'balances' && styles.activeTabText]}>
-                Balances
-              </Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'calendar' && styles.activeTab]}
-            onPress={() => setActiveTab('calendar')}
-          >
-            <Text style={[styles.tabText, activeTab === 'calendar' && styles.activeTabText]}>
-              Calendar
-            </Text>
-          </TouchableOpacity>
-          {isEmployee && (
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'backdated' && styles.activeTab]}
-              onPress={() => setActiveTab('backdated')}
-            >
-              <Text style={[styles.tabText, activeTab === 'backdated' && styles.activeTabText]}>
-                Backdated
-              </Text>
-            </TouchableOpacity>
-          )}
-        </ScrollView>
-      </View>
-
-      {/* Filter Buttons */}
-      {activeTab === 'requests' && (
-        <View style={styles.filterContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {[
-              { key: 'all', label: 'All' },
-              { key: 'pending', label: 'Pending' },
-              { key: 'approved', label: 'Approved' },
-              { key: 'rejected', label: 'Rejected' },
-            ].map((filterOption) => (
-              <TouchableOpacity
-                key={filterOption.key}
-                style={[
-                  styles.filterButton,
-                  filter === filterOption.key && styles.filterButtonActive,
-                ]}
-                onPress={() => setFilter(filterOption.key as any)}
-              >
-                <Text
-                  style={[
-                    styles.filterButtonText,
-                    filter === filterOption.key && styles.filterButtonTextActive,
-                  ]}
-                >
-                  {filterOption.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
+      
 
       {/* Content */}
-      <ScrollView
+      <FlatList
         style={styles.scrollView}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        {activeTab === 'requests' && (
+        data={activeTab === 'requests' ? filteredRequests : []}
+        keyExtractor={(item) => item.id}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        ListHeaderComponent={
           <>
-            {loading ? (
-              <View style={styles.loadingContainer}>
-                <Text style={styles.loadingText}>Loading leave requests...</Text>
-              </View>
-            ) : filteredRequests.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Ionicons name="calendar-outline" size={64} color="#666" />
-                <Text style={styles.emptyText}>No leave requests found</Text>
-              </View>
-            ) : (
-              filteredRequests.map((request) => {
-                const badge = getStatusBadge(request.status);
-                return (
-                  <View key={request.id} style={styles.requestCard}>
-                    <View style={styles.requestHeader}>
-                      <Text style={styles.employeeName}>
-                        {request.employee_name || request.employee_id}
+            {/* Tabs */}
+            <View style={styles.tabContainer}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <TouchableOpacity
+                  style={[styles.tab, activeTab === 'requests' && styles.activeTab]}
+                  onPress={() => setActiveTab('requests')}
+                >
+                  <Text style={[styles.tabText, activeTab === 'requests' && styles.activeTabText]}>
+                    Requests
+                  </Text>
+                </TouchableOpacity>
+                {isEmployee && (
+                  <TouchableOpacity
+                    style={[styles.tab, activeTab === 'balances' && styles.activeTab]}
+                    onPress={() => setActiveTab('balances')}
+                  >
+                    <Text style={[styles.tabText, activeTab === 'balances' && styles.activeTabText]}>
+                      Balances
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[styles.tab, activeTab === 'calendar' && styles.activeTab]}
+                  onPress={() => setActiveTab('calendar')}
+                >
+                  <Text style={[styles.tabText, activeTab === 'calendar' && styles.activeTabText]}>
+                    Calendar
+                  </Text>
+                </TouchableOpacity>
+                {isEmployee && (
+                  <TouchableOpacity
+                    style={[styles.tab, activeTab === 'backdated' && styles.activeTab]}
+                    onPress={() => setActiveTab('backdated')}
+                  >
+                    <Text style={[styles.tabText, activeTab === 'backdated' && styles.activeTabText]}>
+                      Backdated
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </ScrollView>
+            </View>
+
+            {/* Filter Buttons */}
+            {activeTab === 'requests' && (
+              <View style={styles.filterContainer}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {[
+                    { key: 'all', label: 'All' },
+                    { key: 'pending', label: 'Pending' },
+                    { key: 'approved', label: 'Approved' },
+                    { key: 'rejected', label: 'Rejected' },
+                  ].map((filterOption) => (
+                    <TouchableOpacity
+                      key={filterOption.key}
+                      style={[
+                        styles.filterButton,
+                        filter === filterOption.key && styles.filterButtonActive,
+                      ]}
+                      onPress={() => setFilter(filterOption.key as any)}
+                    >
+                      <Text
+                        style={[
+                          styles.filterButtonText,
+                          filter === filterOption.key && styles.filterButtonTextActive,
+                        ]}
+                      >
+                        {filterOption.label}
                       </Text>
-                      <View style={[styles.statusBadge, { backgroundColor: badge.color }]}>
-                        <Text style={styles.statusText}>{badge.label}</Text>
-                      </View>
-                    </View>
-                    
-                    <Text style={styles.leaveType}>
-                      {request.leave_type_name || request.leave_type_id}
-                    </Text>
-                    
-                    <Text style={styles.dateRange}>
-                      {formatDate(request.start_date)} - {formatDate(request.end_date)}
-                      <Text style={styles.daysText}> ({request.total_days} days)</Text>
-                    </Text>
-                    
-                    <Text style={styles.reason}>{request.reason}</Text>
-                    
-                    {isAdminOrManager && request.status === 'pending' && (
-                      <View style={styles.actionButtons}>
-                        <TouchableOpacity
-                          style={[styles.actionButton, styles.approveButton]}
-                          onPress={() => handleApproveLeave(request.id)}
-                        >
-                          <Ionicons name="checkmark" size={16} color="#fff" />
-                          <Text style={styles.approveButtonText}>Approve</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.actionButton, styles.rejectButton]}
-                          onPress={() => handleRejectLeave(request.id)}
-                        >
-                          <Ionicons name="close" size={16} color="#fff" />
-                          <Text style={styles.rejectButtonText}>Reject</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </View>
-                );
-              })
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
             )}
           </>
+        }
+        ListEmptyComponent={activeTab === 'requests' ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="calendar-outline" size={64} color="#666" />
+            <Text style={styles.emptyText}>No leave requests found</Text>
+          </View>
+        ) : null}
+        renderItem={({ item: request }) => (
+          <View style={styles.requestCard}>
+            <View style={styles.requestHeader}>
+              <Text style={styles.employeeName}>
+                {request.employee_name || request.employee_id}
+              </Text>
+              <View style={[styles.statusBadge, { backgroundColor: getStatusBadge(request.status).color }]}>
+                <Text style={styles.statusText}>{getStatusBadge(request.status).label}</Text>
+              </View>
+            </View>
+
+            <Text style={styles.leaveType}>
+              {request.leave_type_name || request.leave_type_id}
+            </Text>
+
+            <Text style={styles.dateRange}>
+              {formatDate(request.start_date)} - {formatDate(request.end_date)}
+              <Text style={styles.daysText}> ({request.total_days} days)</Text>
+            </Text>
+
+            <Text style={styles.reason}>{request.reason}</Text>
+
+            {isAdminOrManager && request.status === 'pending' && (
+              <View style={styles.actionButtons}>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.approveButton]}
+                  onPress={() => handleApproveLeave(request.id)}
+                >
+                  <Ionicons name="checkmark" size={16} color="#fff" />
+                  <Text style={styles.approveButtonText}>Approve</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.rejectButton]}
+                  onPress={() => handleRejectLeave(request.id)}
+                >
+                  <Ionicons name="close" size={16} color="#fff" />
+                  <Text style={styles.rejectButtonText}>Reject</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         )}
+      />
+        
 
         {activeTab === 'balances' && (
           <>
@@ -626,7 +622,6 @@ export default function LeaveManagementScreen({ navigation }: any) {
             </Text>
           </View>
         )}
-      </ScrollView>
 
       {/* Leave Request Form Modal */}
       <Modal

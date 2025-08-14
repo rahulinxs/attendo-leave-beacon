@@ -30,18 +30,19 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ email, onSuccess, onCance
       // Construct the redirect URL with the correct parameters
       const redirectUrl = new URL(window.location.origin);
       redirectUrl.pathname = '/update-password';
-      redirectUrl.searchParams.set('tenant', tenant);
+      redirectUrl.searchParams.set('type', 'recovery');
       
       console.log('Sending password reset email to:', emailInput);
       console.log('Redirect URL:', redirectUrl.toString());
       
-      const { error } = await supabase.auth.resetPasswordForEmail(emailInput, {
+      // First, send the reset email
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(emailInput, {
         redirectTo: redirectUrl.toString(),
       });
 
-      if (error) {
-        console.error('Password reset error:', error);
-        throw error;
+      if (resetError) {
+        console.error('Password reset error:', resetError);
+        throw resetError;
       }
       
       setShowConfirmation(true);

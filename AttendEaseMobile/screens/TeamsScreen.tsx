@@ -86,30 +86,31 @@ const TeamsScreen = () => {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{APP_NAME} Teams</Text>
-      <Text style={styles.subtitle}>
-        {profileData?.profile?.role === 'super_admin' ? 'All Users' :
-         profileData?.profile?.role === 'admin' ? 'Company Members' :
-         profileData?.profile?.role === 'reporting_manager' ? 'Team Members' :
-         'Your Profile'}
-      </Text>
-      <FlatList
-        data={teamMembers}
-        keyExtractor={item => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.memberItem}>
-            <Text style={styles.memberName}>{item.name}</Text>
-            <Text style={styles.memberEmail}>{item.email}</Text>
-            <Text style={styles.memberRole}>{getRoleDisplayName(item.role)}</Text>
-            {item.department && <Text style={styles.memberDept}>{item.department}</Text>}
-          </View>
-        )}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>No team members found</Text>
-        }
-      />
-    </View>
+    <FlatList
+      contentContainerStyle={styles.container}
+      data={teamMembers}
+      keyExtractor={item => item.id}
+      ListHeaderComponent={
+        <View>
+          <Text style={styles.title}>{APP_NAME} Teams</Text>
+          <Text style={styles.subtitle}>
+            {profileData?.profile?.role === 'super_admin' ? 'All Users' :
+            profileData?.profile?.role === 'admin' ? 'Company Members' :
+            profileData?.profile?.role === 'reporting_manager' ? 'Team Members' :
+            'Your Profile'}
+          </Text>
+        </View>
+      }
+      renderItem={({ item }) => (
+        <View style={styles.memberItem}>
+          <Text style={styles.memberName}>{item.name}</Text>
+          <Text style={styles.memberEmail}>{item.email}</Text>
+          <Text style={styles.memberRole}>{getRoleDisplayName(item.role)}</Text>
+          {item.department && <Text style={styles.memberDept}>{item.department}</Text>}
+        </View>
+      )}
+      ListEmptyComponent={<Text style={styles.emptyText}>No team members found</Text>}
+    />
   );
 };
 

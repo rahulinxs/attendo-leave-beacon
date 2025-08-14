@@ -3,10 +3,8 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Alert,
-  RefreshControl,
   FlatList,
   Modal,
 } from 'react-native';
@@ -41,10 +39,14 @@ export default function AttendanceManagementScreen({ navigation }: any) {
   const loadAttendanceRecords = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      let query = supabase
         .from('attendance')
         .select('*')
         .eq('date', selectedDate);
+      if (companyId) {
+        query = query.eq('company_id', companyId as any);
+      }
+      const { data, error } = await query;
       if (error) throw error;
       setAttendanceRecords(data || []);
     } catch (error) {
@@ -125,7 +127,11 @@ export default function AttendanceManagementScreen({ navigation }: any) {
   useEffect(() => {
     if (isAdminOrManager) {
       (async () => {
-        const { data, error } = await supabase.from('employees').select('id, name, email, position, department');
+        let query = supabase.from('employees').select('id, name, email, position, department');
+        if (companyId) {
+          query = query.eq('company_id', companyId as any);
+        }
+        const { data, error } = await query;
         if (!error) setEmployees(data || []);
       })();
     }
@@ -160,13 +166,15 @@ export default function AttendanceManagementScreen({ navigation }: any) {
   const markAttendance = async (empId, status) => {
     try {
       setLoading(true);
-      const { error } = await supabase.from('attendance').upsert({
+      const payload: any = {
         employee_id: empId,
         date: selectedDate,
         status,
         check_in_time: status === 'present' ? new Date().toISOString() : null,
         check_out_time: null,
-      }, { onConflict: 'employee_id,date' });
+      };
+      if (companyId) payload.company_id = companyId;
+      const { error } = await supabase.from('attendance').upsert(payload, { onConflict: 'employee_id,date' });
       if (error) throw error;
       Alert.alert('Success', 'Attendance marked');
       // Refresh
@@ -414,78 +422,79 @@ export default function AttendanceManagementScreen({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
+      <FlatList
         style={styles.scrollView}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        data={attendanceRecords}
+        keyExtractor={(item) => item.id}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        ListEmptyComponent={
+          loading ? (
+            <View style={styles.loadingContainer}>
+              <Text style={styles.loadingText}>Loading attendance records...</Text>
+            </View>
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="calendar-outline" size={64} color="#666" />
+              <Text style={styles.emptyText}>No attendance records found</Text>
+            </View>
+          )
         }
-      >
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Loading attendance records...</Text>
-          </View>
-        ) : attendanceRecords.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="calendar-outline" size={64} color="#666" />
-            <Text style={styles.emptyText}>No attendance records found</Text>
-          </View>
-        ) : (
-          attendanceRecords.map((record) => (
-            <View key={record.id} style={styles.attendanceCard}>
-              <View style={styles.employeeInfo}>
-                <Text style={styles.employeeName}>{record.employee_name}</Text>
-                <Text style={styles.employeeId}>ID: {record.employee_id}</Text>
-              </View>
-              
-              <View style={styles.attendanceDetails}>
-                <View style={styles.timeRow}>
-                  <View style={styles.timeItem}>
-                    <Text style={styles.timeLabel}>Check In</Text>
-                    <Text style={styles.timeValue}>{formatTime(record.check_in_time)}</Text>
-                  </View>
-                  <View style={styles.timeItem}>
-                    <Text style={styles.timeLabel}>Check Out</Text>
-                    <Text style={styles.timeValue}>{formatTime(record.check_out_time)}</Text>
-                  </View>
-                  <View style={styles.timeItem}>
-                    <Text style={styles.timeLabel}>Total Hours</Text>
-                    <Text style={styles.timeValue}>
-                      {calculateTotalHours(record.check_in_time, record.check_out_time)}h
-                    </Text>
-                  </View>
+        renderItem={({ item: record }) => (
+          <View style={styles.attendanceCard}>
+            <View style={styles.employeeInfo}>
+              <Text style={styles.employeeName}>{record.employee_name}</Text>
+              <Text style={styles.employeeId}>ID: {record.employee_id}</Text>
+            </View>
+
+            <View style={styles.attendanceDetails}>
+              <View style={styles.timeRow}>
+                <View style={styles.timeItem}>
+                  <Text style={styles.timeLabel}>Check In</Text>
+                  <Text style={styles.timeValue}>{formatTime(record.check_in_time)}</Text>
                 </View>
-                
-                <View style={styles.statusContainer}>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      {
-                        backgroundColor:
-                          record.status === 'present' ? '#10b981' : 
-                          record.status === 'absent' ? '#ef4444' : '#f59e0b',
-                      },
-                    ]}
-                  >
-                    <Text style={styles.statusText}>
-                      {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
-                    </Text>
-                  </View>
+                <View style={styles.timeItem}>
+                  <Text style={styles.timeLabel}>Check Out</Text>
+                  <Text style={styles.timeValue}>{formatTime(record.check_out_time)}</Text>
+                </View>
+                <View style={styles.timeItem}>
+                  <Text style={styles.timeLabel}>Total Hours</Text>
+                  <Text style={styles.timeValue}>
+                    {calculateTotalHours(record.check_in_time, record.check_out_time)}h
+                  </Text>
                 </View>
               </View>
-              
-              <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.editButton]}
-                  onPress={() => handleUpdateAttendance(record.id, {})}
+
+              <View style={styles.statusContainer}>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    {
+                      backgroundColor:
+                        record.status === 'present' ? '#10b981' :
+                        record.status === 'absent' ? '#ef4444' : '#f59e0b',
+                    },
+                  ]}
                 >
-                  <Ionicons name="pencil" size={16} color="#3b82f6" />
-                  <Text style={styles.editButtonText}>Edit</Text>
-                </TouchableOpacity>
+                  <Text style={styles.statusText}>
+                    {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                  </Text>
+                </View>
               </View>
             </View>
-          ))
+
+            <View style={styles.actionButtons}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.editButton]}
+                onPress={() => handleUpdateAttendance(record.id, {})}
+              >
+                <Ionicons name="pencil" size={16} color="#3b82f6" />
+                <Text style={styles.editButtonText}>Edit</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         )}
-      </ScrollView>
+      />
 
       {/* Date Picker Modal */}
       {showDatePicker && (

@@ -3,7 +3,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import Auth from '@/components/Auth';
 import Layout from '@/components/Layout';
 import Dashboard from '@/components/Dashboard';
-import ProfileManagement from '@/components/ProfileManagement';
 import EmployeeManagement from '@/components/EmployeeManagement';
 import AttendanceManagement from '@/components/AttendanceManagement';
 import LeaveManagement, { EmployeeLeaveView } from '@/components/LeaveManagement';
@@ -17,6 +16,7 @@ import Profile from '@/components/Profile';
 import CompanyProfile from '@/components/CompanyProfile';
 import PerformanceReport from '@/components/PerformanceReport';
 import RecruitmentReport from '@/components/RecruitmentReport';
+import { SessionSettings } from '@/components/SessionSettings';
 
 const Index = () => {
   const { user, isLoading } = useAuth();
@@ -117,13 +117,14 @@ const Index = () => {
           <Profile employeeId={user.id} />
         );
       
-      case 'profile-management':
-        return <ProfileManagement />;
       case 'company-profile':
         return <CompanyProfile />;
       
       case 'settings':
         return <SystemSettings />;
+      
+      case 'session-settings':
+        return <SessionSettings />;
       
       default:
         return <Dashboard onNavigate={setActiveTab} />;

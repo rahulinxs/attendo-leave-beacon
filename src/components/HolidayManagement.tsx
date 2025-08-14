@@ -9,7 +9,6 @@ import { Badge } from '@/components/ui/badge';
 import { Calendar as CalendarIcon, Plus, Trash2, CalendarDays } from 'lucide-react';
 import { CustomCalendar } from '@/components/CustomCalendar';
 import { useAuth } from '@/contexts/AuthContext';
-import { useCompany } from '@/contexts/CompanyContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { format, parseISO } from 'date-fns';
@@ -47,25 +46,20 @@ const HolidayManagement: React.FC = () => {
     return date.getFullYear() === selectedMonth.getFullYear() && date.getMonth() === selectedMonth.getMonth();
   });
   const { user } = useAuth();
-  const { currentCompany } = useCompany();
   const [showAddForm, setShowAddForm] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     date: '',
     description: '',
-    is_recurring: false,
-    company_id: ''
+    is_recurring: false
   });
 
   const fetchHolidays = async () => {
-    if (!currentCompany?.id) return;
-    
     try {
       setIsLoading(true);
       const { data, error } = await supabase
         .from('holidays')
         .select('*')
-        .eq('company_id', currentCompany.id)
         .order('date', { ascending: true });
 
       if (error) {
@@ -101,8 +95,7 @@ const HolidayManagement: React.FC = () => {
           name: formData.name,
           date: formData.date,
           description: formData.description,
-          is_recurring: formData.is_recurring,
-          company_id: currentCompany?.id
+          is_recurring: formData.is_recurring
         }]);
 
       if (error) {
@@ -120,13 +113,7 @@ const HolidayManagement: React.FC = () => {
         description: "Holiday added successfully"
       });
 
-      setFormData({ 
-        name: '', 
-        date: '', 
-        description: '', 
-        is_recurring: false,
-        company_id: ''
-      });
+      setFormData({ name: '', date: '', description: '', is_recurring: false });
       setShowAddForm(false);
       fetchHolidays();
     } catch (error) {
@@ -187,10 +174,8 @@ const HolidayManagement: React.FC = () => {
   };
 
   useEffect(() => {
-    if (currentCompany?.id) {
-      fetchHolidays();
-    }
-  }, [currentCompany?.id]);
+    fetchHolidays();
+  }, []);
 
   const canManageHolidays = user?.role === 'admin' || user?.role === 'super_admin';
 
@@ -208,7 +193,7 @@ const HolidayManagement: React.FC = () => {
           >
             <CalendarIcon className="w-4 h-4 mr-1" /> Calendar View
           </Button>
-          <Button
+          <Button 
             variant={viewMode === 'list' ? 'default' : 'outline'}
             onClick={() => setViewMode('list')}
           >
@@ -217,8 +202,8 @@ const HolidayManagement: React.FC = () => {
           {canManageHolidays && (
             <Button onClick={() => setShowAddForm(true)} variant="gradient">
               <Plus className="w-4 h-4 mr-2" /> Add Holiday
-            </Button>
-          )}
+          </Button>
+        )}
         </div>
       </div>
 
@@ -227,12 +212,12 @@ const HolidayManagement: React.FC = () => {
       {/* Calendar View */}
       {viewMode === 'calendar' && (
         <>
-          {showAddForm && canManageHolidays && (
+      {showAddForm && canManageHolidays && (
             <Card className="border-2 border-blue-200 mb-4">
-              <CardHeader>
-                <CardTitle>Add New Holiday</CardTitle>
-              </CardHeader>
-              <CardContent>
+          <CardHeader>
+            <CardTitle>Add New Holiday</CardTitle>
+          </CardHeader>
+          <CardContent>
                 {/* ...form unchanged... */}
               </CardContent>
             </Card>
@@ -255,10 +240,10 @@ const HolidayManagement: React.FC = () => {
                 <div className="mt-4 flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full bg-blue-600 inline-block"></span>
                   <span className="text-sm">Holiday</span>
-                </div>
               </div>
-            </CardContent>
-          </Card>
+              </div>
+          </CardContent>
+        </Card>
         </>
       )}
 
@@ -275,107 +260,93 @@ const HolidayManagement: React.FC = () => {
               </CardContent>
             </Card>
           )}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
                 <CalendarIcon className="w-5 h-5 mr-2 text-blue-600" />
-                Holidays ({holidays.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-            {isLoading ? (
-              <div className="flex items-center justify-center p-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              </div>
-            ) : holidays.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <CalendarDays className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No holidays found</h3>
-                <p className="text-gray-500 mb-4">No holidays have been added yet</p>
-                {canManageHolidays && (
-                  <Button 
-                    onClick={() => setShowAddForm(true)}
-                    className="gradient-primary text-white border-0"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add First Holiday
-                  </Button>
-                )}
-              </div>
-            ) : (
-               <div className="space-y-6">
-                 {holidays.map((holiday) => {
-                   const isUpcoming = parseISO(holiday.date) > new Date();
-                   const badgeColor = isUpcoming ? 'bg-green-500 text-white' : 'bg-gray-400 text-white';
-                   const typeColor = holiday.type === 'public' ? 'bg-blue-500' : holiday.type === 'optional' ? 'bg-green-500' : holiday.type === 'religious' ? 'bg-yellow-500' : 'bg-gray-400';
-                   return (
-                     <div
-                       key={holiday.id}
-                       className={`flex items-center justify-between p-6 rounded-xl shadow-md transition-all duration-150 bg-white hover:bg-blue-50 border border-blue-100 relative ${holiday.is_recurring ? 'bg-gradient-to-r from-blue-50 to-green-50' : ''}`}
-                     >
-                       <div className="flex items-center gap-4">
-                         <div className={`w-5 h-5 rounded-full ${typeColor} border-2 border-white shadow`} />
-                         <div>
-                           <h3 className="font-extrabold text-lg text-blue-900 flex items-center gap-2">
-                             {holiday.name}
-                             <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-semibold shadow-sm ${typeColor} bg-opacity-90 text-white`}>
-                               {holiday.type ? holiday.type.charAt(0).toUpperCase() + holiday.type.slice(1) : 'Other'}
-                             </span>
-                           </h3>
-                           <p className="text-md font-bold text-blue-700 mt-1 flex items-center gap-2">
-                             <span className="inline-block bg-blue-100 text-blue-700 rounded px-2 py-0.5 font-mono tracking-wider text-base">
-                               {format(parseISO(holiday.date), 'EEE, MMM dd, yyyy')}
-                             </span>
-                             <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-semibold shadow ${badgeColor}`}>{isUpcoming ? 'Upcoming' : 'Past'}</span>
-                             {holiday.is_recurring && (
-                               <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700 border border-green-300">Recurring</span>
-                             )}
-                           </p>
-                           {holiday.description &&
-  holiday.description.trim().toLowerCase() !== holiday.name.trim().toLowerCase() && (
-    <p className="text-sm text-gray-500 mt-2 italic">{holiday.description}</p>
-  )}
-                         </div>
-                       </div>
-                       <div className="flex items-center gap-2">
-                         {canManageHolidays && (
-                           <AlertDialog>
-                             <AlertDialogTrigger asChild>
-                               <Button
-                                 variant="ghost"
-                                 size="sm"
-                                 className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-full border border-red-100"
-                               >
-                                 <Trash2 className="w-4 h-4" />
-                               </Button>
-                             </AlertDialogTrigger>
-                             <AlertDialogContent>
-                               <AlertDialogHeader>
-                                 <AlertDialogTitle>Delete Holiday</AlertDialogTitle>
-                                 <AlertDialogDescription>
-                                   Are you sure you want to delete "{holiday.name}"? This action cannot be undone.
-                                 </AlertDialogDescription>
-                               </AlertDialogHeader>
-                               <AlertDialogFooter>
-                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                 <AlertDialogAction
-                                   onClick={() => handleDeleteHoliday(holiday.id, holiday.name)}
-                                   className="bg-red-600 hover:bg-red-700"
-                                 >
-                                   Delete
-                                 </AlertDialogAction>
-                               </AlertDialogFooter>
-                             </AlertDialogContent>
-                           </AlertDialog>
-                         )}
-                       </div>
-                     </div>
-                   );
-                 })}
-               </div>
-            )}
-          </CardContent>
-        </Card>
+            Holidays ({holidays.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex items-center justify-center p-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : holidays.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <CalendarDays className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No holidays found</h3>
+              <p className="text-gray-500 mb-4">No holidays have been added yet</p>
+              {canManageHolidays && (
+                <Button 
+                  onClick={() => setShowAddForm(true)}
+                  className="gradient-primary text-white border-0"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add First Holiday
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {holidays.map((holiday) => (
+                <div key={holiday.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-4 h-4 rounded-full bg-blue-500" />
+                    <div>
+                      <h3 className="font-medium">{holiday.name}</h3>
+                      <p className="text-sm text-gray-600">
+                          {format(parseISO(holiday.date), 'EEEE, MMMM dd, yyyy')}
+                      </p>
+                      {holiday.description && (
+                        <p className="text-sm text-gray-500 mt-1">{holiday.description}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Badge variant="secondary">
+                        {parseISO(holiday.date) > new Date() ? 'Upcoming' : 'Past'}
+                    </Badge>
+                    {holiday.is_recurring && (
+                      <Badge variant="outline">Recurring</Badge>
+                    )}
+                    {canManageHolidays && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Holiday</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete "{holiday.name}"? This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteHoliday(holiday.id, holiday.name)}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
         </>
       )}
     </div>

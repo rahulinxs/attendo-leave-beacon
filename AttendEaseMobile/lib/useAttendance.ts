@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from './supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useUserProfile } from './useUserProfile';
 
 export interface AttendanceRecord {
   id: string;
@@ -20,6 +21,8 @@ export interface AttendanceRecord {
 
 export function useAttendance() {
   const { user } = useAuth();
+  const { profileData } = useUserProfile();
+  const companyId = profileData?.profile?.company_id;
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [today, setToday] = useState<AttendanceRecord | null>(null);
   const [loading, setLoading] = useState(false);
@@ -31,11 +34,15 @@ export function useAttendance() {
     setLoading(true);
     setError(null);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('attendance')
         .select('*')
         .eq('employee_id', user.id)
         .order('date', { ascending: false });
+      if (companyId) {
+        query = query.eq('company_id', companyId as any);
+      }
+      const { data, error } = await query;
       if (error) setError(error.message);
       setRecords(data || []);
     } catch (err: any) {
@@ -43,7 +50,7 @@ export function useAttendance() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, companyId]);
 
   // Fetch today's attendance record
   const fetchToday = useCallback(async () => {
@@ -52,12 +59,16 @@ export function useAttendance() {
     setError(null);
     try {
       const todayStr = new Date().toISOString().slice(0, 10);
-      const { data, error } = await supabase
+      let query = supabase
         .from('attendance')
         .select('*')
         .eq('employee_id', user.id)
         .eq('date', todayStr)
-        .single();
+        .limit(1);
+      if (companyId) {
+        query = query.eq('company_id', companyId as any);
+      }
+      const { data, error } = await query.maybeSingle();
       if (error && error.code !== 'PGRST116') setError(error.message);
       setToday(data || null);
     } catch (err: any) {
@@ -65,7 +76,7 @@ export function useAttendance() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, companyId]);
 
   // Check in
   const checkIn = useCallback(async (location?: any, notes?: string) => {
@@ -74,15 +85,18 @@ export function useAttendance() {
     setError(null);
     try {
       const todayStr = new Date().toISOString().slice(0, 10);
+      const payload: any = {
+        employee_id: user.id,
+        date: todayStr,
+        check_in_time: new Date().toISOString(),
+        location: location || null,
+        notes: notes || null,
+        status: 'present',
+      };
+      if (companyId) payload.company_id = companyId;
       const { error } = await supabase
         .from('attendance')
-        .upsert({
-          employee_id: user.id,
-          date: todayStr,
-          check_in_time: new Date().toISOString(),
-          location: location || null,
-          notes: notes || null,
-        }, { onConflict: ['employee_id', 'date'] });
+        .upsert(payload, { onConflict: ['employee_id', 'date'] });
       if (error) setError(error.message);
       await fetchToday();
       await fetchAttendance();
@@ -91,7 +105,7 @@ export function useAttendance() {
     } finally {
       setLoading(false);
     }
-  }, [user, fetchToday, fetchAttendance]);
+  }, [user, companyId, fetchToday, fetchAttendance]);
 
   // Check out
   const checkOut = useCallback(async (location?: any, notes?: string) => {
@@ -100,7 +114,7 @@ export function useAttendance() {
     setError(null);
     try {
       const todayStr = new Date().toISOString().slice(0, 10);
-      const { error } = await supabase
+      let query = supabase
         .from('attendance')
         .update({
           check_out_time: new Date().toISOString(),
@@ -109,6 +123,10 @@ export function useAttendance() {
         })
         .eq('employee_id', user.id)
         .eq('date', todayStr);
+      if (companyId) {
+        query = query.eq('company_id', companyId as any);
+      }
+      const { error } = await query;
       if (error) setError(error.message);
       await fetchToday();
       await fetchAttendance();
@@ -117,7 +135,7 @@ export function useAttendance() {
     } finally {
       setLoading(false);
     }
-  }, [user, fetchToday, fetchAttendance]);
+  }, [user, companyId, fetchToday, fetchAttendance]);
 
   return {
     records,

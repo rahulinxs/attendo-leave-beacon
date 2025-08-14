@@ -25,6 +25,9 @@ import { THEME_OPTIONS } from '@/contexts/ThemeContext';
 import { OnboardingModal } from './OnboardingModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import ResetPassword from './ResetPassword';
+import { SessionTimeoutModal } from './SessionTimeoutModal';
+import { SessionStatusIndicator } from './SessionStatusIndicator';
+import { useSession } from '@/contexts/SessionContext';
 
 interface DashboardProps {
   onNavigate?: (tab: string) => void;
@@ -32,11 +35,12 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const { user } = useAuth();
-  const { todayAttendance, recentAttendance, checkIn, checkOut, isLoading: attendanceLoading } = useAttendance();
-  const { leaveRequests, leaveBalances, pendingRequests, approveLeaveRequest, rejectLeaveRequest, isLoading: leaveLoading } = useLeave('employee');
+  const { todayAttendance, recentAttendance, checkIn, checkOut, isLoading: attendanceLoading, fetchTodayAttendance, fetchRecentAttendance } = useAttendance();
+  const { leaveRequests, leaveBalances, pendingRequests, approveLeaveRequest, rejectLeaveRequest, isLoading: leaveLoading, fetchLeaveRequests, fetchLeaveBalances } = useLeave('employee');
   const { currentCompany } = useCompany();
   const { theme } = useTheme();
   const themeClass = THEME_OPTIONS.find(t => t.key === theme)?.className || '';
+  const { showTimeoutWarning, setShowTimeoutWarning } = useSession();
   
   // Debug log leave balances
   useEffect(() => {
@@ -82,6 +86,23 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   });
   const [showOnboarding, setShowOnboarding] = useState(true);
   const [showResetPassword, setShowResetPassword] = useState(false);
+
+  // Refresh all dashboard data when user or company changes
+  const refreshDashboardData = async () => {
+    if (user && currentCompany) {
+      await Promise.all([
+        fetchTodayAttendance(),
+        fetchRecentAttendance(),
+        fetchLeaveRequests(),
+        fetchLeaveBalances()
+      ]);
+    }
+  };
+
+  // Refresh data when user or company changes
+  useEffect(() => {
+    refreshDashboardData();
+  }, [user, currentCompany]);
 
   // Update clock every second
   useEffect(() => {
@@ -181,7 +202,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             {/* Welcome Header content START */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
               <div>
-                <div className="text-lg font-bold mb-1 text-blue-800">Welcome back, {user?.name}{currentCompany ? ` (${currentCompany.name})` : ''}</div>
+                <div className="text-lg font-bold mb-1 text-blue-800">Welcome back, {user?.name}</div>
+                {currentCompany && (
+                  <div className="text-md font-medium mb-1 text-blue-600">{currentCompany.name}</div>
+                )}
                 <div className="text-4xl font-extrabold text-blue-700 mb-1 flex items-center gap-2">
                   <Clock className="w-7 h-7 text-blue-400 bg-white rounded-full p-1 shadow mr-2" />
                   {currentTime}
@@ -190,6 +214,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 <div className="text-purple-700 font-semibold text-md">{user?.position}</div>
               </div>
               <div className="flex flex-col md:flex-row gap-3 md:items-center">
+                <SessionStatusIndicator />
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={refreshDashboardData}
+                  disabled={attendanceLoading || leaveLoading}
+                  className="flex items-center gap-2 transition-transform hover:scale-105 shadow-lg"
+                >
+                  <TrendingUp className="w-4 h-4" />
+                  Refresh
+                </Button>
                 <Button variant="gradient" className="transition-transform hover:scale-105 shadow-lg" onClick={handleCheckInOut}>
                   {todayAttendance?.check_in_time && !todayAttendance?.check_out_time ? 'Check Out' : 'Check In'}
                 </Button>
@@ -466,6 +501,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
           </CardContent>
         </Card>
       )}
+
+      {/* Session Timeout Modal */}
+      <SessionTimeoutModal 
+        open={showTimeoutWarning} 
+        onClose={() => setShowTimeoutWarning(false)} 
+      />
     </div>
   );
 };

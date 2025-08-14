@@ -351,12 +351,12 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
   };
 
   useEffect(() => {
-    if (user) {
+    if (user && currentCompany) {
       fetchLeaveRequests();
       // All users should have leave balances
       fetchLeaveBalances();
     }
-  }, [user]);
+  }, [user, currentCompany]);
 
   return {
     leaveRequests,

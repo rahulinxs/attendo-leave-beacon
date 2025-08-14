@@ -20,16 +20,17 @@ const UpdatePassword: React.FC = () => {
       const accessToken = searchParams.get('access_token');
       const type = searchParams.get('type');
       
+      console.log('Check recovery params:', { accessToken, type });
+      
       if (type === 'recovery' && accessToken) {
         try {
           // First, sign out any existing sessions to prevent conflicts
           await supabase.auth.signOut();
           
-          // Try to verify the OTP token
-          const { data, error } = await supabase.auth.verifyOtp({
-            token_hash: accessToken,
-            type: 'recovery',
-          });
+          console.log('Attempting to verify OTP with token:', accessToken);
+          
+          // Try to verify the OTP token using exchangeCodeForSession
+          const { data, error } = await supabase.auth.exchangeCodeForSession(accessToken);
           
           if (error) {
             console.error('OTP verification error:', error);
@@ -54,6 +55,7 @@ const UpdatePassword: React.FC = () => {
           });
         }
       } else {
+        console.error('Missing required parameters for password reset');
         setError('Invalid password reset link. Please use the link from your email.');
       }
     };
@@ -78,45 +80,32 @@ const UpdatePassword: React.FC = () => {
     setIsLoading(true);
 
     try {
+      console.log('Attempting to update password...');
+      
       // First try to update the password directly
       const { error: updateError } = await supabase.auth.updateUser({
         password,
       });
 
       if (updateError) {
-        // If direct update fails, try to sign in with the recovery token first
-        const accessToken = searchParams.get('access_token');
-        if (accessToken) {
-          // Sign in with the recovery token
-          const { error: signInError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: '',
-          });
-          
-          if (signInError) throw signInError;
-          
-          // Now try updating the password again
-          const { error: secondUpdateError } = await supabase.auth.updateUser({
-            password,
-          });
-          
-          if (secondUpdateError) throw secondUpdateError;
-        } else {
-          throw updateError;
-        }
+        console.log('Direct update failed, trying with session...');
+        throw updateError;
       }
 
+      console.log('Password updated successfully');
+      
       toast({
         title: 'Password Updated',
-        description: 'Your password has been updated successfully.',
+        description: 'Your password has been updated successfully. You can now log in with your new password.',
       });
 
       // Sign out and redirect to login
       await supabase.auth.signOut();
       navigate('/login');
+      
     } catch (err: any) {
       console.error('Update password error:', err);
-      setError(err.message || 'Failed to update password. Please try again.');
+      setError(err.message || 'Failed to update password. Please try again or request a new reset link.');
       toast({
         title: 'Error',
         description: err.message || 'Failed to update password',

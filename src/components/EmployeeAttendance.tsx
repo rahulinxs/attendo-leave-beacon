@@ -93,7 +93,7 @@ const EmployeeAttendance: React.FC = () => {
     }
     setSubmittingBackdate(true);
     try {
-      await supabase.from('attendance').upsert({
+      const { error } = await supabase.from('attendance').upsert({
         employee_id: user.id,
         company_id: currentCompany.id,
         date: backdateForm.date,
@@ -101,7 +101,15 @@ const EmployeeAttendance: React.FC = () => {
         notes: backdateForm.reason,
         pending_approval: true,
         requestor_role: user.role,
+      }, {
+        onConflict: 'employee_id,date'
       });
+      
+      if (error) {
+        console.error('Backdate submission error:', error);
+        toast({ title: 'Error', description: 'Failed to submit backdate request', variant: 'destructive' });
+        return;
+      }
       toast({ title: 'Request Submitted', description: 'Backdate attendance request sent for approval.' });
       setBackdateForm({ date: '', status: '', reason: '' });
     } catch (error) {
@@ -224,19 +232,21 @@ const EmployeeAttendance: React.FC = () => {
             </Card>
           </div>
         </TabsContent>
-        <TabsContent value="calendar">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CalendarIcon className="w-5 h-5" />
-                Attendance Calendar (Last 30 Days)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <AttendanceCalendar />
-            </CardContent>
-          </Card>
-        </TabsContent>
+                 <TabsContent value="calendar">
+           <Card>
+             <CardHeader>
+               <CardTitle className="flex items-center gap-2">
+                 <CalendarIcon className="w-5 h-5" />
+                 Attendance Calendar (Last 30 Days)
+               </CardTitle>
+             </CardHeader>
+             <CardContent className="flex justify-center">
+               <div className="max-w-4xl">
+                 <AttendanceCalendar />
+               </div>
+             </CardContent>
+           </Card>
+         </TabsContent>
         <TabsContent value="history">
           <Card>
             <CardHeader>

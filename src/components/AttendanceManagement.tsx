@@ -233,13 +233,20 @@ const AttendanceManagement: React.FC = () => {
     try {
       const dateStr = selectedDate.toISOString().split('T')[0];
       const now = new Date().toISOString();
-      let updateObj: any = { status };
+      let updateObj: any = { 
+        status,
+        updated_at: now
+      };
+      
+      // Handle check-in/check-out times based on status
       if (status === 'present' || status === 'late' || status === 'half_day') {
         updateObj.check_in_time = now;
+        updateObj.check_out_time = null; // Will be set when they check out
       } else {
         updateObj.check_in_time = null;
         updateObj.check_out_time = null;
       }
+      
       const { error } = await supabase
         .from('attendance')
         .upsert({
@@ -247,15 +254,20 @@ const AttendanceManagement: React.FC = () => {
           company_id: currentCompany.id,
           date: dateStr,
           ...updateObj,
+        }, {
+          onConflict: 'employee_id,date'
         });
+        
       if (error) {
+        console.error('Attendance upsert error:', error);
         toast({ title: 'Error', description: 'Failed to mark attendance', variant: 'destructive' });
       } else {
-        toast({ title: 'Success', description: 'Attendance marked' });
+        toast({ title: 'Success', description: 'Attendance marked successfully' });
         setDateAttendanceMap((prev) => ({ ...prev, [employeeId]: status }));
       }
     } catch (e) {
-      toast({ title: 'Error', description: 'Unexpected error', variant: 'destructive' });
+      console.error('Attendance marking error:', e);
+      toast({ title: 'Error', description: 'Unexpected error occurred', variant: 'destructive' });
     } finally {
       setMarking(null);
     }
@@ -336,19 +348,30 @@ const AttendanceManagement: React.FC = () => {
     try {
       if (!backdateForm.employeeId || !backdateForm.date || !backdateForm.status || !currentCompany) return;
       if (backdateForm.type === 'attendance') {
-        await supabase.from('attendance').upsert({
+        const { error } = await supabase.from('attendance').upsert({
           employee_id: backdateForm.employeeId,
           company_id: currentCompany.id,
           date: backdateForm.date,
           status: backdateForm.status,
           pending_approval: true,
+        }, {
+          onConflict: 'employee_id,date'
         });
+        
+        if (error) {
+          console.error('Backdate submission error:', error);
+          toast({ title: 'Error', description: 'Failed to submit backdate request', variant: 'destructive' });
+          return;
+        }
       } else {
         // For leave, you may want to insert into a leave_requests table
         // Placeholder: toast({ title: 'Leave request submitted for approval' });
       }
       toast({ title: 'Submitted for approval' });
       setShowBackdateModal(false);
+    } catch (error) {
+      console.error('Backdate submission error:', error);
+      toast({ title: 'Error', description: 'Unexpected error occurred', variant: 'destructive' });
     } finally {
       setSubmittingBackdate(false);
     }
@@ -423,8 +446,11 @@ const AttendanceManagement: React.FC = () => {
         .from('attendance')
         .upsert({
           employee_id: statusChangeForm.employeeId,
+          company_id: currentCompany?.id,
           date: statusChangeForm.date,
           ...updateObj,
+        }, {
+          onConflict: 'employee_id,date'
         });
 
       if (error) {

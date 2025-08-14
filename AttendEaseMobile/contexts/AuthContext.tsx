@@ -36,9 +36,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { success: false, error: error.message };
-    return { success: true };
+    // First try normal Supabase auth
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    if (!signInError && signInData?.user) {
+      return { success: true };
+    }
+
+    // Fallback: invoke edge function to provision/login user if present in employees table
+    try {
+      const { data, error } = await supabase.functions.invoke('auth-user', {
+        body: { email, password },
+      });
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      if (data?.session?.access_token && data?.session?.refresh_token) {
+        const { error: setErr } = await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+        if (setErr) return { success: false, error: setErr.message };
+        return { success: true };
+      }
+      return { success: false, error: 'Login failed' };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Login failed' };
+    }
   };
 
   const signup = async (email: string, password: string, name: string) => {

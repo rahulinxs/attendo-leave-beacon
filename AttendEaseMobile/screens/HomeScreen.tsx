@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, FlatList } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserProfile } from '../lib/useUserProfile';
 import { APP_NAME } from '../branding';
@@ -19,6 +19,7 @@ const HomeScreen = ({ navigation }) => {
       { label: 'Leave', icon: '🌴', screen: 'Leave', roles: ['employee', 'reporting_manager', 'admin', 'super_admin'] },
       { label: 'Teams', icon: '👥', screen: 'Teams', roles: ['reporting_manager', 'admin', 'super_admin'] },
       { label: 'Reports', icon: '📊', screen: 'Reports', roles: ['reporting_manager', 'admin', 'super_admin'] },
+      { label: 'Recruitment Reports', icon: '📈', screen: 'RecruitmentReports', roles: ['reporting_manager', 'admin', 'super_admin'] },
       { label: 'Settings', icon: '⚙️', screen: 'Settings', roles: ['employee', 'reporting_manager', 'admin', 'super_admin'] },
       { label: 'Profile', icon: '👤', screen: 'Profile', roles: ['employee', 'reporting_manager', 'admin', 'super_admin'] },
       
@@ -60,7 +61,13 @@ const HomeScreen = ({ navigation }) => {
   const systemSettingsModule = availableModules.find(module => module.label === 'System Settings');
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <FlatList
+      contentContainerStyle={styles.container}
+      data={[1]}
+      keyExtractor={() => 'home'}
+      renderItem={() => null}
+      ListHeaderComponent={
+        <>
       <Image source={LOGO} style={styles.logo} />
       <Text style={styles.greeting}>Welcome, {profileData?.profile?.name || user?.email || 'User'}!</Text>
       <Text style={styles.roleText}>{getRoleDisplayName(userRole)}</Text>
@@ -122,7 +129,9 @@ const HomeScreen = ({ navigation }) => {
       <TouchableOpacity style={styles.logoutButton} onPress={logout}>
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
-    </ScrollView>
+        </>
+      }
+    />
   );
 };
 

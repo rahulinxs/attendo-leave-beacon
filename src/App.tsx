@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { CompanyProvider } from "./contexts/CompanyContext";
+import { SessionProvider } from "./contexts/SessionContext";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import UpdatePassword from "./components/UpdatePassword";
@@ -19,28 +20,30 @@ const App = () => (
       <TooltipProvider>
         <AuthProvider>
           <CompanyProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/update-password" element={
-                <AuthProvider>
-                  <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
-                    <UpdatePassword />
-                  </div>
-                </AuthProvider>
-              } />
-              <Route path="/reset-password" element={
-                <AuthProvider>
-                  <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
-                    <ResetPassword email="" onSuccess={() => {}} onCancel={() => {}} />
-                  </div>
-                </AuthProvider>
-              } />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
+            <SessionProvider>
+              <Toaster />
+              <Sonner />
+              <BrowserRouter>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/update-password" element={
+                    <AuthProvider>
+                      <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
+                        <UpdatePassword />
+                      </div>
+                    </AuthProvider>
+                  } />
+                  <Route path="/reset-password" element={
+                    <AuthProvider>
+                      <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
+                        <ResetPassword email="" onSuccess={() => {}} onCancel={() => {}} />
+                      </div>
+                    </AuthProvider>
+                  } />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </BrowserRouter>
+            </SessionProvider>
           </CompanyProvider>
         </AuthProvider>
       </TooltipProvider>
