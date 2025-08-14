@@ -33,8 +33,17 @@ type PeriodType = 'monthly' | 'quarterly' | 'half-yearly' | 'yearly';
 const PerformanceReport: React.FC = () => {
   const { currentCompany } = useCompany();
   const { user } = useAuth();
-  const [month, setMonth] = useState(new Date().getMonth() + 1);
-  const [year, setYear] = useState(new Date().getFullYear());
+  const [month, setMonth] = useState(() => {
+    const now = new Date();
+    const previousMonth = now.getMonth() === 0 ? 12 : now.getMonth();
+    return previousMonth;
+  });
+  const [year, setYear] = useState(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    // If we're in January (month 0), we need to go back to previous year for December
+    return currentMonth === 0 ? now.getFullYear() - 1 : now.getFullYear();
+  });
   const [periodType, setPeriodType] = useState<PeriodType>('monthly');
   const [quarter, setQuarter] = useState<number>(1);
   const [half, setHalf] = useState<number>(1);
