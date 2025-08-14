@@ -27,7 +27,9 @@ import {
   Network,
   FlaskConical,
   ClipboardList,
-  ChevronRight
+  ChevronRight,
+  TrendingUp,
+  FileSpreadsheet
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -63,6 +65,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
   const [sidebarVisible, setSidebarVisible] = useState(true); // new state for desktop
   const [hrOpen, setHROpen] = useState(false);
   const [managementOpen, setManagementOpen] = useState(false);
+  const [reportsOpen, setReportsOpen] = useState(false);
   const themeClass = THEME_OPTIONS.find(t => t.key === theme)?.className || '';
 
   // Enhanced navigation items with role-based access control
@@ -458,8 +461,63 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                 </>
               )}
 
+              {/* Reports retractable menu */}
+              {['admin', 'super_admin', 'reporting_manager'].includes(user?.role) && (
+                <>
+                  <button
+                    className="w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left font-semibold transition-colors sidebar-nav-btn bg-[rgba(0,0,0,0.03)] hover:bg-[rgba(0,0,0,0.06)] mt-2"
+                    onClick={() => {
+                      setReportsOpen((open) => {
+                        if (!open) {
+                          setHROpen(false);
+                          setManagementOpen(false);
+                        }
+                        return !open;
+                      });
+                    }}
+                    aria-expanded={reportsOpen}
+                    aria-controls="reports-menu"
+                  >
+                    <BarChart3 className="w-5 h-5" />
+                    <span>Reports</span>
+                    {reportsOpen ? <ChevronDown className="w-4 h-4 ml-auto" /> : <ChevronRight className="w-4 h-4 ml-auto" />}
+                  </button>
+                  <div
+                    id="reports-menu"
+                    className={`pl-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${reportsOpen ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-2'}`}
+                    style={{ willChange: 'max-height, opacity, transform' }}
+                  >
+                    <button
+                      onClick={() => onTabChange('reports')}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'reports' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                    >
+                      <BarChart3 className="w-5 h-5" />
+                      <span className="sidebar-label text-sm">Reports & Analytics</span>
+                    </button>
+                    {currentCompany?.moduleSettings?.performance_report_enabled && (
+                      <button
+                        onClick={() => onTabChange('performance-report')}
+                        className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'performance-report' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                      >
+                        <TrendingUp className="w-5 h-5" />
+                        <span className="sidebar-label text-sm">Performance Report</span>
+                      </button>
+                    )}
+                    {currentCompany?.moduleSettings?.performance_report_enabled && (
+                      <button
+                        onClick={() => onTabChange('recruitment-report')}
+                        className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'recruitment-report' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                      >
+                        <FileSpreadsheet className="w-5 h-5" />
+                        <span className="sidebar-label text-sm">Recruitment Report</span>
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+
               {/* Render the rest of the navigation items */}
-              {navItems.filter(item => item.id !== 'dashboard').map((item) => {
+              {navItems.filter(item => !['dashboard', 'reports', 'performance-report', 'recruitment-report'].includes(item.id)).map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
                 return (
