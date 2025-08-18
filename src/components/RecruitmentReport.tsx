@@ -16,7 +16,8 @@ import { Label } from './ui/label';
 
 const columns = [
   'Team', 'USER NAME', 'Monster', 'Dice', 'LinkedIn Profiles viewed', 'LinkedIn InMails sent',
-  'Total Calls', 'Total Call Duration', 'Total Submissions', 'Total Interviews', 'Offers', 'Starts'
+  'Total Calls', 'Total Call Duration', 'Total Submissions', 'Total Interviews', 'Offers', 'Starts',
+  'Offered', 'Placed'
 ];
 
 const getMonthOptions = () => {
@@ -33,6 +34,42 @@ const getYearOptions = () => {
 };
 
 type PeriodType = 'monthly' | 'quarterly' | 'half-yearly' | 'yearly';
+
+// Layout helpers for better fit and readability
+const getHeaderClassForField = (field: string) => {
+  const base = 'border border-gray-300 px-3 py-2 text-left text-xs font-semibold truncate';
+  switch (field) {
+    case 'team':
+    case 'user_name':
+      return `${base} w-[14%]`;
+    case 'total_call_duration':
+      return `${base} w-[10%] text-center`;
+    case 'offered':
+    case 'placed':
+      return `${base} w-[16%]`;
+    default:
+      return `${base} w-[8%] text-center`;
+  }
+};
+
+const getCellClassForField = (field: string) => {
+  const base = 'border border-gray-300 px-3 py-2 text-xs align-top truncate';
+  switch (field) {
+    case 'team':
+    case 'user_name':
+      return `${base}`;
+    case 'total_call_duration':
+      return `${base} text-center`;
+    case 'offered':
+    case 'placed':
+      return `${base} whitespace-pre-wrap break-words`;
+    default:
+      return `${base} text-center`;
+  }
+};
+
+const isEditableField = ['monster', 'dice', 'linkedin_profiles_viewed', 'linkedin_inmails_sent',
+  'total_calls', 'total_submissions', 'total_interviews', 'offers', 'starts', 'offered', 'placed'];
 
 const RecruitmentReport: React.FC = () => {
   const { currentCompany } = useCompany();
@@ -165,7 +202,85 @@ const RecruitmentReport: React.FC = () => {
         });
         return;
       }
-      setReportData(data || []);
+      const rows = data || [];
+
+      const durationToSeconds = (d: string) => {
+        if (!d) return 0;
+        const [h, m, s] = d.split(':').map((n) => parseInt((n as any) || '0', 10));
+        return (h || 0) * 3600 + (m || 0) * 60 + (s || 0);
+      };
+      const isAllThreeZero = (r: any) => {
+        const calls = Number(r?.total_calls) || 0;
+        const subs = Number(r?.total_submissions) || 0;
+        const dur = durationToSeconds(r?.total_call_duration || '0:00:00');
+        return calls === 0 && subs === 0 && dur === 0;
+      };
+
+      if (periodType === 'monthly') {
+        const filtered = rows.filter((r: any) => !isAllThreeZero(r));
+        setReportData(filtered);
+      } else {
+        const aggregateByUser: Record<string, any> = {};
+        const numericFields = [
+          'monster','dice','linkedin_profiles_viewed','linkedin_inmails_sent','total_calls',
+          'total_submissions','total_interviews','offers','starts'
+        ];
+
+        const secondsToDuration = (sec: number) => {
+          const h = Math.floor(sec / 3600);
+          const m = Math.floor((sec % 3600) / 60);
+          const s = sec % 60;
+          return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        };
+
+        const normalizeList = (value: any): string[] => {
+          if (!value && value !== 0) return [];
+          if (value === 0 || value === '0') return [];
+          if (Array.isArray(value)) {
+            return value
+              .map((v) => (v ?? '').toString().trim())
+              .filter((v) => v && v !== '0');
+          }
+          const asString = (value ?? '').toString();
+          return asString
+            .split(',')
+            .map((v) => v.trim())
+            .filter((v) => v && v !== '0');
+        };
+
+        rows.forEach((row: any) => {
+          const userId = row.user_id;
+          if (!aggregateByUser[userId]) {
+            aggregateByUser[userId] = {
+              ...row,
+              team_id: userIdToTeamId[userId] || row.team_id,
+              offered: normalizeList(row.offered).join(', '),
+              placed: normalizeList(row.placed).join(', '),
+            };
+          } else {
+            numericFields.forEach((f) => {
+              aggregateByUser[userId][f] = (aggregateByUser[userId][f] || 0) + (row[f] || 0);
+            });
+            const prevSec = durationToSeconds(aggregateByUser[userId].total_call_duration);
+            const addSec = durationToSeconds(row.total_call_duration);
+            aggregateByUser[userId].total_call_duration = secondsToDuration(prevSec + addSec);
+
+            // Merge offered/placed text lists de-duplicated
+            const prevOffered = new Set(normalizeList(aggregateByUser[userId].offered));
+            const nextOffered = normalizeList(row.offered);
+            nextOffered.forEach((n) => prevOffered.add(n));
+            aggregateByUser[userId].offered = Array.from(prevOffered).join(', ');
+
+            const prevPlaced = new Set(normalizeList(aggregateByUser[userId].placed));
+            const nextPlaced = normalizeList(row.placed);
+            nextPlaced.forEach((n) => prevPlaced.add(n));
+            aggregateByUser[userId].placed = Array.from(prevPlaced).join(', ');
+          }
+        });
+        const aggregated = Object.values(aggregateByUser);
+        const filteredAgg = aggregated.filter((r: any) => !isAllThreeZero(r));
+        setReportData(filteredAgg);
+      }
     } catch (error) {
       console.error('Error fetching performance reports:', error);
       toast({
@@ -191,8 +306,21 @@ const RecruitmentReport: React.FC = () => {
   };
 
   const parseNumber = (val: any) => {
-    const num = parseFloat(val);
+    const num = typeof val === 'string' ? parseFloat(val.trim()) : Number(val);
     return isNaN(num) ? 0 : num;
+  };
+
+  const parseTextAvoidZero = (val: any) => {
+    if (val === null || val === undefined) return null as unknown as string;
+    if (Array.isArray(val)) {
+      const parts = val
+        .map((v) => (v ?? '').toString().trim())
+        .filter((v) => v && v !== '0');
+      return parts.length ? parts.join(', ') as unknown as string : null as unknown as string;
+    }
+    const str = (val ?? '').toString().trim();
+    if (!str || str === '0') return null as unknown as string;
+    return str as unknown as string;
   };
 
   const processImport = async (mode: 'replace' | 'upsert') => {
@@ -204,29 +332,31 @@ const RecruitmentReport: React.FC = () => {
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-             const processedData = jsonData.map((row: any) => {
-               const teamName = row['Team'] || '';
-               const userName = row['USER NAME'] || '';
-               const teamId = Object.keys(teamLookup).find(key => teamLookup[key] === teamName) || '';
-               const userId = userNameToUserId[userName] || '';
-               
-               return {
-                 team_id: teamId,
-                 user_id: userId,
-                 monster: parseNumber(row['Monster']),
-                 dice: parseNumber(row['Dice']),
-                 linkedin_profiles_viewed: parseNumber(row['LinkedIn Profiles viewed']),
-                 linkedin_inmails_sent: parseNumber(row['LinkedIn InMails sent']),
-                 total_calls: parseNumber(row['Total Calls']),
-                 total_call_duration: row['Total Call Duration'] || '',
-                 total_submissions: parseNumber(row['Total Submissions']),
-                 total_interviews: parseNumber(row['Total Interviews']),
-                 offers: parseNumber(row['Offers']),
-                 starts: parseNumber(row['Starts']),
-                 report_date: `${year}-${month.toString().padStart(1, '0')}-28`,
-                 company_id: currentCompany?.id,
-               };
-             });
+      const processedData = jsonData.map((row: any) => {
+        const teamName = row['Team'] || '';
+        const userName = row['USER NAME'] || '';
+        const teamId = Object.keys(teamLookup).find(key => teamLookup[key] === teamName) || '';
+        const userId = userNameToUserId[userName] || '';
+        
+        return {
+          team_id: teamId,
+          user_id: userId,
+          monster: parseNumber(row['Monster']),
+          dice: parseNumber(row['Dice']),
+          linkedin_profiles_viewed: parseNumber(row['LinkedIn Profiles viewed']),
+          linkedin_inmails_sent: parseNumber(row['LinkedIn InMails sent']),
+          total_calls: parseNumber(row['Total Calls']),
+          total_call_duration: row['Total Call Duration'] || '',
+          total_submissions: parseNumber(row['Total Submissions']),
+          total_interviews: parseNumber(row['Total Interviews']),
+          offers: parseNumber(row['Offers']),
+          starts: parseNumber(row['Starts']),
+          offered: parseTextAvoidZero(row['Offered']),
+          placed: parseTextAvoidZero(row['Placed']),
+          report_date: `${year}-${month.toString().padStart(2, '0')}-28`,
+          company_id: currentCompany?.id,
+        };
+      });
 
       setImportPreview(processedData);
       setReviewData(processedData);
@@ -253,9 +383,20 @@ const RecruitmentReport: React.FC = () => {
     if (!editingCell) return;
 
     try {
+      const numericFields = new Set(['monster','dice','linkedin_profiles_viewed','linkedin_inmails_sent','total_calls','total_submissions','total_interviews','offers','starts']);
+      let valueToSave: any;
+      if (numericFields.has(field)) {
+        const n = Number(editValue);
+        valueToSave = isNaN(n) ? null : n;
+      } else if (field === 'offered' || field === 'placed') {
+        const str = (editValue ?? '').toString().trim();
+        valueToSave = (str && str !== '0') ? str : null;
+      } else {
+        valueToSave = editValue;
+      }
       const { error } = await supabase
         .from('performance_reports')
-        .update({ [field]: editValue })
+        .update({ [field]: valueToSave })
         .eq('id', reportData[rowIndex].id);
 
       if (error) {
@@ -268,7 +409,7 @@ const RecruitmentReport: React.FC = () => {
         return;
       }
 
-      handleCellEdit(rowIndex, field, editValue);
+      handleCellEdit(rowIndex, field, valueToSave);
       setEditingCell(null);
       setEditValue('');
       toast({
@@ -385,12 +526,16 @@ const RecruitmentReport: React.FC = () => {
       );
     }
 
+    const displayValue = (v: any, f: string) => {
+      if ((f === 'offered' || f === 'placed') && (v === 0 || v === '0')) return '';
+      return v ?? '';
+    };
     return (
       <div
         className="cursor-pointer hover:bg-gray-100 p-1 rounded"
         onClick={() => startEditing(rowIndex, field, value)}
       >
-        {value || 0}
+        {displayValue(value, field)}
       </div>
     );
   };
@@ -595,40 +740,43 @@ const RecruitmentReport: React.FC = () => {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full border-collapse border border-gray-300">
+                  <table className="w-full table-fixed border-collapse border border-gray-300">
                     <thead>
                       <tr className="bg-gray-50">
-                        {columns.map((column) => (
-                          <th key={column} className="border border-gray-300 px-4 py-2 text-left text-sm font-medium">
-                            {column}
-                          </th>
-                        ))}
+                        {columns.map((column) => {
+                          const field = column.toLowerCase().replace(/\s+/g, '_').replace(/[()$]/g, '');
+                          return (
+                            <th key={column} className={getHeaderClassForField(field)}>
+                              {column}
+                            </th>
+                          );
+                        })}
                       </tr>
                     </thead>
                     <tbody>
                       {reportData.map((row, rowIndex) => (
                         <tr key={rowIndex} className="hover:bg-gray-50">
-                                                     {columns.map((column) => {
-                             const field = column.toLowerCase().replace(/\s+/g, '_').replace(/[()$]/g, '');
-                             let value = row[field];
-                             
-                             // Map team_id and user_id to names
-                             if (column === 'Team') {
-                               value = teamLookup[row.team_id] || 'Unknown';
-                             } else if (column === 'USER NAME') {
-                               value = userLookup[row.user_id] || 'Unknown';
-                             }
-                             
-                             return (
-                               <td key={column} className="border border-gray-300 px-4 py-2 text-sm">
-                                 {['monster', 'dice', 'linkedin_profiles_viewed', 'linkedin_inmails_sent',
-                                   'total_calls', 'total_submissions', 'total_interviews', 'offers', 'starts'].includes(field)
-                                   ? renderEditableCell(rowIndex, field, value, row)
-                                   : (value || '')
-                                 }
-                               </td>
-                             );
-                           })}
+                          {columns.map((column) => {
+                            const field = column.toLowerCase().replace(/\s+/g, '_').replace(/[()$]/g, '');
+                            let value = row[field];
+ 
+                            // Map team_id and user_id to names
+                            if (column === 'Team') {
+                              value = teamLookup[row.team_id] || 'Unknown';
+                            } else if (column === 'USER NAME') {
+                              value = userLookup[row.user_id] || 'Unknown';
+                            }
+ 
+                            const isEditable = isEditableField.includes(field);
+                            const display = ((field === 'offered' || field === 'placed') && (value === 0 || value === '0')) ? '' : (value || '');
+                            return (
+                              <td key={column} className={getCellClassForField(field)}>
+                                {periodType === 'monthly' && isEditable
+                                  ? renderEditableCell(rowIndex, field, value, row)
+                                  : display}
+                              </td>
+                            );
+                          })}
                         </tr>
                       ))}
                     </tbody>

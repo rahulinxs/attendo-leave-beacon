@@ -196,8 +196,30 @@ const PerformanceReport: React.FC = () => {
               aggMap[key].total_interviews += row.total_interviews || 0;
               aggMap[key].offers += row.offers || 0;
               aggMap[key].starts += row.starts || 0;
-              aggMap[key].placed += row.placed || 0;
-              aggMap[key].offered += row.offered || 0;
+              // Offered/Placed treated as text lists; merge unique non-zero tokens
+              const normalizeList = (value: any): string[] => {
+                if (!value && value !== 0) return [];
+                if (value === 0 || value === '0') return [];
+                if (Array.isArray(value)) {
+                  return value
+                    .map((v) => (v ?? '').toString().trim())
+                    .filter((v) => v && v !== '0');
+                }
+                const asString = (value ?? '').toString();
+                return asString
+                  .split(',')
+                  .map((v) => v.trim())
+                  .filter((v) => v && v !== '0');
+              };
+              const prevOffered = new Set(normalizeList(aggMap[key].offered));
+              const nextOffered = normalizeList(row.offered);
+              nextOffered.forEach((n) => prevOffered.add(n));
+              aggMap[key].offered = Array.from(prevOffered).join(', ');
+
+              const prevPlaced = new Set(normalizeList(aggMap[key].placed));
+              const nextPlaced = normalizeList(row.placed);
+              nextPlaced.forEach((n) => prevPlaced.add(n));
+              aggMap[key].placed = Array.from(prevPlaced).join(', ');
               // For durations, add as seconds then format back
               function durationToSeconds(d:string) {
                 if (!d) return 0;
