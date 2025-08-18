@@ -62,10 +62,17 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
   const { currentCompany, companies, setCurrentCompany } = useCompany();
   const { sidebarPosition, theme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarVisible, setSidebarVisible] = useState(true); // new state for desktop
-  const [hrOpen, setHROpen] = useState(false);
-  const [managementOpen, setManagementOpen] = useState(false);
-  const [reportsOpen, setReportsOpen] = useState(false);
+  const [sidebarVisible, setSidebarVisible] = useState(true);
+  // Track which section is currently open (null if none)
+  const [openSection, setOpenSection] = useState<string | null>(null);
+  
+  // Toggle a section open/closed, closing others
+  const toggleSection = (section: string) => {
+    setOpenSection(current => current === section ? null : section);
+  };
+  
+  // Check if a section is open
+  const isSectionOpen = (section: string) => openSection === section;
   const themeClass = THEME_OPTIONS.find(t => t.key === theme)?.className || '';
 
   // Enhanced navigation items with role-based access control
@@ -368,21 +375,18 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                   <button
                     className="w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left font-semibold transition-colors sidebar-nav-btn bg-[rgba(0,0,0,0.03)] hover:bg-[rgba(0,0,0,0.06)]"
                     onClick={() => {
-                      setHROpen((open) => {
-                        if (!open) setManagementOpen(false);
-                        return !open;
-                      });
+                      toggleSection('hr');
                     }}
-                    aria-expanded={hrOpen}
+                    aria-expanded={isSectionOpen('hr')}
                     aria-controls="hr-menu"
                   >
                     <Users className="w-5 h-5" />
                     <span>Human Resource</span>
-                    {hrOpen ? <ChevronDown className="w-4 h-4 ml-auto" /> : <ChevronRight className="w-4 h-4 ml-auto" />}
+                    {isSectionOpen('hr') ? <ChevronDown className="w-4 h-4 ml-auto" /> : <ChevronRight className="w-4 h-4 ml-auto" />}
                   </button>
                   <div
                     id="hr-menu"
-                    className={`pl-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${hrOpen ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-2'}`}
+                    className={`pl-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${isSectionOpen('hr') ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-2'}`}
                     style={{ willChange: 'max-height, opacity, transform' }}
                   >
                     <button
@@ -419,21 +423,18 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                   <button
                     className="w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left font-semibold transition-colors sidebar-nav-btn bg-[rgba(0,0,0,0.03)] hover:bg-[rgba(0,0,0,0.06)] mt-2"
                     onClick={() => {
-                      setManagementOpen((open) => {
-                        if (!open) setHROpen(false);
-                        return !open;
-                      });
+                      toggleSection('management');
                     }}
-                    aria-expanded={managementOpen}
+                    aria-expanded={isSectionOpen('management')}
                     aria-controls="management-menu"
                   >
                     <Settings className="w-5 h-5" />
                     <span>Management</span>
-                    {managementOpen ? <ChevronDown className="w-4 h-4 ml-auto" /> : <ChevronRight className="w-4 h-4 ml-auto" />}
+                    {isSectionOpen('management') ? <ChevronDown className="w-4 h-4 ml-auto" /> : <ChevronRight className="w-4 h-4 ml-auto" />}
                   </button>
                   <div
                     id="management-menu"
-                    className={`pl-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${managementOpen ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-2'}`}
+                    className={`pl-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${isSectionOpen('management') ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-2'}`}
                     style={{ willChange: 'max-height, opacity, transform' }}
                   >
                     <button
@@ -467,24 +468,18 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                   <button
                     className="w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left font-semibold transition-colors sidebar-nav-btn bg-[rgba(0,0,0,0.03)] hover:bg-[rgba(0,0,0,0.06)] mt-2"
                     onClick={() => {
-                      setReportsOpen((open) => {
-                        if (!open) {
-                          setHROpen(false);
-                          setManagementOpen(false);
-                        }
-                        return !open;
-                      });
+                      toggleSection('reports');
                     }}
-                    aria-expanded={reportsOpen}
+                    aria-expanded={isSectionOpen('reports')}
                     aria-controls="reports-menu"
                   >
                     <BarChart3 className="w-5 h-5" />
                     <span>Reports</span>
-                    {reportsOpen ? <ChevronDown className="w-4 h-4 ml-auto" /> : <ChevronRight className="w-4 h-4 ml-auto" />}
+                    {isSectionOpen('reports') ? <ChevronDown className="w-4 h-4 ml-auto" /> : <ChevronRight className="w-4 h-4 ml-auto" />}
                   </button>
                   <div
                     id="reports-menu"
-                    className={`pl-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${reportsOpen ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-2'}`}
+                    className={`pl-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${isSectionOpen('reports') ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-2'}`}
                     style={{ willChange: 'max-height, opacity, transform' }}
                   >
                     <button
