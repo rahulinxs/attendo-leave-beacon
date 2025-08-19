@@ -20,45 +20,59 @@ export default function ResetPassword() {
   const [sessionSet, setSessionSet] = useState(false);
 
   useEffect(() => {
-    // Get tenant from query param
-    const params = new URLSearchParams(window.location.search);
-    const tenantId = params.get("tenant") || "attendedge";
-    setTenant(tenantId);
+    const verifyToken = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('token');
+      const type = params.get('type');
+      const tenantId = params.get('tenant') || "attendedge";
+      
+      setTenant(tenantId);
 
-    // Fetch branding from Supabase companies table (only name/domain for now)
-    async function fetchBranding() {
-      const { data, error } = await supabase
-        .from('companies')
-        .select('name, domain')
-        .or(`domain.eq.${tenantId},name.ilike.%${tenantId}%`)
-        .maybeSingle();
-      if (!error && data) {
-        setBranding({
-          ...defaultBranding,
-          name: data.name || defaultBranding.name,
-        });
-      } else {
-        setBranding(defaultBranding);
+      // Fetch branding from Supabase companies table
+      async function fetchBranding() {
+        const { data, error } = await supabase
+          .from('companies')
+          .select('name, domain')
+          .or(`domain.eq.${tenantId},name.ilike.%${tenantId}%`)
+          .maybeSingle();
+        if (!error && data) {
+          setBranding({
+            ...defaultBranding,
+            name: data.name || defaultBranding.name,
+          });
+        } else {
+          setBranding(defaultBranding);
+        }
       }
-    }
-    fetchBranding();
+      await fetchBranding();
 
-    // Get access_token and refresh_token from hash
-    const hash = window.location.hash;
-    const hashParams = new URLSearchParams(hash.replace("#", ""));
-    const accessToken = hashParams.get("access_token") || "";
-    const refreshToken = hashParams.get("refresh_token") || "";
-    setToken(accessToken);
-    setRefreshToken(refreshToken);
+      if (type === 'recovery' && token) {
+        try {
+          // Verify the OTP token
+          const { error } = await supabase.auth.verifyOtp({
+            token_hash: token,
+            type: 'recovery'
+          });
+          
+          if (error) {
+            console.error('OTP verification error:', error);
+            throw error;
+          }
+          
+          // If we get here, the token is valid and session is set
+          setSessionSet(true);
+          setMessage('Please enter your new password');
+          
+        } catch (error) {
+          console.error('Password reset error:', error);
+          setMessage('Invalid or expired password reset link. Please request a new one.');
+        }
+      } else {
+        setMessage('Invalid password reset link. Please use the link from your email.');
+      }
+    };
 
-    // Set session if both tokens are present
-    if (accessToken && refreshToken) {
-      supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
-        .then(({ error }) => {
-          if (error) setMessage("Failed to authenticate session: " + error.message);
-          else setSessionSet(true);
-        });
-    }
+    verifyToken();
   }, []);
 
   const handleReset = async (e: React.FormEvent) => {
