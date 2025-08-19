@@ -115,15 +115,28 @@ export default function UpdatePassword() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-1">
-          <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-            <Lock className="h-8 w-8 text-primary" />
+          <div className="mx-auto w-16 h-16 gradient-primary rounded-2xl flex items-center justify-center mb-4">
+            <Building2 className="w-8 h-8 text-white" />
           </div>
-          <CardTitle className="text-2xl">
-            Set New Password
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Create a strong, unique password
-          </p>
+          <div className="space-y-2">
+            <div>
+              <span 
+                className="font-bold text-[38px]" 
+                style={{ color: "#1702f9", fontFamily: "Cambria, serif" }}
+              >
+                Attend
+              </span>
+              <span 
+                className="font-bold text-[38px]" 
+                style={{ color: "#39FF14", fontFamily: "Cambria, serif" }}
+              >
+                Edge
+              </span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Set New Password
+            </p>
+          </div>
         </CardHeader>
         
         <form onSubmit={handleUpdatePassword}>
