@@ -1,6 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 
 // Default branding
 const defaultBranding = {
@@ -14,104 +18,40 @@ const defaultBranding = {
 export default function ResetPassword() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
-  const [branding, setBranding] = useState(defaultBranding);
+  const [branding] = useState(defaultBranding);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   
   // Check if we have a token in the URL (handled by the UpdatePassword page)
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const type = urlParams.get('type');
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    const accessToken = hashParams.get('access_token');
-    const refreshToken = hashParams.get('refresh_token');
-    
-    // If we have a recovery token, redirect to the UpdatePassword page
-    if (type === 'recovery' && accessToken && refreshToken) {
-      navigate(`/update-password?access_token=${accessToken}&refresh_token=${refreshToken}&type=recovery`);
-    }
-  }, [navigate]);
-      } catch (error: any) {
-        console.error('Error in verifyToken:', error);
-        setMessage(error.message || 'Invalid or expired reset link. Please request a new one.');
-      } finally {
-        setIsLoading(false);
-      }
-
-      // Fetch branding from Supabase companies table
-      async function fetchBranding() {
-        const { data, error } = await supabase
-          .from('companies')
-          .select('name, domain')
-          .or(`domain.eq.${tenant},name.ilike.%${tenant}%`)
-          .maybeSingle();
-        if (!error && data) {
-          setBranding({
-            ...defaultBranding,
-            name: data.name || defaultBranding.name,
-          });
-        } else {
-          setBranding(defaultBranding);
-        }
-      }
-      await fetchBranding();
-
-      if (type === 'recovery') {
-        // Check if there's an error in the URL (like expired token)
-        const errorParam = params.get('error') || hashParams.get('error');
-        if (errorParam) {
-          const errorCode = params.get('error_code') || hashParams.get('error_code');
-          const errorDesc = params.get('error_description') || hashParams.get('error_description');
-          
-          if (errorCode === 'otp_expired') {
-            throw new Error('The password reset link has expired. Please request a new one.');
-          }
-          throw new Error(errorDesc || 'An error occurred during password reset');
+    const checkForToken = async () => {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const type = urlParams.get('type');
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        
+        // If we have a recovery token, redirect to the UpdatePassword page
+        if (type === 'recovery' && accessToken && refreshToken) {
+          console.log('Redirecting to update password with token');
+          navigate(`/update-password?access_token=${accessToken}&refresh_token=${refreshToken}&type=recovery`);
+          return;
         }
 
-        if (!token) {
-          throw new Error('Invalid password reset link. Missing token.');
+        // If we have an error in the URL, show it
+        const error = urlParams.get('error') || hashParams.get('error');
+        if (error) {
+          setMessage(`Error: ${error}. Please try again.`);
         }
-
-        try {
-          // If we have a refresh token, set the session first
-          if (refreshToken) {
-            const { error: sessionError } = await supabase.auth.setSession({
-              access_token: token,
-              refresh_token: refreshToken
-            });
-            if (sessionError) throw sessionError;
-          }
-          
-          // Verify the OTP token
-          const { error } = await supabase.auth.verifyOtp({
-            token_hash: token,
-            type: 'recovery'
-          });
-          
-          if (error) {
-            console.error('OTP verification error:', error);
-            if (error.status === 400) {
-              throw new Error('The password reset link is invalid or has expired.');
-            }
-            throw error;
-          }
-          
-          // If we get here, the token is valid and session is set
-          setSessionSet(true);
-          setMessage('Please enter your new password');
-          
-        } catch (error) {
-          console.error('Password reset error:', error);
-          setMessage('Invalid or expired password reset link. Please request a new one.');
-        }
-      } else {
-        setMessage('Invalid password reset link. Please use the link from your email.');
+      } catch (error) {
+        console.error('Error checking for token:', error);
+        setMessage('An error occurred. Please try again.');
       }
     };
 
-    verifyToken();
-  }, []);
+    checkForToken();
+  }, [navigate]);
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,8 +65,8 @@ export default function ResetPassword() {
     setMessage('');
     
     try {
-      // Redirect to the reset-password page (Supabase will append the token)
-      const redirectUrl = `${window.location.origin}/reset-password`;
+      // Redirect to the update-password page (Supabase will append the token)
+      const redirectUrl = `${window.location.origin}/update-password`;
       console.log('Sending password reset email to:', email);
       console.log('Redirect URL:', redirectUrl);
       
@@ -143,83 +83,83 @@ export default function ResetPassword() {
     } finally {
       setIsLoading(false);
     }
-    }
   };
 
   return (
-    <div
-      style={{
-        background: branding.background,
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "1rem",
-      }}
-    >
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <div className="flex justify-center mb-4">
-            <img
-              src={branding.logo}
-              alt={`${branding.name} Logo`}
-              className="h-12 w-auto"
-            />
-          </div>
-          <CardTitle className="text-center text-2xl">
-            Reset Password
-          </CardTitle>
-          <p className="text-center text-muted-foreground">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <div className="text-center">
+          <img
+            className="mx-auto h-12 w-auto"
+            src={branding.logo}
+            alt={branding.name}
+          />
+          <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
+            Reset your password
+          </h2>
+          <p className="mt-2 text-sm text-gray-600">
             {branding.slogan}
           </p>
-        </CardHeader>
-        <form onSubmit={handleReset}>
-          <CardContent className="space-y-4">
-            {message && (
-              <div className={`p-3 rounded-md ${
-                message.toLowerCase().includes('success') || message.includes('sent') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-              }`}>
-                {message}
-              </div>
-            )}
+        </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email address"
-                required
+        <Card className="mt-8">
+          <CardHeader>
+            <CardTitle className="text-center">Forgot your password?</CardTitle>
+          </CardHeader>
+          <form onSubmit={handleReset}>
+            <CardContent>
+              {message && (
+                <div 
+                  className={`mb-4 p-3 rounded-md ${
+                    message.includes('sent!') 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-red-100 text-red-800'
+                  }`}
+                >
+                  {message}
+                </div>
+              )}
+              
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="email">Email address</Label>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="mt-1 block w-full"
+                    placeholder="Enter your email address"
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
+            </CardContent>
+            <CardFooter className="flex flex-col space-y-4">
+              <Button
+                type="submit"
+                className="w-full"
                 disabled={isLoading}
-              />
-              <p className="text-sm text-muted-foreground">
-                We'll send you a link to reset your password.
-              </p>
-            </div>
-          </CardContent>
-          <CardFooter className="flex flex-col space-y-2">
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={isLoading}
-            >
-              {isLoading ? 'Sending...' : 'Send Reset Link'}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => navigate('/login')}
-              disabled={isLoading}
-            >
-              Back to Login
-            </Button>
-          </CardFooter>
-        </form>
-      </Card>
+              >
+                {isLoading ? 'Sending...' : 'Send reset link'}
+              </Button>
+              
+              <div className="text-center text-sm">
+                <button
+                  type="button"
+                  className="font-medium text-blue-600 hover:text-blue-500"
+                  onClick={() => navigate('/login')}
+                >
+                  Back to sign in
+                </button>
+              </div>
+            </CardFooter>
+          </form>
+        </Card>
+      </div>
     </div>
   );
 };
