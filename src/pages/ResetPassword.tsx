@@ -13,36 +13,61 @@ const defaultBranding = {
 export default function ResetPassword() {
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
-  const [token, setToken] = useState("");
-  const [refreshToken, setRefreshToken] = useState("");
   const [tenant, setTenant] = useState("");
   const [branding, setBranding] = useState(defaultBranding);
-  const [sessionSet, setSessionSet] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const verifyToken = async () => {
-      // Get parameters from both query string and hash fragment
-      const params = new URLSearchParams(window.location.search);
-      const hashParams = new URLSearchParams(window.location.hash.substring(1));
-      
-      // Check for token in both places
-      let token = params.get('token') || hashParams.get('access_token');
-      const type = params.get('type');
-      const tenantId = params.get('tenant') || "attendedge";
-      
-      // If we got a token from the hash, we might also have a refresh token
-      const refreshToken = hashParams.get('refresh_token');
-      setToken(token || '');
-      setRefreshToken(refreshToken || '');
-      
-      setTenant(tenantId);
+      try {
+        setIsLoading(true);
+        
+        // Get parameters from both query string and hash fragment
+        const params = new URLSearchParams(window.location.search);
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        
+        // Check for token in both places
+        const token = hashParams.get('access_token');
+        const type = hashParams.get('type');
+        const refreshToken = hashParams.get('refresh_token');
+        const tenantId = params.get('tenant') || "attendedge";
+        
+        setTenant(tenantId);
+        
+        // If we have a token and type, set the session
+        if (token && type === 'recovery' && refreshToken) {
+          console.log('Setting session with recovery token');
+          
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: token,
+            refresh_token: refreshToken
+          });
+          
+          if (sessionError) throw sessionError;
+          
+          console.log('Session set successfully');
+          // Clear the URL hash to prevent re-triggering
+          window.history.replaceState({}, document.title, window.location.pathname + '?tenant=' + tenantId);
+        } else {
+          // Check if we already have a valid session
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            throw new Error('Invalid or expired reset link. Please request a new one.');
+          }
+        }
+      } catch (error: any) {
+        console.error('Error in verifyToken:', error);
+        setMessage(error.message || 'Invalid or expired reset link. Please request a new one.');
+      } finally {
+        setIsLoading(false);
+      }
 
       // Fetch branding from Supabase companies table
       async function fetchBranding() {
         const { data, error } = await supabase
           .from('companies')
           .select('name, domain')
-          .or(`domain.eq.${tenantId},name.ilike.%${tenantId}%`)
+          .or(`domain.eq.${tenant},name.ilike.%${tenant}%`)
           .maybeSingle();
         if (!error && data) {
           setBranding({
@@ -115,53 +140,48 @@ export default function ResetPassword() {
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!password) {
-      setMessage("Please enter a new password.");
-      return;
-    }
-    
     if (password.length < 8) {
       setMessage("Password must be at least 8 characters long.");
       return;
     }
     
+    setIsLoading(true);
+    setMessage('');
+    
     try {
-      // First try to update the password directly
+      // Check if we have a valid session
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error('Your session has expired. Please request a new password reset link.');
+      }
+      
+      // Update the password
       const { error: updateError } = await supabase.auth.updateUser({
         password,
       });
 
-      if (updateError) {
-        // If direct update fails, try setting session again
-        if (token && refreshToken) {
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token: token,
-            refresh_token: refreshToken
-          });
-          
-          if (sessionError) throw sessionError;
-          
-          // Try updating password again after setting session
-          const { error: retryError } = await supabase.auth.updateUser({
-            password,
-          });
-          
-          if (retryError) throw retryError;
-        } else {
-          throw updateError;
-        }
-      }
+      if (updateError) throw updateError;
+
+      // Show success message
+      setMessage("Password updated successfully! Redirecting to login...");
       
-      setMessage("Password updated successfully! You can now log in with your new password.");
+      // Sign out and redirect to login after a short delay
+      await supabase.auth.signOut();
       
-      // Redirect to login after a short delay
+      // Redirect to login after 2 seconds
       setTimeout(() => {
-        window.location.href = '/login';
-      }, 3000);
+        window.location.href = "/login";
+      }, 2000);
       
     } catch (error: any) {
-      console.error('Password update error:', error);
-      setMessage(error.message || 'Failed to update password. Please try again.');
+      console.error("Error updating password:", error);
+      setMessage(error.error_description || error.message || "Error updating password. The link may have expired.");
+      
+      // Clear the URL hash to prevent re-triggering the reset flow
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } finally {
+      setIsLoading(false);
     }
   };
 
