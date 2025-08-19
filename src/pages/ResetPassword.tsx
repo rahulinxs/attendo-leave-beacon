@@ -21,10 +21,19 @@ export default function ResetPassword() {
 
   useEffect(() => {
     const verifyToken = async () => {
+      // Get parameters from both query string and hash fragment
       const params = new URLSearchParams(window.location.search);
-      const token = params.get('token');
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      
+      // Check for token in both places
+      let token = params.get('token') || hashParams.get('access_token');
       const type = params.get('type');
       const tenantId = params.get('tenant') || "attendedge";
+      
+      // If we got a token from the hash, we might also have a refresh token
+      const refreshToken = hashParams.get('refresh_token');
+      setToken(token || '');
+      setRefreshToken(refreshToken || '');
       
       setTenant(tenantId);
 
@@ -46,8 +55,33 @@ export default function ResetPassword() {
       }
       await fetchBranding();
 
-      if (type === 'recovery' && token) {
+      if (type === 'recovery') {
+        // Check if there's an error in the URL (like expired token)
+        const errorParam = params.get('error') || hashParams.get('error');
+        if (errorParam) {
+          const errorCode = params.get('error_code') || hashParams.get('error_code');
+          const errorDesc = params.get('error_description') || hashParams.get('error_description');
+          
+          if (errorCode === 'otp_expired') {
+            throw new Error('The password reset link has expired. Please request a new one.');
+          }
+          throw new Error(errorDesc || 'An error occurred during password reset');
+        }
+
+        if (!token) {
+          throw new Error('Invalid password reset link. Missing token.');
+        }
+
         try {
+          // If we have a refresh token, set the session first
+          if (refreshToken) {
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token: token,
+              refresh_token: refreshToken
+            });
+            if (sessionError) throw sessionError;
+          }
+          
           // Verify the OTP token
           const { error } = await supabase.auth.verifyOtp({
             token_hash: token,
@@ -56,6 +90,9 @@ export default function ResetPassword() {
           
           if (error) {
             console.error('OTP verification error:', error);
+            if (error.status === 400) {
+              throw new Error('The password reset link is invalid or has expired.');
+            }
             throw error;
           }
           
@@ -77,17 +114,55 @@ export default function ResetPassword() {
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!sessionSet) {
-      setMessage("Session not established. Please use the link from your email.");
-      return;
-    }
+    
     if (!password) {
       setMessage("Please enter a new password.");
       return;
     }
-    const { error } = await supabase.auth.updateUser({ password });
-    if (error) setMessage(error.message);
-    else setMessage("Password updated! You can now log in.");
+    
+    if (password.length < 8) {
+      setMessage("Password must be at least 8 characters long.");
+      return;
+    }
+    
+    try {
+      // First try to update the password directly
+      const { error: updateError } = await supabase.auth.updateUser({
+        password,
+      });
+
+      if (updateError) {
+        // If direct update fails, try setting session again
+        if (token && refreshToken) {
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: token,
+            refresh_token: refreshToken
+          });
+          
+          if (sessionError) throw sessionError;
+          
+          // Try updating password again after setting session
+          const { error: retryError } = await supabase.auth.updateUser({
+            password,
+          });
+          
+          if (retryError) throw retryError;
+        } else {
+          throw updateError;
+        }
+      }
+      
+      setMessage("Password updated successfully! You can now log in with your new password.");
+      
+      // Redirect to login after a short delay
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 3000);
+      
+    } catch (error: any) {
+      console.error('Password update error:', error);
+      setMessage(error.message || 'Failed to update password. Please try again.');
+    }
   };
 
   return (
