@@ -65,8 +65,8 @@ export default function ResetPassword() {
     setMessage('');
     
     try {
-      // Redirect to the update-password page (Supabase will append the token)
-      const redirectUrl = `${window.location.origin}/update-password`;
+      // Use production URL for password reset to ensure consistency
+      const redirectUrl = `https://attendedge.netlify.app/update-password`;
       console.log('Sending password reset email to:', email);
       console.log('Redirect URL:', redirectUrl);
       
