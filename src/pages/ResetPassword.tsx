@@ -75,17 +75,6 @@ export default function ResetPassword() {
         redirectTo: redirectUrl,
       });
       
-      // Also update the email template to use the correct URL
-      const { error: templateError } = await supabase.auth.api.updateUser(
-        email,
-        {
-          email_confirm: true,
-          email_change_confirm_url: redirectUrl,
-        }
-      );
-      
-      if (templateError) console.error('Error updating template:', templateError);
-      
       if (error) throw error;
       
       setMessage('Password reset link sent! Please check your email.');

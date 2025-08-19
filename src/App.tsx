@@ -8,8 +8,8 @@ import { CompanyProvider } from "./contexts/CompanyContext";
 import { SessionProvider } from "./contexts/SessionContext";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
-import UpdatePassword from "./components/UpdatePassword";
-import ResetPassword from "./components/ResetPassword";
+import UpdatePassword from "./pages/UpdatePassword";
+import ResetPassword from "./pages/ResetPassword";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 
 const queryClient = new QueryClient();
@@ -36,7 +36,7 @@ const App = () => (
                   <Route path="/reset-password" element={
                     <AuthProvider>
                       <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
-                        <ResetPassword email="" onSuccess={() => {}} onCancel={() => {}} />
+                        <ResetPassword />
                       </div>
                     </AuthProvider>
                   } />
