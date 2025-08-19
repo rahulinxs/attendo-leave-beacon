@@ -136,7 +136,7 @@ export default function UpdatePassword() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-6">
+      <div className="w-full max-w-2xl space-y-6">
         <Card className="w-full">
           <CardHeader className="text-center space-y-2">
             <Branding />
