@@ -18,14 +18,23 @@ export default function UpdatePassword() {
       try {
         setIsLoading(true);
         
-        // Check if we have a valid session
-        const { data: { session } } = await supabase.auth.getSession();
+        // Get token from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const accessToken = urlParams.get('access_token');
+        const refreshToken = urlParams.get('refresh_token');
+        const type = urlParams.get('type');
         
-        if (!session) {
-          setMessage("Invalid or expired reset link. Please request a new one.");
-          setIsLoading(false);
-          return;
+        if (!accessToken || !refreshToken || type !== 'recovery') {
+          throw new Error('Invalid or expired reset link. Please request a new one.');
         }
+        
+        // Set the session with the token
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken
+        });
+        
+        if (sessionError) throw sessionError;
         
         // Clear the URL to prevent re-triggering
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -33,6 +42,8 @@ export default function UpdatePassword() {
       } catch (error: any) {
         console.error('Error verifying session:', error);
         setMessage(error.message || 'An error occurred while verifying your session.');
+        setIsLoading(false);
+      } finally {
         setIsLoading(false);
       }
     };

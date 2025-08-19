@@ -19,15 +19,18 @@ export default function ResetPassword() {
   const navigate = useNavigate();
   
   // Check if we have a token in the URL (handled by the UpdatePassword page)
-  const urlParams = new URLSearchParams(window.location.search);
-  const token = urlParams.get('access_token');
-  const type = urlParams.get('type');
-  
-  // If we have a token, redirect to the UpdatePassword page
-  if (token && type === 'recovery') {
-    navigate(`/update-password?access_token=${token}&type=${type}`);
-    return null;
-  }
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const type = urlParams.get('type');
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const accessToken = hashParams.get('access_token');
+    const refreshToken = hashParams.get('refresh_token');
+    
+    // If we have a recovery token, redirect to the UpdatePassword page
+    if (type === 'recovery' && accessToken && refreshToken) {
+      navigate(`/update-password?access_token=${accessToken}&refresh_token=${refreshToken}&type=recovery`);
+    }
+  }, [navigate]);
       } catch (error: any) {
         console.error('Error in verifyToken:', error);
         setMessage(error.message || 'Invalid or expired reset link. Please request a new one.');
@@ -122,8 +125,8 @@ export default function ResetPassword() {
     setMessage('');
     
     try {
-      // Redirect to the update-password page after successful email send
-      const redirectUrl = `${window.location.origin}/update-password`;
+      // Redirect to the reset-password page (Supabase will append the token)
+      const redirectUrl = `${window.location.origin}/reset-password`;
       console.log('Sending password reset email to:', email);
       console.log('Redirect URL:', redirectUrl);
       
