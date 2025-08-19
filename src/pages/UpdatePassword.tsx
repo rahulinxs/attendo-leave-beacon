@@ -7,18 +7,11 @@ import { Label } from "../components/ui/label";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "../components/ui/card";
 import { Loader2, Lock } from "lucide-react";
 
-const defaultBranding = {
-  logo: "/attendedge-logo.png",
-  name: "AttendEdge",
-  slogan: "Smart Attendance & Leave Management"
-};
-
 export default function UpdatePassword() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState<{text: string; type: 'success' | 'error' | 'info'}>();
   const [isLoading, setIsLoading] = useState(false);
-  const [branding] = useState(defaultBranding);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -119,27 +112,16 @@ export default function UpdatePassword() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-primary/10 p-4">
-      <Card className="w-full max-w-md shadow-xl overflow-hidden border-0">
-        <div className="bg-gradient-to-r from-primary to-primary/90 p-6 text-white">
-          <div className="flex flex-col items-center justify-center space-y-2">
-            <img 
-              src={branding.logo} 
-              alt="AttendEdge Logo"
-              className="h-12 w-auto mb-2"
-            />
-            <h1 className="text-4xl font-bold">
-              <span style={{color: '#ffffff', fontSize: '38px', fontFamily: 'Cambria, serif', textShadow: '0 0 5px rgba(30,110,247,0.7)'}}>{APP_NAME}</span>
-            </h1>
-            <p className="text-sm opacity-90">{branding.slogan}</p>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center space-y-1">
+          <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+            <Lock className="h-8 w-8 text-primary" />
           </div>
-        </div>
-        
-        <CardHeader className="pb-2">
-          <CardTitle className="text-xl font-semibold text-center">
+          <CardTitle className="text-2xl">
             Set New Password
           </CardTitle>
-          <p className="text-sm text-muted-foreground text-center">
+          <p className="text-sm text-muted-foreground">
             Create a strong, unique password
           </p>
         </CardHeader>
