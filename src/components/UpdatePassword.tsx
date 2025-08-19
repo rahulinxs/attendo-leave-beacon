@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -12,76 +12,58 @@ const UpdatePassword: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searchParams] = useSearchParams();
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const checkRecovery = async () => {
+    const initializePasswordReset = async () => {
       try {
-        // First, sign out any existing sessions to prevent conflicts
+        // Sign out any existing sessions
         await supabase.auth.signOut();
         
-        // Get all URL parameters
-        const token = searchParams.get('token') || '';
-        const type = searchParams.get('type');
-        const accessToken = searchParams.get('access_token') || '';
-        const refreshToken = searchParams.get('refresh_token') || '';
+        // Parse the hash fragment
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        const type = hashParams.get('type');
         
-        console.log('Check recovery params:', { token, type, accessToken, refreshToken });
+        console.log('Password reset params:', { accessToken, refreshToken, type });
         
-        if (type !== 'recovery' || (!token && !accessToken)) {
+        if (!accessToken || !refreshToken || type !== 'recovery') {
           throw new Error('Invalid password reset link. Please use the link from your email.');
         }
         
-        // If we have an access token, set the session
-        if (accessToken && refreshToken) {
-          console.log('Setting session with tokens');
-          const { data: { session }, error: sessionError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken
-          });
-          
-          if (sessionError || !session) {
-            throw sessionError || new Error('Failed to set session');
-          }
-          
-          console.log('Session set successfully');
-          return;
+        // Set the session using the tokens from the URL
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken
+        });
+        
+        if (sessionError) {
+          throw new Error('Invalid or expired reset link. Please request a new one.');
         }
         
-        // If we have a token, verify it
-        if (token) {
-          console.log('Verifying OTP token:', token);
-          const { error: verifyError } = await supabase.auth.verifyOtp({
-            token,
-            type: 'recovery',
-            email: searchParams.get('email') || undefined,
-          });
-          
-          if (verifyError) throw verifyError;
-          
-          console.log('OTP verification successful');
-          return;
-        }
+        console.log('Password reset session initialized successfully');
         
       } catch (err: any) {
-        console.error('Password reset error:', err);
-        setError(err.message || 'Invalid or expired password reset link. Please request a new reset link.');
+        console.error('Password reset initialization error:', err);
+        setError(err.message || 'Failed to initialize password reset. Please try again.');
         toast({
           title: 'Error',
-          description: err.message || 'Invalid or expired password reset link',
+          description: err.message || 'Failed to initialize password reset',
           variant: 'destructive',
         });
       }
     };
-
-    checkRecovery();
-  }, [searchParams]);
+    
+    initializePasswordReset();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
+    // Validate passwords
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -95,31 +77,9 @@ const UpdatePassword: React.FC = () => {
     setIsLoading(true);
 
     try {
-      console.log('Attempting to update password...');
-      
-      // First, ensure we have a valid session
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError || !session) {
-        // If no session, try to get the session from URL parameters
-        const accessToken = searchParams.get('access_token');
-        const refreshToken = searchParams.get('refresh_token');
-        
-        if (accessToken && refreshToken) {
-          console.log('Setting session from URL parameters');
-          const { error: setSessionError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken
-          });
-          
-          if (setSessionError) throw setSessionError;
-        } else {
-          throw new Error('No active session. Please request a new password reset link.');
-        }
-      }
-      
-      // Now update the password
       console.log('Updating password...');
+      
+      // Update the password
       const { error: updateError } = await supabase.auth.updateUser({
         password,
       });
@@ -134,7 +94,7 @@ const UpdatePassword: React.FC = () => {
         description: 'Your password has been updated successfully. Redirecting to login...',
       });
       
-      // Sign out and redirect to login after a short delay
+      // Sign out and redirect to login
       await supabase.auth.signOut();
       
       // Redirect to login page after a short delay
@@ -144,7 +104,7 @@ const UpdatePassword: React.FC = () => {
       
     } catch (err: any) {
       console.error('Update password error:', err);
-      setError(err.message || 'Failed to update password. Please try again or request a new reset link.');
+      setError(err.message || 'Failed to update password. The link may have expired. Please request a new reset link.');
       toast({
         title: 'Error',
         description: err.message || 'Failed to update password',
