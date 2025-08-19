@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "../components/ui/card";
+import { Card, CardContent } from "../components/ui/card";
 import { Loader2, Lock } from "lucide-react";
 
 // Branding component to match Auth.tsx
@@ -136,106 +136,144 @@ export default function UpdatePassword() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl space-y-6">
-        <Card className="w-full">
-          <CardHeader className="text-center space-y-2">
-            <Branding />
-            <CardTitle className="text-2xl font-semibold">
+      <div className="w-full max-w-2xl">
+        <Card className="w-full overflow-hidden shadow-xl border-0">
+          <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-6 text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 rounded-2xl backdrop-blur-sm">
+              <Lock className="w-8 h-8 text-white" />
+            </div>
+            <h1 className="mt-4 text-2xl font-bold text-white">
               Set New Password
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Create a strong, unique password
+            </h1>
+            <p className="text-blue-100 mt-1">
+              Create a strong, unique password to secure your account
             </p>
-        </CardHeader>
-        
-        <form onSubmit={handleUpdatePassword}>
-          <CardContent className="space-y-4">
-            {message && (
-              <div className={`p-3 rounded-md text-sm ${
-                message.type === 'error' ? 'bg-red-100 text-red-800' : 
-                message.type === 'success' ? 'bg-green-100 text-green-800' : 
-                'bg-blue-100 text-blue-800'
-              }`}>
-                {message.text}
-              </div>
-            )}
-            
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
-                <Label htmlFor="password" className="text-sm font-medium md:col-span-1">
-                  New Password
-                </Label>
-                <div className="md:col-span-3">
-                  <Input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your new password"
-                    required
-                    minLength={8}
-                    disabled={isLoading}
-                    className="h-11 focus-visible:ring-2 focus-visible:ring-primary/50 w-full"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Must be at least 8 characters long
+          </div>
+          
+          <CardContent className="p-8">
+            <form onSubmit={handleUpdatePassword} className="space-y-6">
+              {message && (
+                <div className={`p-4 rounded-lg border ${
+                  message.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 
+                  message.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 
+                  'bg-blue-50 border-blue-200 text-blue-800'
+                }`}>
+                  <div className="flex items-center">
+                    {message.type === 'error' ? (
+                      <svg className="w-5 h-5 mr-2 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    ) : message.type === 'success' ? (
+                      <svg className="w-5 h-5 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5 mr-2 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                    <span className="font-medium">{message.text}</span>
+                  </div>
+                </div>
+              )}
+              
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password" className="text-sm font-medium text-gray-700">
+                      New Password
+                    </Label>
+                    <span className="text-xs text-gray-500">
+                      {password.length > 0 ? `${password.length}/8+ characters` : ''}
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter your new password"
+                      required
+                      minLength={8}
+                      disabled={isLoading}
+                      className={`h-12 px-4 text-base border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        password.length > 0 && password.length < 8 ? 'border-yellow-500' : ''
+                      }`}
+                    />
+                    {password.length > 0 && (
+                      <div className="h-1 mt-1 bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full ${
+                            password.length < 4 ? 'bg-red-500' : 
+                            password.length < 8 ? 'bg-yellow-500' : 'bg-green-500'
+                          }`}
+                          style={{ width: `${Math.min(100, (password.length / 12) * 100)}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Use at least 8 characters with a mix of letters, numbers & symbols
                   </p>
                 </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
-                <Label htmlFor="confirmPassword" className="text-sm font-medium md:col-span-1">
-                  Confirm Password
-                </Label>
-                <div className="md:col-span-3">
+                
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700">
+                    Confirm Password
+                  </Label>
                   <Input
                     id="confirmPassword"
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Confirm your new password"
+                    placeholder="Re-enter your new password"
                     required
                     minLength={8}
                     disabled={isLoading}
-                    className="h-11 focus-visible:ring-2 focus-visible:ring-primary/50 w-full"
+                    className={`h-12 px-4 text-base border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      confirmPassword && password !== confirmPassword ? 'border-red-500' : ''
+                    }`}
                   />
+                  {confirmPassword && password !== confirmPassword && (
+                    <p className="text-xs text-red-500">Passwords don't match</p>
+                  )}
                 </div>
               </div>
-            </div>
+              
+              <div className="pt-2">
+                <Button 
+                  type="submit" 
+                  variant="default"
+                  className="w-full h-12 text-base font-medium bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"
+                  disabled={isLoading || !password || !confirmPassword || password !== confirmPassword}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    <span className="flex items-center justify-center">
+                      <Lock className="w-4 h-4 mr-2" />
+                      Update Password
+                    </span>
+                  )}
+                </Button>
+                
+                <div className="mt-4 text-center">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/login')}
+                    className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                    disabled={isLoading}
+                  >
+                    ← Back to Sign In
+                  </button>
+                </div>
+              </div>
+            </form>
           </CardContent>
-          
-          <CardFooter className="flex flex-col space-y-3 px-6 pb-6">
-            <Button 
-              type="submit" 
-              variant="gradient"
-              className="w-full h-12 text-base font-medium transition-all duration-200 hover:shadow-lg"
-              disabled={isLoading || !password || !confirmPassword}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                <>
-                  <Lock className="mr-2 h-4 w-4" />
-                  Update Password
-                </>
-              )}
-            </Button>
-            
-            <div className="text-center text-sm">
-              <button
-                type="button"
-                onClick={() => navigate('/login')}
-                className="font-medium text-primary hover:underline"
-                disabled={isLoading}
-              >
-                Back to Sign In
-              </button>
-            </div>
-          </CardFooter>
-          </form>
         </Card>
       </div>
     </div>
