@@ -164,5 +164,3 @@ export default function ResetPassword() {
     </div>
   );
 };
-
-export default ResetPassword;
