@@ -46,7 +46,8 @@ export default function UpdatePassword() {
         
       } catch (error: any) {
         console.error('Error verifying session:', error);
-        setMessage(error.error_description || error.message || 'An error occurred while verifying your session.');
+        // Don't show the error message to the user
+        // setMessage(error.error_description || error.message || 'An error occurred while verifying your session.');
       } finally {
         setIsLoading(false);
       }
