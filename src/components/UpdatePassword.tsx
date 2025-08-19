@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -13,6 +13,7 @@ const UpdatePassword: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     const initializePasswordReset = async () => {
@@ -116,8 +117,18 @@ const UpdatePassword: React.FC = () => {
 
   const accessToken = searchParams.get('access_token');
   const type = searchParams.get('type');
+  const refreshToken = searchParams.get('refresh_token');
   
-  if (error || !accessToken || type !== 'recovery') {
+  // If we don't have tokens in the URL, check the hash fragment
+  const hashParams = new URLSearchParams(window.location.hash.substring(1));
+  const accessTokenFromHash = hashParams.get('access_token');
+  const refreshTokenFromHash = hashParams.get('refresh_token');
+  const typeFromHash = hashParams.get('type');
+  
+  const hasValidTokens = (accessToken && refreshToken && type === 'recovery') || 
+                       (accessTokenFromHash && refreshTokenFromHash && typeFromHash === 'recovery');
+  
+  if (error || !hasValidTokens) {
     return (
       <Card className="w-full max-w-md mx-auto">
         <CardHeader>
