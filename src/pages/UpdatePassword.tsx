@@ -160,42 +160,46 @@ export default function UpdatePassword() {
               </div>
             )}
             
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-sm font-medium">
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
+                <Label htmlFor="password" className="text-sm font-medium md:col-span-1">
                   New Password
                 </Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your new password"
-                  required
-                  minLength={8}
-                  disabled={isLoading}
-                  className="h-11 focus-visible:ring-2 focus-visible:ring-primary/50"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Must be at least 8 characters long
-                </p>
+                <div className="md:col-span-3">
+                  <Input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your new password"
+                    required
+                    minLength={8}
+                    disabled={isLoading}
+                    className="h-11 focus-visible:ring-2 focus-visible:ring-primary/50 w-full"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Must be at least 8 characters long
+                  </p>
+                </div>
               </div>
               
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword" className="text-sm font-medium">
+              <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
+                <Label htmlFor="confirmPassword" className="text-sm font-medium md:col-span-1">
                   Confirm Password
                 </Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Confirm your new password"
-                  required
-                  minLength={8}
-                  disabled={isLoading}
-                  className="h-11 focus-visible:ring-2 focus-visible:ring-primary/50"
-                />
+                <div className="md:col-span-3">
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm your new password"
+                    required
+                    minLength={8}
+                    disabled={isLoading}
+                    className="h-11 focus-visible:ring-2 focus-visible:ring-primary/50 w-full"
+                  />
+                </div>
               </div>
             </div>
           </CardContent>
