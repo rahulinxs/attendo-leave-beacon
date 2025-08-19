@@ -11,11 +11,14 @@ const defaultBranding = {
 };
 
 export default function ResetPassword() {
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
   const [tenant, setTenant] = useState("");
   const [branding, setBranding] = useState(defaultBranding);
   const [isLoading, setIsLoading] = useState(false);
+  const [isResetRequest, setIsResetRequest] = useState(true);
 
   useEffect(() => {
     const verifyToken = async () => {
@@ -26,34 +29,44 @@ export default function ResetPassword() {
         const params = new URLSearchParams(window.location.search);
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         
-        // Check for token in both places
-        const token = hashParams.get('access_token');
-        const type = hashParams.get('type');
-        const refreshToken = hashParams.get('refresh_token');
-        const tenantId = params.get('tenant') || "attendedge";
+        // Check for token and type in both places
+        const token = hashParams.get('access_token') || params.get('access_token');
+        const type = hashParams.get('type') || params.get('type');
+        const refreshToken = hashParams.get('refresh_token') || params.get('refresh_token');
+        const email = params.get('email') || '';
         
-        setTenant(tenantId);
+        // Set email if available
+        if (email) {
+          setEmail(email);
+        }
         
-        // If we have a token and type, set the session
+        // If we have a token and type, it's a password reset link
         if (token && type === 'recovery' && refreshToken) {
-          console.log('Setting session with recovery token');
+          console.log('Processing password reset link');
           
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token: token,
-            refresh_token: refreshToken
-          });
-          
-          if (sessionError) throw sessionError;
-          
-          console.log('Session set successfully');
-          // Clear the URL hash to prevent re-triggering
-          window.history.replaceState({}, document.title, window.location.pathname + '?tenant=' + tenantId);
-        } else {
-          // Check if we already have a valid session
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) {
+          try {
+            // Try to set the session with the token
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token: token,
+              refresh_token: refreshToken
+            });
+            
+            if (sessionError) throw sessionError;
+            
+            console.log('Session set successfully, showing password reset form');
+            setIsResetRequest(false);
+            
+            // Clean up the URL
+            const cleanUrl = window.location.pathname;
+            window.history.replaceState({}, document.title, cleanUrl);
+            
+          } catch (error) {
+            console.error('Error setting session:', error);
             throw new Error('Invalid or expired reset link. Please request a new one.');
           }
+        } else {
+          // No token, show the initial reset password request form
+          setIsResetRequest(true);
         }
       } catch (error: any) {
         console.error('Error in verifyToken:', error);
@@ -140,48 +153,84 @@ export default function ResetPassword() {
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (password.length < 8) {
-      setMessage("Password must be at least 8 characters long.");
-      return;
-    }
-    
-    setIsLoading(true);
-    setMessage('');
-    
-    try {
-      // Check if we have a valid session
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        throw new Error('Your session has expired. Please request a new password reset link.');
+    if (isResetRequest) {
+      // Handle initial password reset request
+      if (!email) {
+        setMessage("Please enter your email address.");
+        return;
       }
       
-      // Update the password
-      const { error: updateError } = await supabase.auth.updateUser({
-        password,
-      });
+      setIsLoading(true);
+      setMessage('');
+      
+      try {
+        const redirectUrl = `${window.location.origin}/reset-password`;
+        console.log('Sending password reset email to:', email);
+        console.log('Redirect URL:', redirectUrl);
+        
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: redirectUrl,
+        });
+        
+        if (error) throw error;
+        
+        setMessage('Password reset link sent! Please check your email.');
+      } catch (error: any) {
+        console.error('Error sending reset email:', error);
+        setMessage(error.message || 'Failed to send reset email. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      // Handle password update
+      if (password.length < 8) {
+        setMessage("Password must be at least 8 characters long.");
+        return;
+      }
+      
+      if (password !== confirmPassword) {
+        setMessage("Passwords do not match.");
+        return;
+      }
+      
+      setIsLoading(true);
+      setMessage('');
+      
+      try {
+        // Check if we have a valid session
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+          throw new Error('Your session has expired. Please request a new password reset link.');
+        }
+        
+        // Update the password
+        const { error: updateError } = await supabase.auth.updateUser({
+          password,
+        });
 
-      if (updateError) throw updateError;
+        if (updateError) throw updateError;
 
-      // Show success message
-      setMessage("Password updated successfully! Redirecting to login...");
-      
-      // Sign out and redirect to login after a short delay
-      await supabase.auth.signOut();
-      
-      // Redirect to login after 2 seconds
-      setTimeout(() => {
-        window.location.href = "/login";
-      }, 2000);
-      
-    } catch (error: any) {
-      console.error("Error updating password:", error);
-      setMessage(error.error_description || error.message || "Error updating password. The link may have expired.");
-      
-      // Clear the URL hash to prevent re-triggering the reset flow
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } finally {
-      setIsLoading(false);
+        // Show success message
+        setMessage("Password updated successfully! Redirecting to login...");
+        
+        // Sign out and redirect to login after a short delay
+        await supabase.auth.signOut();
+        
+        // Redirect to login after 2 seconds
+        setTimeout(() => {
+          window.location.href = "/login";
+        }, 2000);
+        
+      } catch (error: any) {
+        console.error("Error updating password:", error);
+        setMessage(error.error_description || error.message || "Error updating password. The link may have expired.");
+        
+        // Clear the URL hash to prevent re-triggering the reset flow
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -194,34 +243,108 @@ export default function ResetPassword() {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
+        padding: "1rem",
       }}
     >
-      <img src={branding.logo} alt={branding.name} style={{ maxWidth: 180, marginBottom: 24 }} />
-      <h2 style={{ color: branding.primaryColor }}>{branding.name}</h2>
-      <p style={{ marginBottom: 32 }}>{branding.slogan}</p>
-      <form onSubmit={handleReset} style={{ width: 320 }}>
-        <input
-          type="password"
-          placeholder="New password"
-          value={password}
-          onChange={e => setPassword(e.target.value)}
-          style={{ width: "100%", marginBottom: 16, padding: 8 }}
-        />
-        <button
-          type="submit"
-          style={{
-            width: "100%",
-            background: branding.primaryColor,
-            color: "#fff",
-            padding: 12,
-            border: "none",
-            borderRadius: 4,
-          }}
-        >
-          Reset Password
-        </button>
-      </form>
-      {message && <div style={{ marginTop: 16 }}>{message}</div>}
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <div className="flex justify-center mb-4">
+            <img
+              src={branding.logo}
+              alt={`${branding.name} Logo`}
+              className="h-12 w-auto"
+            />
+          </div>
+          <CardTitle className="text-center text-2xl">
+            {isResetRequest ? 'Reset Password' : 'Set New Password'}
+          </CardTitle>
+          <p className="text-center text-muted-foreground">
+            {branding.slogan}
+          </p>
+        </CardHeader>
+        <form onSubmit={handleReset}>
+          <CardContent className="space-y-4">
+            {message && (
+              <div className={`p-3 rounded-md ${
+                message.toLowerCase().includes('success') || message.includes('sent') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+              }`}>
+                {message}
+              </div>
+            )}
+
+            {isResetRequest ? (
+              // Initial reset password request form
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your email address"
+                  required
+                  disabled={isLoading}
+                />
+                <p className="text-sm text-muted-foreground">
+                  We'll send you a link to reset your password.
+                </p>
+              </div>
+            ) : (
+              // Password update form
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="password">New Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your new password"
+                    required
+                    minLength={8}
+                    disabled={isLoading}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Confirm Password</Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm your new password"
+                    required
+                    minLength={8}
+                    disabled={isLoading}
+                  />
+                </div>
+              </>
+            )}
+          </CardContent>
+          <CardFooter className="flex flex-col space-y-2">
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={isLoading}
+            >
+              {isLoading 
+                ? (isResetRequest ? 'Sending...' : 'Updating...') 
+                : (isResetRequest ? 'Send Reset Link' : 'Update Password')}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => window.location.href = "/login"}
+              disabled={isLoading}
+            >
+              Back to Login
+            </Button>
+          </CardFooter>
+        </form>
+      </Card>
     </div>
   );
-} 
+};
+
+export default ResetPassword;
