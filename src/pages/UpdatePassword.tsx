@@ -5,12 +5,20 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "../components/ui/card";
+import { Loader2, Lock } from "lucide-react";
+
+const defaultBranding = {
+  logo: "/attendedge-logo.png",
+  name: "AttendEdge",
+  slogan: "Smart Attendance & Leave Management"
+};
 
 export default function UpdatePassword() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<{text: string; type: 'success' | 'error' | 'info'}>();
   const [isLoading, setIsLoading] = useState(false);
+  const [branding] = useState(defaultBranding);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -47,7 +55,6 @@ export default function UpdatePassword() {
       } catch (error: any) {
         console.error('Error verifying session:', error);
         // Don't show the error message to the user
-        // setMessage(error.error_description || error.message || 'An error occurred while verifying your session.');
       } finally {
         setIsLoading(false);
       }
@@ -60,17 +67,23 @@ export default function UpdatePassword() {
     e.preventDefault();
     
     if (password.length < 8) {
-      setMessage("Password must be at least 8 characters long.");
+      setMessage({
+        text: "Password must be at least 8 characters long.",
+        type: 'error'
+      });
       return;
     }
     
     if (password !== confirmPassword) {
-      setMessage("Passwords do not match.");
+      setMessage({
+        text: "Passwords do not match.",
+        type: 'error'
+      });
       return;
     }
     
     setIsLoading(true);
-    setMessage('');
+    setMessage(undefined);
     
     try {
       // Update the password
@@ -80,8 +93,11 @@ export default function UpdatePassword() {
 
       if (error) throw error;
 
-      // Show success message
-      setMessage("Password updated successfully! Redirecting to login...");
+      // Show success message with icon
+      setMessage({
+        text: "Password updated successfully! Redirecting to login...",
+        type: 'success'
+      });
       
       // Sign out and redirect to login after a short delay
       await supabase.auth.signOut();
@@ -93,74 +109,123 @@ export default function UpdatePassword() {
       
     } catch (error: any) {
       console.error("Error updating password:", error);
-      setMessage(error.error_description || error.message || "Error updating password. The link may have expired.");
+      setMessage({
+        text: error.error_description || error.message || "Error updating password. Please try again.",
+        type: 'error'
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold text-center">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-primary/10 p-4">
+      <Card className="w-full max-w-md shadow-xl overflow-hidden border-0">
+        <div className="bg-gradient-to-r from-primary to-primary/90 p-6 text-white">
+          <div className="flex flex-col items-center justify-center space-y-2">
+            <img 
+              src={branding.logo} 
+              alt="AttendEdge Logo"
+              className="h-12 w-auto mb-2"
+            />
+            <h1 className="text-4xl font-bold">
+              <span style={{color: '#ffffff', fontSize: '38px', fontFamily: 'Cambria, serif', textShadow: '0 0 5px rgba(30,110,247,0.7)'}}>{APP_NAME}</span>
+            </h1>
+            <p className="text-sm opacity-90">{branding.slogan}</p>
+          </div>
+        </div>
+        
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xl font-semibold text-center">
             Set New Password
           </CardTitle>
+          <p className="text-sm text-muted-foreground text-center">
+            Create a strong, unique password
+          </p>
         </CardHeader>
+        
         <form onSubmit={handleUpdatePassword}>
           <CardContent className="space-y-4">
             {message && (
-              <div className={`p-3 rounded-md ${
-                message.toLowerCase().includes('success') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+              <div className={`p-3 rounded-md text-sm ${
+                message.type === 'error' ? 'bg-red-100 text-red-800' : 
+                message.type === 'success' ? 'bg-green-100 text-green-800' : 
+                'bg-blue-100 text-blue-800'
               }`}>
-                {message}
+                {message.text}
               </div>
             )}
             
-            <div className="space-y-2">
-              <Label htmlFor="password">New Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your new password"
-                required
-                minLength={8}
-                disabled={isLoading}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm your new password"
-                required
-                minLength={8}
-                disabled={isLoading}
-              />
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-sm font-medium">
+                  New Password
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your new password"
+                  required
+                  minLength={8}
+                  disabled={isLoading}
+                  className="h-11 focus-visible:ring-2 focus-visible:ring-primary/50"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Must be at least 8 characters long
+                </p>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword" className="text-sm font-medium">
+                  Confirm Password
+                </Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm your new password"
+                  required
+                  minLength={8}
+                  disabled={isLoading}
+                  className="h-11 focus-visible:ring-2 focus-visible:ring-primary/50"
+                />
+              </div>
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col space-y-2">
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={isLoading}
+          
+          <CardFooter className="flex flex-col space-y-3 px-6 pb-6">
+            <Button 
+              type="submit" 
+              variant="gradient"
+              className="w-full h-12 text-base font-medium transition-all duration-200 hover:shadow-lg"
+              disabled={isLoading || !password || !confirmPassword}
             >
-              {isLoading ? 'Updating...' : 'Update Password'}
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                <>
+                  <Lock className="mr-2 h-4 w-4" />
+                  Update Password
+                </>
+              )}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => navigate('/login')}
-              disabled={isLoading}
-            >
-              Back to Login
-            </Button>
+            
+            <div className="text-center text-sm">
+              <button
+                type="button"
+                onClick={() => navigate('/login')}
+                className="font-medium text-primary hover:underline"
+                disabled={isLoading}
+              >
+                Back to Sign In
+              </button>
+            </div>
           </CardFooter>
         </form>
       </Card>

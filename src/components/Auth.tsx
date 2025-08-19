@@ -173,9 +173,19 @@ const Auth = () => {
           <div className="mx-auto w-16 h-16 gradient-primary rounded-2xl flex items-center justify-center mb-4">
             <Building2 className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            {APP_NAME}
-          </h1>
+          <span 
+  className="font-bold text-[38px]" 
+  style={{ color: "#1702f9", fontFamily: "Cambria, serif" }}
+>
+  Attend
+</span>
+<span 
+  className="font-bold text-[38px]" 
+  style={{ color: "#39FF14", fontFamily: "Cambria, serif" }}
+>
+  Edge
+</span>
+         
           <p className="text-gray-600">
             {APP_TAGLINE}
           </p>

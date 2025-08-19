@@ -5,14 +5,16 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/componen
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Key } from 'lucide-react';
+import { APP_NAME, APP_TAGLINE } from '@/branding';
 
 // Default branding
 const defaultBranding = {
-  name: "AttendEdge",
+  name: APP_NAME,
   logo: "/attendedge-logo.png",
   primaryColor: "#1976D2",
   background: "#E3F2FD",
-  slogan: "Smart Attendance & Leave Management",
+  slogan: APP_TAGLINE,
 };
 
 export default function ResetPassword() {
@@ -89,16 +91,14 @@ export default function ResetPassword() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
-        <div className="text-center">
-          <img
-            className="mx-auto h-12 w-auto"
-            src={branding.logo}
-            alt={branding.name}
-          />
-          <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
-            Reset your password
-          </h2>
-          <p className="mt-2 text-sm text-gray-600">
+        <div className="text-center space-y-2">
+          <div className="mx-auto w-16 h-16 bg-gradient-to-r from-primary to-primary/90 rounded-2xl flex items-center justify-center mb-4 shadow-md">
+            <Key className="w-8 h-8 text-white" />
+          </div>
+          <h1 className="text-3xl font-bold">
+            <span style={{color: '#1702f9', fontSize: '38px', fontFamily: 'Cambria, serif', textShadow: '0 0 5px rgba(30,110,247,0.7)'}}>{APP_NAME}</span>
+          </h1>
+          <p className="text-muted-foreground">
             {branding.slogan}
           </p>
         </div>

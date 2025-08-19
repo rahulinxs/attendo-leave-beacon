@@ -51,26 +51,27 @@ const LoginForm = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-primary/5 to-primary/10 flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
-          <div className="mx-auto w-16 h-16 gradient-primary rounded-2xl flex items-center justify-center mb-4">
+          <div className="mx-auto w-16 h-16 bg-gradient-to-r from-primary to-primary/90 rounded-2xl flex items-center justify-center mb-4 shadow-md">
             <Building2 className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            {APP_NAME}
+          <h1 className="text-3xl font-bold">
+            <span style={{color: '#1702f9', fontSize: '38px', fontFamily: 'Cambria, serif', textShadow: '0 0 5px rgba(30,110,247,0.7)'}}>Attend</span>
+            <span style={{color: '#39FF14', fontSize: '38px', fontFamily: 'Cambria, serif', textShadow: '0 0 5px rgba(57,255,20,0.7)'}}>Edge</span>
           </h1>
-          <p className="text-gray-600">
+          <p className="text-muted-foreground">
             {APP_TAGLINE}
           </p>
         </div>
 
         {/* Login Form */}
-        <Card className="border-0 shadow-xl bg-white">
+        <Card className="border-0 shadow-xl bg-card">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl text-center">Welcome back</CardTitle>
-            <CardDescription className="text-center">
+            <CardTitle className="text-2xl text-center text-foreground">Welcome back</CardTitle>
+            <CardDescription className="text-center text-muted-foreground">
               Sign in to your account to continue
             </CardDescription>
           </CardHeader>
@@ -101,7 +102,7 @@ const LoginForm = () => {
                   <button
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs bg-gray-200 px-2 py-1 rounded"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs bg-muted hover:bg-muted/80 px-2 py-1 rounded transition-colors"
                   >
                     EYE
                   </button>
@@ -127,20 +128,20 @@ const LoginForm = () => {
             <div className="mt-6">
               <div className="font-semibold mb-2">Demo Credentials</div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="bg-white border rounded p-3 text-gray-800">
-                  <div className="font-bold">Super Admin</div>
-                  <div>Email: rahul@nytp.com</div>
-                  <div>Password: password123</div>
+                <div className="bg-card border rounded-lg p-3 text-foreground shadow-sm hover:shadow transition-shadow">
+                  <div className="font-bold text-primary">Super Admin</div>
+                  <div className="text-sm text-muted-foreground">rahul@nytp.com</div>
+                  <div className="text-sm text-muted-foreground">password123</div>
                 </div>
-                <div className="bg-white border rounded p-3 text-gray-800">
-                  <div className="font-bold">Admin</div>
-                  <div>Email: admin@company.com</div>
-                  <div>Password: password123</div>
+                <div className="bg-card border rounded-lg p-3 text-foreground shadow-sm hover:shadow transition-shadow">
+                  <div className="font-bold text-primary">Admin</div>
+                  <div className="text-sm text-muted-foreground">admin@company.com</div>
+                  <div className="text-sm text-muted-foreground">password123</div>
                 </div>
-                <div className="bg-white border rounded p-3 text-gray-800">
-                  <div className="font-bold">Employee</div>
-                  <div>Email: employee@company.com</div>
-                  <div>Password: password123</div>
+                <div className="bg-card border rounded-lg p-3 text-foreground shadow-sm hover:shadow transition-shadow">
+                  <div className="font-bold text-primary">Employee</div>
+                  <div className="text-sm text-muted-foreground">employee@company.com</div>
+                  <div className="text-sm text-muted-foreground">password123</div>
                 </div>
               </div>
             </div>
@@ -150,16 +151,22 @@ const LoginForm = () => {
         {/* Features */}
         <div className="grid grid-cols-3 gap-4 text-center">
           <div className="space-y-2">
-            <Clock className="w-6 h-6 mx-auto text-blue-600" />
-            <p className="text-xs text-gray-600">Track Time</p>
+            <div className="mx-auto w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+              <Clock className="w-5 h-5 text-primary" />
+            </div>
+            <p className="text-xs text-muted-foreground">Track Time</p>
           </div>
           <div className="space-y-2">
-            <Users className="w-6 h-6 mx-auto text-blue-600" />
-            <p className="text-xs text-gray-600">Manage Team</p>
+            <div className="mx-auto w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+              <Users className="w-5 h-5 text-primary" />
+            </div>
+            <p className="text-xs text-muted-foreground">Manage Team</p>
           </div>
           <div className="space-y-2">
-            <Building2 className="w-6 h-6 mx-auto text-blue-600" />
-            <p className="text-xs text-gray-600">Enterprise Ready</p>
+            <div className="mx-auto w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+              <Building2 className="w-5 h-5 text-primary" />
+            </div>
+            <p className="text-xs text-muted-foreground">Enterprise Ready</p>
           </div>
         </div>
       </div>
