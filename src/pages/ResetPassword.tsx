@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 
 // Default branding
 const defaultBranding = {
@@ -12,62 +13,21 @@ const defaultBranding = {
 
 export default function ResetPassword() {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
-  const [tenant, setTenant] = useState("");
   const [branding, setBranding] = useState(defaultBranding);
   const [isLoading, setIsLoading] = useState(false);
-  const [isResetRequest, setIsResetRequest] = useState(true);
-
-  useEffect(() => {
-    const verifyToken = async () => {
-      try {
-        setIsLoading(true);
-        
-        // Get parameters from both query string and hash fragment
-        const params = new URLSearchParams(window.location.search);
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
-        
-        // Check for token and type in both places
-        const token = hashParams.get('access_token') || params.get('access_token');
-        const type = hashParams.get('type') || params.get('type');
-        const refreshToken = hashParams.get('refresh_token') || params.get('refresh_token');
-        const email = params.get('email') || '';
-        
-        // Set email if available
-        if (email) {
-          setEmail(email);
-        }
-        
-        // If we have a token and type, it's a password reset link
-        if (token && type === 'recovery' && refreshToken) {
-          console.log('Processing password reset link');
-          
-          try {
-            // Try to set the session with the token
-            const { error: sessionError } = await supabase.auth.setSession({
-              access_token: token,
-              refresh_token: refreshToken
-            });
-            
-            if (sessionError) throw sessionError;
-            
-            console.log('Session set successfully, showing password reset form');
-            setIsResetRequest(false);
-            
-            // Clean up the URL
-            const cleanUrl = window.location.pathname;
-            window.history.replaceState({}, document.title, cleanUrl);
-            
-          } catch (error) {
-            console.error('Error setting session:', error);
-            throw new Error('Invalid or expired reset link. Please request a new one.');
-          }
-        } else {
-          // No token, show the initial reset password request form
-          setIsResetRequest(true);
-        }
+  const navigate = useNavigate();
+  
+  // Check if we have a token in the URL (handled by the UpdatePassword page)
+  const urlParams = new URLSearchParams(window.location.search);
+  const token = urlParams.get('access_token');
+  const type = urlParams.get('type');
+  
+  // If we have a token, redirect to the UpdatePassword page
+  if (token && type === 'recovery') {
+    navigate(`/update-password?access_token=${token}&type=${type}`);
+    return null;
+  }
       } catch (error: any) {
         console.error('Error in verifyToken:', error);
         setMessage(error.message || 'Invalid or expired reset link. Please request a new one.');
@@ -153,84 +113,33 @@ export default function ResetPassword() {
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (isResetRequest) {
-      // Handle initial password reset request
-      if (!email) {
-        setMessage("Please enter your email address.");
-        return;
-      }
+    if (!email) {
+      setMessage("Please enter your email address.");
+      return;
+    }
+    
+    setIsLoading(true);
+    setMessage('');
+    
+    try {
+      // Redirect to the update-password page after successful email send
+      const redirectUrl = `${window.location.origin}/update-password`;
+      console.log('Sending password reset email to:', email);
+      console.log('Redirect URL:', redirectUrl);
       
-      setIsLoading(true);
-      setMessage('');
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: redirectUrl,
+      });
       
-      try {
-        const redirectUrl = `${window.location.origin}/reset-password`;
-        console.log('Sending password reset email to:', email);
-        console.log('Redirect URL:', redirectUrl);
-        
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: redirectUrl,
-        });
-        
-        if (error) throw error;
-        
-        setMessage('Password reset link sent! Please check your email.');
-      } catch (error: any) {
-        console.error('Error sending reset email:', error);
-        setMessage(error.message || 'Failed to send reset email. Please try again.');
-      } finally {
-        setIsLoading(false);
-      }
-    } else {
-      // Handle password update
-      if (password.length < 8) {
-        setMessage("Password must be at least 8 characters long.");
-        return;
-      }
+      if (error) throw error;
       
-      if (password !== confirmPassword) {
-        setMessage("Passwords do not match.");
-        return;
-      }
-      
-      setIsLoading(true);
-      setMessage('');
-      
-      try {
-        // Check if we have a valid session
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (!session) {
-          throw new Error('Your session has expired. Please request a new password reset link.');
-        }
-        
-        // Update the password
-        const { error: updateError } = await supabase.auth.updateUser({
-          password,
-        });
-
-        if (updateError) throw updateError;
-
-        // Show success message
-        setMessage("Password updated successfully! Redirecting to login...");
-        
-        // Sign out and redirect to login after a short delay
-        await supabase.auth.signOut();
-        
-        // Redirect to login after 2 seconds
-        setTimeout(() => {
-          window.location.href = "/login";
-        }, 2000);
-        
-      } catch (error: any) {
-        console.error("Error updating password:", error);
-        setMessage(error.error_description || error.message || "Error updating password. The link may have expired.");
-        
-        // Clear the URL hash to prevent re-triggering the reset flow
-        window.history.replaceState({}, document.title, window.location.pathname);
-      } finally {
-        setIsLoading(false);
-      }
+      setMessage('Password reset link sent! Please check your email.');
+    } catch (error: any) {
+      console.error('Error sending reset email:', error);
+      setMessage(error.message || 'Failed to send reset email. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
     }
   };
 
@@ -256,7 +165,7 @@ export default function ResetPassword() {
             />
           </div>
           <CardTitle className="text-center text-2xl">
-            {isResetRequest ? 'Reset Password' : 'Set New Password'}
+            Reset Password
           </CardTitle>
           <p className="text-center text-muted-foreground">
             {branding.slogan}
@@ -272,54 +181,21 @@ export default function ResetPassword() {
               </div>
             )}
 
-            {isResetRequest ? (
-              // Initial reset password request form
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email address"
-                  required
-                  disabled={isLoading}
-                />
-                <p className="text-sm text-muted-foreground">
-                  We'll send you a link to reset your password.
-                </p>
-              </div>
-            ) : (
-              // Password update form
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="password">New Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your new password"
-                    required
-                    minLength={8}
-                    disabled={isLoading}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">Confirm Password</Label>
-                  <Input
-                    id="confirmPassword"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Confirm your new password"
-                    required
-                    minLength={8}
-                    disabled={isLoading}
-                  />
-                </div>
-              </>
-            )}
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email address"
+                required
+                disabled={isLoading}
+              />
+              <p className="text-sm text-muted-foreground">
+                We'll send you a link to reset your password.
+              </p>
+            </div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-2">
             <Button
@@ -327,15 +203,13 @@ export default function ResetPassword() {
               className="w-full"
               disabled={isLoading}
             >
-              {isLoading 
-                ? (isResetRequest ? 'Sending...' : 'Updating...') 
-                : (isResetRequest ? 'Send Reset Link' : 'Update Password')}
+              {isLoading ? 'Sending...' : 'Send Reset Link'}
             </Button>
             <Button
               type="button"
               variant="outline"
               className="w-full"
-              onClick={() => window.location.href = "/login"}
+              onClick={() => navigate('/login')}
               disabled={isLoading}
             >
               Back to Login
