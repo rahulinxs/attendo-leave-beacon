@@ -118,9 +118,9 @@ export default function UpdatePassword() {
       // Sign out and redirect to login after a short delay
       await supabase.auth.signOut();
       
-      // Redirect to login after 2 seconds
+      // Redirect to home page after 2 seconds
       setTimeout(() => {
-        navigate('/login');
+        navigate('/');
       }, 2000);
       
     } catch (error: any) {
