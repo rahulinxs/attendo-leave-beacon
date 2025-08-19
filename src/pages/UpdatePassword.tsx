@@ -7,6 +7,13 @@ import { Label } from "../components/ui/label";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "../components/ui/card";
 import { Loader2, Lock } from "lucide-react";
 
+// Simple logo component to avoid any potential issues
+const Logo = () => (
+  <div className="mx-auto w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center mb-4">
+    <Lock className="w-8 h-8 text-white" />
+  </div>
+);
+
 export default function UpdatePassword() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -115,28 +122,13 @@ export default function UpdatePassword() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-1">
-          <div className="mx-auto w-16 h-16 gradient-primary rounded-2xl flex items-center justify-center mb-4">
-            <Building2 className="w-8 h-8 text-white" />
-          </div>
-          <div className="space-y-2">
-            <div>
-              <span 
-                className="font-bold text-[38px]" 
-                style={{ color: "#1702f9", fontFamily: "Cambria, serif" }}
-              >
-                Attend
-              </span>
-              <span 
-                className="font-bold text-[38px]" 
-                style={{ color: "#39FF14", fontFamily: "Cambria, serif" }}
-              >
-                Edge
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Set New Password
-            </p>
-          </div>
+          <Logo />
+          <CardTitle className="text-2xl font-bold">
+            Set New Password
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Create a strong, unique password
+          </p>
         </CardHeader>
         
         <form onSubmit={handleUpdatePassword}>
