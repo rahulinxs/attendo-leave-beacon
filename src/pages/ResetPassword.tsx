@@ -70,9 +70,21 @@ export default function ResetPassword() {
       console.log('Sending password reset email to:', email);
       console.log('Redirect URL:', redirectUrl);
       
+      // Send password reset email with redirect
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: redirectUrl,
       });
+      
+      // Also update the email template to use the correct URL
+      const { error: templateError } = await supabase.auth.api.updateUser(
+        email,
+        {
+          email_confirm: true,
+          email_change_confirm_url: redirectUrl,
+        }
+      );
+      
+      if (templateError) console.error('Error updating template:', templateError);
       
       if (error) throw error;
       
