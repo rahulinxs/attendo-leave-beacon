@@ -17,57 +17,61 @@ const UpdatePassword: React.FC = () => {
 
   useEffect(() => {
     const checkRecovery = async () => {
-      // First, sign out any existing sessions to prevent conflicts
-      await supabase.auth.signOut();
-      
-      // Check for token in both query params and hash fragment
-      const token = searchParams.get('token') || '';
-      const type = searchParams.get('type');
-      const accessToken = searchParams.get('access_token') || '';
-      const refreshToken = searchParams.get('refresh_token') || '';
-      
-      console.log('Check recovery params:', { token, type, accessToken, refreshToken });
-      
-      if (type === 'recovery' && (token || accessToken)) {
-        try {
-          // If we have an access token, try to set the session first
-          if (accessToken && refreshToken) {
-            console.log('Setting session with tokens');
-            const { error: sessionError } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken
-            });
-            
-            if (sessionError) throw sessionError;
-            
-            console.log('Session set successfully');
-            return;
-          }
-          
-          // If we have a token, try to verify it
-          if (token) {
-            console.log('Verifying OTP token:', token);
-            const { error: verifyError } = await supabase.auth.verifyOtp({
-              token,
-              type: 'recovery',
-            });
-            
-            if (verifyError) throw verifyError;
-            console.log('OTP verification successful');
-          }
-          
-        } catch (err: any) {
-          console.error('Password reset error:', err);
-          setError('Invalid or expired password reset link. Please request a new reset link.');
-          toast({
-            title: 'Error',
-            description: err.message || 'Invalid or expired password reset link',
-            variant: 'destructive',
-          });
+      try {
+        // First, sign out any existing sessions to prevent conflicts
+        await supabase.auth.signOut();
+        
+        // Get all URL parameters
+        const token = searchParams.get('token') || '';
+        const type = searchParams.get('type');
+        const accessToken = searchParams.get('access_token') || '';
+        const refreshToken = searchParams.get('refresh_token') || '';
+        
+        console.log('Check recovery params:', { token, type, accessToken, refreshToken });
+        
+        if (type !== 'recovery' || (!token && !accessToken)) {
+          throw new Error('Invalid password reset link. Please use the link from your email.');
         }
-      } else {
-        console.error('Missing required parameters for password reset');
-        setError('Invalid password reset link. Please use the link from your email.');
+        
+        // If we have an access token, set the session
+        if (accessToken && refreshToken) {
+          console.log('Setting session with tokens');
+          const { data: { session }, error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          });
+          
+          if (sessionError || !session) {
+            throw sessionError || new Error('Failed to set session');
+          }
+          
+          console.log('Session set successfully');
+          return;
+        }
+        
+        // If we have a token, verify it
+        if (token) {
+          console.log('Verifying OTP token:', token);
+          const { error: verifyError } = await supabase.auth.verifyOtp({
+            token,
+            type: 'recovery',
+            email: searchParams.get('email') || undefined,
+          });
+          
+          if (verifyError) throw verifyError;
+          
+          console.log('OTP verification successful');
+          return;
+        }
+        
+      } catch (err: any) {
+        console.error('Password reset error:', err);
+        setError(err.message || 'Invalid or expired password reset link. Please request a new reset link.');
+        toast({
+          title: 'Error',
+          description: err.message || 'Invalid or expired password reset link',
+          variant: 'destructive',
+        });
       }
     };
 
@@ -93,47 +97,50 @@ const UpdatePassword: React.FC = () => {
     try {
       console.log('Attempting to update password...');
       
-      // First, try to update the password directly
-      const { data: userData, error: updateError } = await supabase.auth.updateUser({
-        password,
-      });
-
-      if (updateError) {
-        console.log('Direct update failed, checking session...');
+      // First, ensure we have a valid session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session) {
+        // If no session, try to get the session from URL parameters
+        const accessToken = searchParams.get('access_token');
+        const refreshToken = searchParams.get('refresh_token');
         
-        // If direct update fails, try to get the current session
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (!session) {
+        if (accessToken && refreshToken) {
+          console.log('Setting session from URL parameters');
+          const { error: setSessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          });
+          
+          if (setSessionError) throw setSessionError;
+        } else {
           throw new Error('No active session. Please request a new password reset link.');
         }
-        
-        // Try updating with the current session
-        const { error: updateWithSessionError } = await supabase.auth.updateUser({
-          password,
-        });
-        
-        if (updateWithSessionError) throw updateWithSessionError;
       }
+      
+      // Now update the password
+      console.log('Updating password...');
+      const { error: updateError } = await supabase.auth.updateUser({
+        password,
+      });
+      
+      if (updateError) throw updateError;
 
       console.log('Password updated successfully');
       
-      // Sign out after successful password update
-      await supabase.auth.signOut();
-      
+      // Show success message
       toast({
         title: 'Password Updated',
-        description: 'Your password has been updated successfully. You can now log in with your new password.',
+        description: 'Your password has been updated successfully. Redirecting to login...',
       });
+      
+      // Sign out and redirect to login after a short delay
+      await supabase.auth.signOut();
       
       // Redirect to login page after a short delay
       setTimeout(() => {
         navigate('/login');
       }, 2000);
-
-      // Sign out and redirect to login
-      await supabase.auth.signOut();
-      navigate('/login');
       
     } catch (err: any) {
       console.error('Update password error:', err);

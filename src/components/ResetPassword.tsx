@@ -28,8 +28,8 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ email, onSuccess, onCance
       const tenant = urlParams.get('tenant') || 'attendedge';
       
       // Construct the redirect URL with the correct parameters
-      const siteUrl = window.location.origin;
-      const redirectUrl = `${siteUrl}/update-password`;
+      // Use the production URL for password reset links to ensure consistency
+      const redirectUrl = 'https://attendedge.netlify.app/update-password';
       
       console.log('Sending password reset email to:', emailInput);
       console.log('Redirect URL:', redirectUrl);
