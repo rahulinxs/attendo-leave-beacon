@@ -139,6 +139,20 @@ export default function UpdatePassword() {
       <div className="w-full max-w-2xl">
         <Card className="w-full overflow-hidden shadow-xl border-0">
           <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-6 text-center">
+            <div className="mb-4">
+              <span 
+                className="font-bold text-[38px]" 
+                style={{ color: "#1702f9", fontFamily: "Cambria, serif" }}
+              >
+                Attend
+              </span>
+              <span 
+                className="font-bold text-[38px]" 
+                style={{ color: "#39FF14", fontFamily: "Cambria, serif" }}
+              >
+                Edge
+              </span>
+            </div>
             <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 rounded-2xl backdrop-blur-sm">
               <Lock className="w-8 h-8 text-white" />
             </div>
