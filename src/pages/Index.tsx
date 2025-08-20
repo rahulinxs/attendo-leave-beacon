@@ -13,6 +13,7 @@ import HolidayManagement from '@/components/HolidayManagement';
 import SystemSettings from '@/components/SystemSettings';
 import EmployeeAttendance from '@/components/EmployeeAttendance';
 import Profile from '@/components/Profile';
+import ProfileManagement from '@/components/ProfileManagement';
 import CompanyProfile from '@/components/CompanyProfile';
 import PerformanceReport from '@/components/PerformanceReport';
 import RecruitmentReport from '@/components/RecruitmentReport';
@@ -74,6 +75,18 @@ const Index = () => {
         // Only admins and super admins can access employee management
         if (['admin', 'super_admin'].includes(user.role)) {
           return <EmployeeManagement />;
+        }
+        return (
+          <div className="glass-effect rounded-2xl p-8 border text-center">
+            <h2 className="text-2xl font-bold mb-4">Access Denied</h2>
+            <p className="text-gray-600">You don't have permission to access this section</p>
+          </div>
+        );
+        
+      case 'profile-management':
+        // Only admins and super admins can access profile management
+        if (['admin', 'super_admin'].includes(user.role)) {
+          return <ProfileManagement />;
         }
         return (
           <div className="glass-effect rounded-2xl p-8 border text-center">

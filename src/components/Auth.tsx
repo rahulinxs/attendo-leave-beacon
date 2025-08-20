@@ -192,13 +192,18 @@ const Auth = () => {
         </div>
 
         {/* Auth Forms */}
-        <Card className="border-0 shadow-xl bg-white">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl text-center">Sign In</CardTitle>
-            <CardDescription className="text-center">
+        <Card className="border-0 shadow-xl overflow-hidden">
+          <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-6 text-center text-white">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 rounded-2xl backdrop-blur-sm mx-auto">
+              <LogIn className="w-8 h-8 text-white" />
+            </div>
+            <h1 className="mt-4 text-2xl font-bold">
+              Sign In
+            </h1>
+            <p className="text-blue-100 mt-1">
               Sign in to your account to continue
-            </CardDescription>
-          </CardHeader>
+            </p>
+          </div>
           <CardContent>
             <Tabs defaultValue="login" className="w-full">
               <TabsList className="grid w-full grid-cols-2">

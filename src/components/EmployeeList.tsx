@@ -47,14 +47,17 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onAddEmployee, refreshTrigg
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
 
-  const fetchEmployees = async () => {
+  const fetchEmployees = React.useCallback(async () => {
     if (!currentCompany) {
       setEmployees([]);
       setIsLoading(false);
       return;
     }
+    
+    console.log('Fetching employees...');
+    setIsLoading(true);
+    
     try {
-      console.log('Fetching employees for company:', currentCompany.id);
       const { data: employees, error } = await supabase
         .from('employees')
         .select('*')
@@ -67,14 +70,28 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onAddEmployee, refreshTrigg
         return;
       }
 
-      console.log('Employees fetched:', employees);
-      setEmployees((employees as any[]) || []);
+      console.log('Employees fetched successfully');
+      setEmployees(employees || []);
     } catch (error) {
       console.error('Error fetching employees:', error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentCompany]);
+  
+  // Fetch employees on mount and when refreshTrigger changes
+  useEffect(() => {
+    const controller = new AbortController();
+    
+    // Only fetch if we have a current company
+    if (currentCompany) {
+      fetchEmployees();
+    }
+    
+    return () => {
+      controller.abort();
+    };
+  }, [currentCompany, fetchEmployees, refreshTrigger]);
 
   const canRemoveEmployee = (employee: Employee) => {
     if (!user || !['admin', 'super_admin'].includes(user.role)) return false;

@@ -29,7 +29,8 @@ import {
   ClipboardList,
   ChevronRight,
   TrendingUp,
-  FileSpreadsheet
+  FileSpreadsheet,
+  UserCircle
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -118,8 +119,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       roles: ['reporting_manager', 'admin', 'super_admin'],
       requiresPermission: true
     },
-    
-    // Admin features - for admins and super admins
     {
       id: 'teams',
       label: 'Team Management',
@@ -131,6 +130,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       id: 'employees',
       label: 'Employee Management',
       icon: Users,
+      roles: ['admin', 'super_admin'],
+      requiresPermission: true
+    },
+    {
+      id: 'profile-management',
+      label: 'Profile Management',
+      icon: UserCircle,
       roles: ['admin', 'super_admin'],
       requiresPermission: true
     },
@@ -458,6 +464,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                       <Calendar className="w-5 h-5" />
                       <span className="sidebar-label text-sm">Leave Type Management</span>
                     </button>
+                    <button
+                      onClick={() => onTabChange('profile-management')}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'profile-management' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                    >
+                      <UserCircle className="w-5 h-5" />
+                      <span className="sidebar-label text-sm">Profile Management</span>
+                    </button>
                   </div>
                 </>
               )}
@@ -512,7 +525,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
               )}
 
               {/* Render the rest of the navigation items */}
-              {navItems.filter(item => !['dashboard', 'reports', 'performance-report', 'recruitment-report'].includes(item.id)).map((item) => {
+              {navItems.filter(item => ![
+                'dashboard', 
+                'reports', 
+                'performance-report', 
+                'recruitment-report',
+                'profile-management'  // Exclude from main navigation as it's in the Management section
+              ].includes(item.id)).map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
                 return (
