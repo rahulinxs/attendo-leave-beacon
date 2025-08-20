@@ -102,6 +102,13 @@ export default function UpdatePassword() {
     setMessage(undefined);
     
     try {
+      // Get the current session first
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session) {
+        throw new Error('Your session has expired. Please request a new password reset link.');
+      }
+      
       // Update the password
       const { error } = await supabase.auth.updateUser({
         password,
