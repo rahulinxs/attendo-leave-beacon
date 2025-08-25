@@ -5,7 +5,6 @@ import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '../../screens/HomeScreen';
 import AttendanceScreen from '../../screens/AttendanceScreen';
 import LeaveScreen from '../../screens/LeaveScreen';
-import TeamsScreen from '../../screens/TeamsScreen';
 import ReportsScreen from '../../screens/ReportsScreen';
 import SettingsScreen from '../../screens/SettingsScreen';
 
@@ -25,7 +24,6 @@ export const MainTabs = () => {
             Home: 'home',
             Attendance: 'time',
             Leave: 'calendar',
-            Teams: 'people',
             Reports: 'stats-chart',
             Settings: 'settings',
           };
@@ -37,7 +35,6 @@ export const MainTabs = () => {
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Attendance" component={AttendanceScreen} />
       <Tab.Screen name="Leave" component={LeaveScreen} />
-      <Tab.Screen name="Teams" component={TeamsScreen} />
       <Tab.Screen name="Reports" component={ReportsScreen} />
       <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>

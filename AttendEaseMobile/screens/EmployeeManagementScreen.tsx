@@ -44,15 +44,51 @@ export default function EmployeeManagementScreen({ navigation }: any) {
     team_id: '',
   });
   const [teams, setTeams] = useState([]);
+  const [summary, setSummary] = useState({
+    totalEmployees: 0,
+    activeEmployees: 0,
+    inactiveEmployees: 0,
+    departments: 0,
+    admins: 0
+  });
 
   const loadEmployees = async () => {
     try {
       setLoading(true);
+      
+      // Only load employees from the user's company
+      if (!profileData?.profile?.company_id) {
+        console.warn('No company_id found for user');
+        setEmployees([]);
+        return;
+      }
+
       const { data, error } = await supabase
-        .from('employees')
-        .select('*');
+        .from('profiles')
+        .select(`
+          id, email, name, role, department, position, hire_date, 
+          is_active, created_at, updated_at, company_id
+        `)
+        .eq('company_id', profileData.profile.company_id)
+        .order('name', { ascending: true });
+        
       if (error) throw error;
       setEmployees(data || []);
+      
+      // Calculate summary statistics
+      const totalEmployees = data?.length || 0;
+      const activeEmployees = data?.filter(emp => emp.is_active).length || 0;
+      const inactiveEmployees = totalEmployees - activeEmployees;
+      const departments = new Set(data?.map(emp => emp.department).filter(Boolean)).size;
+      const admins = data?.filter(emp => emp.role === 'admin' || emp.role === 'super_admin').length || 0;
+      
+      setSummary({
+        totalEmployees,
+        activeEmployees,
+        inactiveEmployees,
+        departments,
+        admins
+      });
     } catch (error) {
       console.error('Error loading employees:', error);
       Alert.alert('Error', 'Failed to load employees');
@@ -101,7 +137,7 @@ export default function EmployeeManagementScreen({ navigation }: any) {
             try {
               setLoading(true);
               const { error } = await supabase
-                .from('employees')
+                .from('profiles')
                 .update({ name })
                 .eq('id', employee.id);
               if (error) throw error;
@@ -126,14 +162,27 @@ export default function EmployeeManagementScreen({ navigation }: any) {
   const handleSubmitAddEmployee = async () => {
     try {
       setLoading(true);
-      const { error } = await supabase.from('employees').insert([
+      // Create user in auth first, then create profile
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email: newEmployee.email,
+        password: 'TempPassword123!', // Temporary password
+        email_confirm: true
+      });
+
+      if (authError) throw authError;
+
+      // Create profile with the auth user's ID
+      const { error } = await supabase.from('profiles').insert([
         {
+          id: authData.user.id,
           name: newEmployee.name,
           email: newEmployee.email,
           role: newEmployee.role,
           department: newEmployee.department,
           team_id: newEmployee.team_id || null,
-          company_id: profileData.profile.company_id, // Always set company_id
+          company_id: profileData.profile.company_id,
+          is_active: true,
+          hire_date: new Date().toISOString().split('T')[0]
         },
       ]);
       if (error) throw error;
@@ -160,8 +209,10 @@ export default function EmployeeManagementScreen({ navigation }: any) {
   }, [profileData?.profile?.company_id]);
 
   useEffect(() => {
-    loadEmployees();
-  }, []);
+    if (profileData?.profile?.company_id) {
+      loadEmployees();
+    }
+  }, [profileData?.profile?.company_id]);
 
   const canManageEmployees = profileData?.profile?.role === 'admin' || profileData?.profile?.role === 'super_admin';
 
@@ -189,6 +240,52 @@ export default function EmployeeManagementScreen({ navigation }: any) {
         <TouchableOpacity style={styles.addButton} onPress={handleAddEmployee}>
           <Ionicons name="add" size={24} color="white" />
         </TouchableOpacity>
+      </View>
+
+      {/* Summary Section */}
+      <View style={styles.summaryContainer}>
+        <Text style={styles.summaryTitle}>Company Overview</Text>
+        <View style={styles.summaryGrid}>
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryIconContainer}>
+              <Ionicons name="people" size={24} color="#3b82f6" />
+            </View>
+            <Text style={styles.summaryNumber}>{summary.totalEmployees}</Text>
+            <Text style={styles.summaryLabel}>Total Employees</Text>
+          </View>
+          
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryIconContainer}>
+              <Ionicons name="checkmark-circle" size={24} color="#10b981" />
+            </View>
+            <Text style={styles.summaryNumber}>{summary.activeEmployees}</Text>
+            <Text style={styles.summaryLabel}>Active</Text>
+          </View>
+          
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryIconContainer}>
+              <Ionicons name="pause-circle" size={24} color="#f59e0b" />
+            </View>
+            <Text style={styles.summaryNumber}>{summary.inactiveEmployees}</Text>
+            <Text style={styles.summaryLabel}>Inactive</Text>
+          </View>
+          
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryIconContainer}>
+              <Ionicons name="business" size={24} color="#8b5cf6" />
+            </View>
+            <Text style={styles.summaryNumber}>{summary.departments}</Text>
+            <Text style={styles.summaryLabel}>Departments</Text>
+          </View>
+          
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryIconContainer}>
+              <Ionicons name="shield-checkmark" size={24} color="#ef4444" />
+            </View>
+            <Text style={styles.summaryNumber}>{summary.admins}</Text>
+            <Text style={styles.summaryLabel}>Admins</Text>
+          </View>
+        </View>
       </View>
 
       <ScrollView
@@ -439,4 +536,51 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     padding: 20,
   },
-}); 
+  summaryContainer: {
+    backgroundColor: 'white',
+    margin: 16,
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  summaryTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 16,
+  },
+  summaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  summaryCard: {
+    backgroundColor: '#f8fafc',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    minWidth: '30%',
+    flex: 1,
+    maxWidth: '48%',
+  },
+  summaryIconContainer: {
+    marginBottom: 8,
+  },
+  summaryNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: '#64748b',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+});

@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, FlatList, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, ScrollView, RefreshControl, Alert, SafeAreaView } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useUserProfile } from '../lib/useUserProfile';
 import { APP_NAME } from '../branding';
 import { Picker } from '@react-native-picker/picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Ionicons } from '@expo/vector-icons';
 
 interface AnalyticsData {
   attendanceRate?: number;
@@ -15,19 +17,256 @@ interface AnalyticsData {
   userRole?: string;
 }
 
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  header: {
+    padding: 20,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginLeft: 12,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#64748b',
+    textAlign: 'center',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 12,
+  },
+  dateRangeContainer: {
+    padding: 20,
+    backgroundColor: '#fff',
+    marginTop: 8,
+  },
+  dateRangeButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  dateRangeButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    marginHorizontal: 4,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+  },
+  dateRangeButtonActive: {
+    backgroundColor: '#2563eb',
+  },
+  dateRangeButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#64748b',
+  },
+  dateRangeButtonTextActive: {
+    color: '#fff',
+  },
+  filterContainer: {
+    padding: 20,
+    backgroundColor: '#fff',
+    marginTop: 8,
+  },
+  datePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  datePickerText: {
+    fontSize: 16,
+    color: '#1e293b',
+    fontWeight: '500',
+  },
+  pickerContainer: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  picker: {
+    height: 50,
+  },
+  metricsContainer: {
+    padding: 20,
+  },
+  metricCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
+  },
+  metricHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  metricTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginLeft: 12,
+  },
+  metricValue: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#2563eb',
+    marginBottom: 12,
+  },
+  roleValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2563eb',
+    marginBottom: 12,
+  },
+  metricDetail: {
+    fontSize: 14,
+    color: '#64748b',
+    lineHeight: 20,
+  },
+  progressBar: {
+    width: '100%',
+    height: 8,
+    backgroundColor: '#e2e8f0',
+    borderRadius: 4,
+    marginVertical: 12,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 4,
+    backgroundColor: '#2563eb',
+  },
+  metricInsight: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#f0f9ff',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#2563eb',
+  },
+  insightText: {
+    fontSize: 14,
+    color: '#1e293b',
+    fontWeight: '500',
+  },
+  leaveBreakdown: {
+    marginVertical: 12,
+  },
+  leaveItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  leaveIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  leaveText: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  errorText: {
+    color: '#ef4444',
+    textAlign: 'center',
+    marginTop: 16,
+    fontSize: 16,
+  },
+});
+
 const ReportsScreen = () => {
   const { profileData } = useUserProfile();
   const [analytics, setAnalytics] = useState<AnalyticsData>({});
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState('all');
   const [teams, setTeams] = useState([]);
+  const [dateRange, setDateRange] = useState('month'); // week, month, quarter, year
 
   useEffect(() => {
     fetchAnalytics();
     fetchTeams();
-  }, [profileData]);
+  }, [profileData, selectedDate, selectedTeam, dateRange]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchAnalytics();
+    setRefreshing(false);
+  };
+
+  const onDateChange = (event, selectedDate) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      setSelectedDate(selectedDate);
+    }
+  };
+
+  const getDateRangeText = () => {
+    const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+    return selectedDate.toLocaleDateString('en-US', options);
+  };
 
   const fetchAnalytics = async () => {
     if (!profileData?.profile) return;
@@ -129,129 +368,199 @@ const ReportsScreen = () => {
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>{APP_NAME} Reports</Text>
-        <ActivityIndicator size="large" color="#2563eb" />
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Ionicons name="analytics-outline" size={48} color="#2563eb" />
+          <Text style={styles.title}>Loading Reports...</Text>
+          <ActivityIndicator size="large" color="#2563eb" style={{ marginTop: 16 }} />
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>{APP_NAME} Reports</Text>
-        <Text style={styles.errorText}>Error: {error}</Text>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle-outline" size={48} color="#ef4444" />
+          <Text style={styles.title}>Reports Error</Text>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={fetchAnalytics}>
+            <Ionicons name="refresh-outline" size={20} color="#fff" />
+            <Text style={styles.retryButtonText}>Try Again</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
-  const listHeader = (
-    <View>
-      <Text style={styles.title}>{APP_NAME} Reports</Text>
-      <Text style={styles.subtitle}>{getScopeText()}</Text>
-      <View style={styles.filterRow}>
-        <Text style={styles.filterLabel}>Date:</Text>
-        <TouchableOpacity onPress={() => {/* show date picker */}} style={styles.filterInput}>
-          <Text>{selectedDate}</Text>
-        </TouchableOpacity>
-        {['admin', 'super_admin', 'reporting_manager'].includes(profileData?.profile?.role) && (
-          <>
-            <Text style={styles.filterLabel}>Team:</Text>
-            <Picker
-              selectedValue={selectedTeam}
-              style={styles.filterInput}
-              onValueChange={(itemValue) => setSelectedTeam(itemValue)}
-            >
-              <Picker.Item label="All" value="all" />
-              {teams.map(team => (
-                <Picker.Item key={team.id} label={team.name} value={team.id} />
-              ))}
-            </Picker>
-          </>
-        )}
-      </View>
-      <View style={styles.card}>
-        <Text style={styles.metricTitle}>Attendance Rate</Text>
-        <Text style={styles.metricValue}>{analytics.attendanceRate ?? 0}%</Text>
-        <View style={styles.barChartContainer}>
-          <View style={[styles.bar, { width: `${analytics.attendanceRate ?? 0}%` }]} />
-        </View>
-        <Text style={styles.metricDetail}>
-          {analytics.presentDays ?? 0} of {analytics.totalDays ?? 0} days
-        </Text>
-      </View>
-      <View style={styles.card}>
-        <Text style={styles.metricTitle}>Leave Requests</Text>
-        <Text style={styles.metricValue}>{analytics.totalLeaveRequests ?? 0}</Text>
-        <View style={styles.barChartContainer}>
-          <View style={[styles.bar, { width: `${((analytics.approvedLeave ?? 0) / ((analytics.totalLeaveRequests ?? 1))) * 100}%`, backgroundColor: '#10b981' }]} />
-          <View style={[styles.bar, { width: `${((analytics.pendingLeave ?? 0) / ((analytics.totalLeaveRequests ?? 1))) * 100}%`, backgroundColor: '#f59e0b' }]} />
-        </View>
-        <Text style={styles.metricDetail}>
-          {analytics.approvedLeave ?? 0} approved, {analytics.pendingLeave ?? 0} pending
-        </Text>
-      </View>
-      <View style={styles.card}>
-        <Text style={styles.metricTitle}>User Role</Text>
-        <Text style={styles.metricValue}>{analytics.userRole ?? ''}</Text>
-        <Text style={styles.metricDetail}>Access level</Text>
-      </View>
-    </View>
-  );
-
   return (
-    <FlatList
-      style={styles.container}
-      data={[1]}
-      keyExtractor={() => 'header'}
-      renderItem={() => null}
-      ListHeaderComponent={listHeader}
-    />
+    <SafeAreaView style={styles.container}>
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <Ionicons name="analytics" size={32} color="#2563eb" />
+            <Text style={styles.title}>Analytics Dashboard</Text>
+          </View>
+          <Text style={styles.subtitle}>{getScopeText()}</Text>
+        </View>
+
+        {/* Date Range Selector */}
+        <View style={styles.dateRangeContainer}>
+          <Text style={styles.sectionTitle}>Time Period</Text>
+          <View style={styles.dateRangeButtons}>
+            {['week', 'month', 'quarter', 'year'].map((range) => (
+              <TouchableOpacity
+                key={range}
+                style={[
+                  styles.dateRangeButton,
+                  dateRange === range && styles.dateRangeButtonActive
+                ]}
+                onPress={() => setDateRange(range)}
+              >
+                <Text style={[
+                  styles.dateRangeButtonText,
+                  dateRange === range && styles.dateRangeButtonTextActive
+                ]}>
+                  {range.charAt(0).toUpperCase() + range.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Date Picker */}
+        <View style={styles.filterContainer}>
+          <Text style={styles.sectionTitle}>Select Date</Text>
+          <TouchableOpacity 
+            style={styles.datePickerButton} 
+            onPress={() => setShowDatePicker(true)}
+          >
+            <Ionicons name="calendar-outline" size={20} color="#2563eb" />
+            <Text style={styles.datePickerText}>{getDateRangeText()}</Text>
+            <Ionicons name="chevron-down-outline" size={20} color="#64748b" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Team Filter */}
+        {['admin', 'super_admin', 'reporting_manager'].includes(profileData?.profile?.role) && (
+          <View style={styles.filterContainer}>
+            <Text style={styles.sectionTitle}>Team Filter</Text>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={selectedTeam}
+                style={styles.picker}
+                onValueChange={(itemValue) => setSelectedTeam(itemValue)}
+              >
+                <Picker.Item label="All Teams" value="all" />
+                {teams.map(team => (
+                  <Picker.Item key={team.id} label={team.name} value={team.id} />
+                ))}
+              </Picker>
+            </View>
+          </View>
+        )}
+
+        {/* Metrics Cards */}
+        <View style={styles.metricsContainer}>
+          {/* Attendance Rate Card */}
+          <View style={styles.metricCard}>
+            <View style={styles.metricHeader}>
+              <Ionicons name="checkmark-circle" size={24} color="#10b981" />
+              <Text style={styles.metricTitle}>Attendance Rate</Text>
+            </View>
+            <Text style={styles.metricValue}>{analytics.attendanceRate ?? 0}%</Text>
+            <View style={styles.progressBar}>
+              <View 
+                style={[
+                  styles.progressFill, 
+                  { width: `${analytics.attendanceRate ?? 0}%`, backgroundColor: '#10b981' }
+                ]} 
+              />
+            </View>
+            <Text style={styles.metricDetail}>
+              {analytics.presentDays ?? 0} present out of {analytics.totalDays ?? 0} total days
+            </Text>
+            <View style={styles.metricInsight}>
+              <Text style={styles.insightText}>
+                {(analytics.attendanceRate ?? 0) >= 90 ? '🎉 Excellent attendance!' : 
+                 (analytics.attendanceRate ?? 0) >= 75 ? '👍 Good attendance' : 
+                 '⚠️ Needs improvement'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Leave Requests Card */}
+          <View style={styles.metricCard}>
+            <View style={styles.metricHeader}>
+              <Ionicons name="calendar" size={24} color="#f59e0b" />
+              <Text style={styles.metricTitle}>Leave Requests</Text>
+            </View>
+            <Text style={styles.metricValue}>{analytics.totalLeaveRequests ?? 0}</Text>
+            <View style={styles.leaveBreakdown}>
+              <View style={styles.leaveItem}>
+                <View style={[styles.leaveIndicator, { backgroundColor: '#10b981' }]} />
+                <Text style={styles.leaveText}>Approved: {analytics.approvedLeave ?? 0}</Text>
+              </View>
+              <View style={styles.leaveItem}>
+                <View style={[styles.leaveIndicator, { backgroundColor: '#f59e0b' }]} />
+                <Text style={styles.leaveText}>Pending: {analytics.pendingLeave ?? 0}</Text>
+              </View>
+              <View style={styles.leaveItem}>
+                <View style={[styles.leaveIndicator, { backgroundColor: '#ef4444' }]} />
+                <Text style={styles.leaveText}>
+                  Rejected: {(analytics.totalLeaveRequests ?? 0) - (analytics.approvedLeave ?? 0) - (analytics.pendingLeave ?? 0)}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.progressBar}>
+              <View 
+                style={[
+                  styles.progressFill, 
+                  { 
+                    width: `${((analytics.approvedLeave ?? 0) / Math.max(analytics.totalLeaveRequests ?? 1, 1)) * 100}%`, 
+                    backgroundColor: '#10b981' 
+                  }
+                ]} 
+              />
+            </View>
+          </View>
+
+          {/* Quick Stats Card */}
+          <View style={styles.metricCard}>
+            <View style={styles.metricHeader}>
+              <Ionicons name="person-circle" size={24} color="#2563eb" />
+              <Text style={styles.metricTitle}>Your Access Level</Text>
+            </View>
+            <Text style={styles.roleValue}>{analytics.userRole?.replace('_', ' ').toUpperCase() ?? ''}</Text>
+            <Text style={styles.metricDetail}>
+              {analytics.userRole === 'super_admin' ? 'Full system access across all companies' :
+               analytics.userRole === 'admin' ? 'Company-wide data and management access' :
+               analytics.userRole === 'reporting_manager' ? 'Team data and reporting access' :
+               'Personal data access only'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Date Picker Modal */}
+        {showDatePicker && (
+          <DateTimePicker
+            value={selectedDate}
+            mode="date"
+            display="default"
+            onChange={onDateChange}
+          />
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc', padding: 16 },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#22223b', marginBottom: 8, textAlign: 'center' },
-  subtitle: { fontSize: 16, color: '#64748b', marginBottom: 16, textAlign: 'center' },
-  card: { backgroundColor: '#fff', borderRadius: 16, padding: 24, marginBottom: 16, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, elevation: 4 },
-  metricTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 8 },
-  metricValue: { fontSize: 24, fontWeight: 'bold', color: '#2563eb', marginBottom: 4 },
-  metricDetail: { fontSize: 14, color: '#64748b', textAlign: 'center' },
-  errorText: { color: 'red', textAlign: 'center', marginTop: 20 },
-  filterRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    marginBottom: 16,
-    flexWrap: 'wrap',
-  },
-  filterLabel: {
-    fontSize: 16,
-    color: '#475569',
-    marginRight: 10,
-  },
-  filterInput: {
-    backgroundColor: '#e2e8f0',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    minWidth: 100,
-    textAlign: 'center',
-  },
-  barChartContainer: {
-    width: '100%',
-    height: 20,
-    backgroundColor: '#e0e0e0',
-    borderRadius: 10,
-    overflow: 'hidden',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  bar: {
-    height: '100%',
-    borderRadius: 10,
-  },
-});
-
-export default ReportsScreen; 
+export default ReportsScreen;

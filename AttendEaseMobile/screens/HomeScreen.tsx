@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, FlatList } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserProfile } from '../lib/useUserProfile';
+import { useCompany } from '../contexts/CompanyContext';
 import { APP_NAME } from '../branding';
 
 const LOGO = require('../assets/attendedge-logo.png');
@@ -9,7 +10,16 @@ const LOGO = require('../assets/attendedge-logo.png');
 const HomeScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
   const { profileData } = useUserProfile();
+  const { company, loading: companyLoading } = useCompany();
   const userRole = profileData?.profile?.role || 'employee';
+  
+  // Get company display name
+  const getCompanyDisplay = () => {
+    if (companyLoading) return 'Loading...';
+    if (company) return company.name || 'Unnamed Company';
+    if (profileData?.profile?.company_id) return `Company ID: ${profileData.profile.company_id}`;
+    return 'No company assigned';
+  };
 
   // Define modules with role-based access
   const getAvailableModules = () => {
@@ -17,7 +27,6 @@ const HomeScreen = ({ navigation }) => {
       // Regular modules
       { label: 'Attendance', icon: '🕒', screen: 'Attendance', roles: ['employee', 'reporting_manager', 'admin', 'super_admin'] },
       { label: 'Leave', icon: '🌴', screen: 'Leave', roles: ['employee', 'reporting_manager', 'admin', 'super_admin'] },
-      { label: 'Teams', icon: '👥', screen: 'Teams', roles: ['reporting_manager', 'admin', 'super_admin'] },
       { label: 'Reports', icon: '📊', screen: 'Reports', roles: ['reporting_manager', 'admin', 'super_admin'] },
       { label: 'Recruitment Reports', icon: '📈', screen: 'RecruitmentReports', roles: ['reporting_manager', 'admin', 'super_admin'] },
       { label: 'Settings', icon: '⚙️', screen: 'Settings', roles: ['employee', 'reporting_manager', 'admin', 'super_admin'] },
@@ -27,9 +36,9 @@ const HomeScreen = ({ navigation }) => {
       { label: 'Employee Management', icon: '👨‍💼', screen: 'EmployeeManagement', roles: ['admin', 'super_admin'] },
       { label: 'Attendance Management', icon: '📋', screen: 'AttendanceManagement', roles: ['reporting_manager', 'admin', 'super_admin'] },
       { label: 'Leave Management', icon: '📝', screen: 'LeaveManagement', roles: ['reporting_manager', 'admin', 'super_admin'] },
+      { label: 'Leave Types Management', icon: '📋', screen: 'LeaveTypes', roles: ['admin', 'super_admin'] },
       { label: 'Team Management', icon: '🏢', screen: 'TeamManagement', roles: ['admin', 'super_admin'] },
       { label: 'Holiday Management', icon: '🎉', screen: 'HolidayManagement', roles: ['admin', 'super_admin'] },
-      { label: 'System Settings', icon: '⚙️', screen: 'Settings', roles: ['employee', 'reporting_manager', 'admin', 'super_admin'] },
     ];
 
     return allModules.filter(module => module.roles.includes(userRole));
@@ -53,12 +62,11 @@ const HomeScreen = ({ navigation }) => {
 
   // Separate regular modules from management modules
   const regularModules = availableModules.filter(module => 
-    !module.label.includes('Management') && module.label !== 'System Settings'
+    !module.label.includes('Management')
   );
   const managementModules = availableModules.filter(module => 
     module.label.includes('Management')
   );
-  const systemSettingsModule = availableModules.find(module => module.label === 'System Settings');
 
   return (
     <FlatList
@@ -71,6 +79,10 @@ const HomeScreen = ({ navigation }) => {
       <Image source={LOGO} style={styles.logo} />
       <Text style={styles.greeting}>Welcome, {profileData?.profile?.name || user?.email || 'User'}!</Text>
       <Text style={styles.roleText}>{getRoleDisplayName(userRole)}</Text>
+      <View style={styles.companyContainer}>
+        <Text style={styles.companyText}>{getCompanyDisplay()}</Text>
+        {company?.id && <Text style={styles.companyId}>ID: {company.id}</Text>}
+      </View>
       <Text style={styles.subtitle}>What would you like to do today?</Text>
       
       {/* Regular Modules */}
@@ -109,22 +121,6 @@ const HomeScreen = ({ navigation }) => {
         </View>
       )}
 
-      {/* System Settings Module */}
-      {systemSettingsModule && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>System Settings</Text>
-          <View style={styles.linksContainer}>
-            <TouchableOpacity 
-              key={systemSettingsModule.label} 
-              style={styles.linkCard} 
-              onPress={() => handleLinkPress(systemSettingsModule.screen)}
-            >
-              <Text style={styles.linkIcon}>{systemSettingsModule.icon}</Text>
-              <Text style={styles.linkLabel}>{systemSettingsModule.label}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
 
       <TouchableOpacity style={styles.logoutButton} onPress={logout}>
         <Text style={styles.logoutText}>Logout</Text>
@@ -158,15 +154,27 @@ const styles = StyleSheet.create({
   },
   roleText: { 
     fontSize: 16, 
-    color: '#64748b', 
-    marginBottom: 8, 
-    textAlign: 'center' 
+    color: '#666', 
+    marginBottom: 5, 
+  },
+  companyContainer: { 
+    marginBottom: 20, 
+    alignItems: 'center', 
+  },
+  companyText: { 
+    fontSize: 16, 
+    color: '#444', 
+    fontWeight: '500', 
+  },
+  companyId: { 
+    fontSize: 14, 
+    color: '#666', 
+    marginTop: 2, 
   },
   subtitle: { 
     fontSize: 16, 
     color: '#4a4e69', 
     marginBottom: 24, 
-    textAlign: 'center' 
   },
   section: {
     width: '100%',

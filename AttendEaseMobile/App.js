@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import 'react-native-reanimated';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { CompanyProvider } from './contexts/CompanyContext';
 import AuthScreen from './screens/AuthScreen';
 import { RootStack } from './src/app/stack';
 
@@ -22,12 +23,21 @@ function RootNavigator() {
   );
 }
 
-export default function App() {
+function AppContent() {
   return (
-    <AuthProvider>
+    <CompanyProvider>
       <NavigationContainer>
         <RootNavigator />
       </NavigationContainer>
+    </CompanyProvider>
+  );
+}
+
+// Main App component with all providers
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
     </AuthProvider>
   );
 }

@@ -10,12 +10,16 @@ import {
   Modal,
   Dimensions,
   ScrollView,
+  RefreshControl,
+  ActivityIndicator,
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useLeave } from '../lib/useLeave';
 import { useUserProfile } from '../lib/useUserProfile';
 import { supabase } from '../lib/supabase';
+import { APP_NAME } from '../branding';
 
 interface LeaveRequest {
   id: string;
@@ -84,17 +88,46 @@ export default function LeaveManagementScreen({ navigation }: any) {
 
   const loadLeaveRequests = async () => {
     try {
+      if (!profileData?.profile?.company_id) {
+        console.log('No company ID available for leave requests');
+        return;
+      }
+      
       setLoading(true);
-      const { data, error } = await supabase
+      // First get leave requests without profiles to avoid column issues
+      const { data: leaveData, error } = await supabase
         .from('leave_requests')
         .select(`
           *,
-          leave_types(name),
-          employees(name)
+          leave_types(name)
         `)
-        .eq('company_id', profileData?.profile?.company_id);
+        .eq('company_id', profileData.profile.company_id)
+        .order('created_at', { ascending: false });
+      
       if (error) throw error;
-      setLeaveRequests(data || []);
+      
+      // Then get employee names separately
+      const employeeIds = [...new Set(leaveData?.map(req => req.employee_id) || [])];
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, full_name, name, email')
+        .in('id', employeeIds);
+      
+      // Create a map of employee names
+      const employeeMap = new Map();
+      profilesData?.forEach(profile => {
+        const displayName = profile.full_name || profile.name || profile.email || 'Unknown Employee';
+        employeeMap.set(profile.id, displayName);
+      });
+      
+      // Format the data to include employee names
+      const formattedData = (leaveData || []).map(request => ({
+        ...request,
+        employee_name: employeeMap.get(request.employee_id) || 'Unknown Employee',
+        leave_type_name: request.leave_types?.name || 'Unknown Leave Type'
+      }));
+      
+      setLeaveRequests(formattedData);
     } catch (error) {
       console.error('Error loading leave requests:', error);
       Alert.alert('Error', 'Failed to load leave requests');
@@ -105,11 +138,16 @@ export default function LeaveManagementScreen({ navigation }: any) {
 
   const loadLeaveTypes = async () => {
     try {
+      if (!profileData?.profile?.company_id) {
+        console.log('No company ID available');
+        return;
+      }
+      
       const { data, error } = await supabase
         .from('leave_types')
         .select('*')
         .eq('is_active', true)
-        .eq('company_id', profileData?.profile?.company_id);
+        .eq('company_id', profileData.profile.company_id);
       if (error) throw error;
       setLeaveTypes(data || []);
     } catch (error) {
@@ -239,8 +277,10 @@ export default function LeaveManagementScreen({ navigation }: any) {
   };
 
   useEffect(() => {
-    onRefresh();
-  }, []);
+    if (profileData?.profile?.company_id) {
+      onRefresh();
+    }
+  }, [profileData]);
 
   // Determine role
   const userRole = profileData?.profile?.role;
@@ -348,8 +388,15 @@ export default function LeaveManagementScreen({ navigation }: any) {
     );
   };
 
+  // Get summary stats
+  const totalRequests = filteredRequests.length;
+  const pendingRequests = filteredRequests.filter(r => r.status === 'pending').length;
+  const approvedRequests = filteredRequests.filter(r => r.status === 'approved').length;
+  const rejectedRequests = filteredRequests.filter(r => r.status === 'rejected').length;
+
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Leave Management</Text>
         {isEmployee && (
@@ -363,266 +410,137 @@ export default function LeaveManagementScreen({ navigation }: any) {
         )}
       </View>
 
-      
+      {/* Dashboard Overview */}
+      {isAdminOrManager && (
+        <View style={styles.dashboardContainer}>
+          <Text style={styles.dashboardTitle}>Leave Overview</Text>
+          <View style={styles.statsGrid}>
+            <View style={styles.statCard}>
+              <Ionicons name="document-text" size={24} color="#3b82f6" />
+              <Text style={styles.statNumber}>{totalRequests}</Text>
+              <Text style={styles.statLabel}>Total</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="time" size={24} color="#f59e0b" />
+              <Text style={styles.statNumber}>{pendingRequests}</Text>
+              <Text style={styles.statLabel}>Pending</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="checkmark-circle" size={24} color="#10b981" />
+              <Text style={styles.statNumber}>{approvedRequests}</Text>
+              <Text style={styles.statLabel}>Approved</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="close-circle" size={24} color="#ef4444" />
+              <Text style={styles.statNumber}>{rejectedRequests}</Text>
+              <Text style={styles.statLabel}>Rejected</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Filter Buttons */}
+      <View style={styles.filterContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {[
+            { key: 'all', label: 'All' },
+            { key: 'pending', label: 'Pending' },
+            { key: 'approved', label: 'Approved' },
+            { key: 'rejected', label: 'Rejected' },
+          ].map((filterOption) => (
+            <TouchableOpacity
+              key={filterOption.key}
+              style={[
+                styles.filterButton,
+                filter === filterOption.key && styles.filterButtonActive,
+              ]}
+              onPress={() => setFilter(filterOption.key as any)}
+            >
+              <Text
+                style={[
+                  styles.filterButtonText,
+                  filter === filterOption.key && styles.filterButtonTextActive,
+                ]}
+              >
+                {filterOption.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
 
       {/* Content */}
-      <FlatList
+      <ScrollView 
         style={styles.scrollView}
-        data={activeTab === 'requests' ? filteredRequests : []}
-        keyExtractor={(item) => item.id}
-        refreshing={refreshing}
-        onRefresh={onRefresh}
-        ListHeaderComponent={
-          <>
-            {/* Tabs */}
-            <View style={styles.tabContainer}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <TouchableOpacity
-                  style={[styles.tab, activeTab === 'requests' && styles.activeTab]}
-                  onPress={() => setActiveTab('requests')}
-                >
-                  <Text style={[styles.tabText, activeTab === 'requests' && styles.activeTabText]}>
-                    Requests
-                  </Text>
-                </TouchableOpacity>
-                {isEmployee && (
-                  <TouchableOpacity
-                    style={[styles.tab, activeTab === 'balances' && styles.activeTab]}
-                    onPress={() => setActiveTab('balances')}
-                  >
-                    <Text style={[styles.tabText, activeTab === 'balances' && styles.activeTabText]}>
-                      Balances
-                    </Text>
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                  style={[styles.tab, activeTab === 'calendar' && styles.activeTab]}
-                  onPress={() => setActiveTab('calendar')}
-                >
-                  <Text style={[styles.tabText, activeTab === 'calendar' && styles.activeTabText]}>
-                    Calendar
-                  </Text>
-                </TouchableOpacity>
-                {isEmployee && (
-                  <TouchableOpacity
-                    style={[styles.tab, activeTab === 'backdated' && styles.activeTab]}
-                    onPress={() => setActiveTab('backdated')}
-                  >
-                    <Text style={[styles.tabText, activeTab === 'backdated' && styles.activeTabText]}>
-                      Backdated
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </ScrollView>
-            </View>
-
-            {/* Filter Buttons */}
-            {activeTab === 'requests' && (
-              <View style={styles.filterContainer}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {[
-                    { key: 'all', label: 'All' },
-                    { key: 'pending', label: 'Pending' },
-                    { key: 'approved', label: 'Approved' },
-                    { key: 'rejected', label: 'Rejected' },
-                  ].map((filterOption) => (
-                    <TouchableOpacity
-                      key={filterOption.key}
-                      style={[
-                        styles.filterButton,
-                        filter === filterOption.key && styles.filterButtonActive,
-                      ]}
-                      onPress={() => setFilter(filterOption.key as any)}
-                    >
-                      <Text
-                        style={[
-                          styles.filterButtonText,
-                          filter === filterOption.key && styles.filterButtonTextActive,
-                        ]}
-                      >
-                        {filterOption.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
-          </>
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#3b82f6']}
+            tintColor="#3b82f6"
+          />
         }
-        ListEmptyComponent={activeTab === 'requests' ? (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="calendar-outline" size={64} color="#666" />
-            <Text style={styles.emptyText}>No leave requests found</Text>
+      >
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+            <Text style={styles.loadingText}>Loading...</Text>
           </View>
-        ) : null}
-        renderItem={({ item: request }) => (
-          <View style={styles.requestCard}>
-            <View style={styles.requestHeader}>
-              <Text style={styles.employeeName}>
-                {request.employee_name || request.employee_id}
-              </Text>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusBadge(request.status).color }]}>
-                <Text style={styles.statusText}>{getStatusBadge(request.status).label}</Text>
-              </View>
-            </View>
-
-            <Text style={styles.leaveType}>
-              {request.leave_type_name || request.leave_type_id}
-            </Text>
-
-            <Text style={styles.dateRange}>
-              {formatDate(request.start_date)} - {formatDate(request.end_date)}
-              <Text style={styles.daysText}> ({request.total_days} days)</Text>
-            </Text>
-
-            <Text style={styles.reason}>{request.reason}</Text>
-
-            {isAdminOrManager && request.status === 'pending' && (
-              <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.approveButton]}
-                  onPress={() => handleApproveLeave(request.id)}
-                >
-                  <Ionicons name="checkmark" size={16} color="#fff" />
-                  <Text style={styles.approveButtonText}>Approve</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.rejectButton]}
-                  onPress={() => handleRejectLeave(request.id)}
-                >
-                  <Ionicons name="close" size={16} color="#fff" />
-                  <Text style={styles.rejectButtonText}>Reject</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        )}
-      />
-        
-
-        {activeTab === 'balances' && (
+        ) : (
           <>
-            {leaveBalances.length === 0 ? (
+            {/* Requests List */}
+            {filteredRequests.length === 0 ? (
               <View style={styles.emptyContainer}>
-                <Ionicons name="pie-chart-outline" size={64} color="#666" />
-                <Text style={styles.emptyText}>No leave balances found</Text>
+                <Ionicons name="calendar-outline" size={64} color="#666" />
+                <Text style={styles.emptyText}>No leave requests found</Text>
               </View>
             ) : (
-              leaveBalances.map((balance) => (
-                <View key={balance.leave_type_id} style={styles.balanceCard}>
-                  <View style={styles.balanceHeader}>
-                    <Text style={styles.balanceType}>
-                      {balance.leave_type_name || balance.leave_type_id}
+              filteredRequests.map((request) => (
+                <View key={request.id} style={styles.requestCard}>
+                  <View style={styles.requestHeader}>
+                    <Text style={styles.employeeName}>
+                      {request.employee_name}
                     </Text>
-                    <Text style={styles.remainingDays}>
-                      {balance.remaining_days} days left
-                    </Text>
-                  </View>
-                  
-                  <View style={styles.balanceProgress}>
-                    <View style={styles.progressBar}>
-                      <View 
-                        style={[
-                          styles.progressFill, 
-                          { 
-                            width: `${(balance.used_days / balance.allocated_days) * 100}%`,
-                            backgroundColor: balance.remaining_days > 0 ? '#10b981' : '#ef4444'
-                          }
-                        ]} 
-                      />
+                    <View style={[styles.statusBadge, { backgroundColor: getStatusBadge(request.status).color }]}>
+                      <Text style={styles.statusText}>{getStatusBadge(request.status).label}</Text>
                     </View>
-                    <Text style={styles.balanceText}>
-                      {balance.used_days} of {balance.allocated_days} days used
-                    </Text>
                   </View>
+
+                  <Text style={styles.leaveType}>
+                    {request.leave_type_name}
+                  </Text>
+
+                  <Text style={styles.dateRange}>
+                    {formatDate(request.start_date)} - {formatDate(request.end_date)}
+                    <Text style={styles.daysText}> ({request.total_days} days)</Text>
+                  </Text>
+
+                  <Text style={styles.reason}>{request.reason}</Text>
+
+                  {isAdminOrManager && request.status === 'pending' && (
+                    <View style={styles.actionButtons}>
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.approveButton]}
+                        onPress={() => handleApproveLeave(request.id)}
+                      >
+                        <Ionicons name="checkmark" size={16} color="#fff" />
+                        <Text style={styles.approveButtonText}>Approve</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.rejectButton]}
+                        onPress={() => handleRejectLeave(request.id)}
+                      >
+                        <Ionicons name="close" size={16} color="#fff" />
+                        <Text style={styles.rejectButtonText}>Reject</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
               ))
             )}
           </>
         )}
-
-        {activeTab === 'calendar' && (
-          <View style={styles.calendarContainer}>
-            <View style={styles.calendarHeader}>
-              <TouchableOpacity onPress={() => setSelectedDate(new Date(selectedDate.getTime() - 24 * 60 * 60 * 1000))}>
-                <Ionicons name="chevron-back" size={24} color="#3b82f6" />
-              </TouchableOpacity>
-              <Text style={styles.calendarTitle}>
-                {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-              </Text>
-              <TouchableOpacity onPress={() => setSelectedDate(new Date(selectedDate.getTime() + 24 * 60 * 60 * 1000))}>
-                <Ionicons name="chevron-forward" size={24} color="#3b82f6" />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.calendarGrid}>
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                <Text key={day} style={styles.calendarDayHeader}>{day}</Text>
-              ))}
-              
-              {Array.from({ length: new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1).getDay() }, (_, i) => (
-                <View key={`empty-${i}`} style={styles.calendarDay} />
-              ))}
-              
-              {Array.from({ length: new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0).getDate() }, (_, i) => {
-                const date = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), i + 1);
-                const dateStr = date.toISOString().split('T')[0];
-                const requests = getLeaveRequestsForDate(date);
-                const isToday = date.toDateString() === new Date().toDateString();
-                
-                return (
-                  <TouchableOpacity
-                    key={i}
-                    style={[
-                      styles.calendarDay,
-                      isToday && styles.calendarToday,
-                      requests.length > 0 && styles.calendarHasLeave
-                    ]}
-                    onPress={() => {
-                      setSelectedDate(date);
-                      if (requests.length > 0) {
-                        Alert.alert(
-                          'Leave Requests',
-                          requests.map(req => 
-                            `${req.employee_name || req.employee_id}: ${req.leave_type_name || req.leave_type_id}`
-                          ).join('\n')
-                        );
-                      }
-                    }}
-                  >
-                    <Text style={[
-                      styles.calendarDayText,
-                      isToday && styles.calendarTodayText,
-                      requests.length > 0 && styles.calendarHasLeaveText
-                    ]}>
-                      {i + 1}
-                    </Text>
-                    {requests.length > 0 && (
-                      <View style={styles.calendarLeaveIndicator} />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        )}
-
-        {activeTab === 'backdated' && (
-          <View style={styles.backdatedContainer}>
-            <TouchableOpacity
-              style={styles.backdatedButton}
-              onPress={() => setShowBackdatedForm(true)}
-            >
-              <Ionicons name="add-circle" size={24} color="#3b82f6" />
-              <Text style={styles.backdatedButtonText}>Request Backdated Leave</Text>
-            </TouchableOpacity>
-            
-            <Text style={styles.backdatedInfo}>
-              Use this option to request leave for past dates that you forgot to apply for.
-            </Text>
-          </View>
-        )}
-
+      </ScrollView>
       {/* Leave Request Form Modal */}
       <Modal
         visible={showRequestForm}
@@ -842,7 +760,7 @@ export default function LeaveManagementScreen({ navigation }: any) {
           maximumDate={new Date()}
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -924,6 +842,45 @@ const styles = StyleSheet.create({
   },
   filterButtonTextActive: {
     color: '#fff',
+  },
+  // Dashboard styles
+  dashboardContainer: {
+    backgroundColor: '#fff',
+    padding: 16,
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  dashboardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 12,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  statNumber: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginTop: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
   },
   scrollView: {
     flex: 1,

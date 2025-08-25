@@ -7,6 +7,9 @@ import {
   Alert,
   FlatList,
   Modal,
+  ScrollView,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -33,25 +36,80 @@ export default function AttendanceManagementScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [employees, setEmployees] = useState([]);
+  const [allAttendance, setAllAttendance] = useState([]);
+  const [todayAttendance, setTodayAttendance] = useState(null);
+  const [attendanceSummary, setAttendanceSummary] = useState({
+    totalEmployees: 0,
+    present: 0,
+    absent: 0,
+    late: 0,
+    halfDay: 0,
+    notMarked: 0
+  });
   const { profileData } = useUserProfile();
   const { checkIn, checkOut } = useAttendance();
 
-  const loadAttendanceRecords = async () => {
+  const loadAttendanceData = async () => {
     try {
       setLoading(true);
-      let query = supabase
-        .from('attendance')
-        .select('*')
-        .eq('date', selectedDate);
-      if (companyId) {
-        query = query.eq('company_id', companyId as any);
+      const companyId = profileData?.profile?.company_id;
+      const userRole = profileData?.profile?.role;
+      const isAdminOrManager = userRole === 'admin' || userRole === 'super_admin' || userRole === 'reporting_manager';
+      
+      if (isAdminOrManager && companyId) {
+        // Load employees and their attendance
+        const [employeesResult, attendanceResult] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select('id, name, email, position, department, role')
+            .eq('company_id', companyId)
+            .eq('is_active', true)
+            .order('name'),
+          supabase
+            .from('attendance')
+            .select('*')
+            .eq('date', selectedDate)
+            .eq('company_id', companyId)
+        ]);
+        
+        if (employeesResult.error) throw employeesResult.error;
+        if (attendanceResult.error) throw attendanceResult.error;
+        
+        setEmployees(employeesResult.data || []);
+        setAllAttendance(attendanceResult.data || []);
+        
+        // Calculate summary
+        const totalEmployees = employeesResult.data?.length || 0;
+        const attendanceData = attendanceResult.data || [];
+        const summary = {
+          totalEmployees,
+          present: attendanceData.filter(a => a.status === 'present').length,
+          absent: attendanceData.filter(a => a.status === 'absent').length,
+          late: attendanceData.filter(a => a.status === 'late').length,
+          halfDay: attendanceData.filter(a => a.status === 'half_day').length,
+          notMarked: totalEmployees - attendanceData.length
+        };
+        setAttendanceSummary(summary);
+      } else {
+        // Load user's own attendance
+        const employeeId = profileData?.profile?.id;
+        if (employeeId && companyId) {
+          const { data, error } = await supabase
+            .from('attendance')
+            .select('*')
+            .eq('employee_id', employeeId)
+            .eq('company_id', companyId)
+            .eq('date', selectedDate)
+            .maybeSingle();
+          
+          if (error && error.code !== 'PGRST116') throw error;
+          setTodayAttendance(data);
+        }
       }
-      const { data, error } = await query;
-      if (error) throw error;
-      setAttendanceRecords(data || []);
     } catch (error) {
-      console.error('Error loading attendance records:', error);
-      Alert.alert('Error', 'Failed to load attendance records');
+      console.error('Error loading attendance data:', error);
+      Alert.alert('Error', 'Failed to load attendance data');
     } finally {
       setLoading(false);
     }
@@ -59,7 +117,7 @@ export default function AttendanceManagementScreen({ navigation }: any) {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadAttendanceRecords();
+    await loadAttendanceData();
     setRefreshing(false);
   };
 
@@ -97,7 +155,7 @@ export default function AttendanceManagementScreen({ navigation }: any) {
                 .eq('id', recordId);
               if (error) throw error;
               Alert.alert('Success', 'Attendance updated successfully');
-              loadAttendanceRecords();
+              loadAttendanceData();
             } catch (error) {
               Alert.alert('Error', 'Failed to update attendance');
             } finally {
@@ -114,39 +172,13 @@ export default function AttendanceManagementScreen({ navigation }: any) {
   };
 
   useEffect(() => {
-    loadAttendanceRecords();
-  }, [selectedDate]);
+    loadAttendanceData();
+  }, [selectedDate, profileData]);
 
   // Determine role
   const userRole = profileData?.profile?.role;
   const isAdminOrManager = userRole === 'admin' || userRole === 'super_admin' || userRole === 'reporting_manager';
   const isEmployee = userRole === 'employee';
-
-  // For admin/manager: fetch all employees and their attendance for selectedDate
-  const [employees, setEmployees] = useState([]);
-  useEffect(() => {
-    if (isAdminOrManager) {
-      (async () => {
-        let query = supabase.from('employees').select('id, name, email, position, department');
-        if (companyId) {
-          query = query.eq('company_id', companyId as any);
-        }
-        const { data, error } = await query;
-        if (!error) setEmployees(data || []);
-      })();
-    }
-  }, [isAdminOrManager]);
-
-  // For admin/manager: fetch attendance for all employees for selectedDate
-  const [allAttendance, setAllAttendance] = useState([]);
-  useEffect(() => {
-    if (isAdminOrManager) {
-      (async () => {
-        const { data, error } = await supabase.from('attendance').select('*').eq('date', selectedDate);
-        if (!error) setAllAttendance(data || []);
-      })();
-    }
-  }, [isAdminOrManager, selectedDate]);
 
   // Helper: get attendance record for an employee
   const getEmployeeAttendance = (empId) => allAttendance.find(a => a.employee_id === empId);
@@ -165,25 +197,86 @@ export default function AttendanceManagementScreen({ navigation }: any) {
   // Mark attendance for an employee
   const markAttendance = async (empId, status) => {
     try {
-      setLoading(true);
+      const companyId = profileData?.profile?.company_id;
+      if (!companyId) return;
+      
       const payload: any = {
         employee_id: empId,
         date: selectedDate,
         status,
-        check_in_time: status === 'present' ? new Date().toISOString() : null,
+        check_in_time: status === 'present' || status === 'late' ? new Date().toISOString() : null,
         check_out_time: null,
+        company_id: companyId
       };
-      if (companyId) payload.company_id = companyId;
+      
       const { error } = await supabase.from('attendance').upsert(payload, { onConflict: 'employee_id,date' });
       if (error) throw error;
-      Alert.alert('Success', 'Attendance marked');
-      // Refresh
-      const { data } = await supabase.from('attendance').select('*').eq('date', selectedDate);
-      setAllAttendance(data || []);
+      
+      Alert.alert('Success', 'Attendance marked successfully');
+      await loadAttendanceData();
     } catch (e) {
+      console.error('Mark attendance error:', e);
       Alert.alert('Error', 'Failed to mark attendance');
-    } finally {
-      setLoading(false);
+    }
+  };
+
+  // Employee check-in/check-out functions
+  const handleCheckIn = async () => {
+    try {
+      const companyId = profileData?.profile?.company_id;
+      const employeeId = profileData?.profile?.id;
+      if (!companyId || !employeeId) return;
+      
+      const timeString = new Date().toISOString();
+      const today = new Date().toISOString().split('T')[0];
+      
+      const payload = {
+        employee_id: employeeId,
+        company_id: companyId,
+        date: today,
+        check_in_time: timeString,
+        status: 'present',
+        created_at: timeString,
+        updated_at: timeString
+      };
+      
+      const { error } = await supabase.from('attendance').upsert(payload, { onConflict: 'employee_id,date' });
+      if (error) throw error;
+      
+      Alert.alert('Success', 'Checked in successfully');
+      await loadAttendanceData();
+    } catch (err) {
+      console.error('Check-in error:', err);
+      Alert.alert('Check-in Failed', err.message || 'Unknown error');
+    }
+  };
+
+  const handleCheckOut = async () => {
+    try {
+      const companyId = profileData?.profile?.company_id;
+      const employeeId = profileData?.profile?.id;
+      if (!companyId || !employeeId) return;
+      
+      const timeString = new Date().toISOString();
+      const today = new Date().toISOString().split('T')[0];
+      
+      const { error } = await supabase
+        .from('attendance')
+        .update({
+          check_out_time: timeString,
+          updated_at: timeString
+        })
+        .eq('employee_id', employeeId)
+        .eq('company_id', companyId)
+        .eq('date', today);
+        
+      if (error) throw error;
+      
+      Alert.alert('Success', 'Checked out successfully');
+      await loadAttendanceData();
+    } catch (err) {
+      console.error('Check-out error:', err);
+      Alert.alert('Check-out Failed', err.message || 'Unknown error');
     }
   };
 
@@ -215,9 +308,6 @@ export default function AttendanceManagementScreen({ navigation }: any) {
     return Math.round(diffHours * 100) / 100;
   };
 
-  // Get company_id if needed
-  const companyId = profileData?.profile?.company_id;
-
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -228,184 +318,7 @@ export default function AttendanceManagementScreen({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      {/* Admin/Manager View: List all employees and mark attendance */}
-      {isAdminOrManager && (
-        <View style={styles.managerContainer}>
-          <View style={styles.managerHeader}>
-            <Text style={styles.managerTitle}>Employee Attendance for {formatDate(selectedDate)}</Text>
-            <Text style={styles.managerSubtitle}>Tap status buttons to mark attendance</Text>
-          </View>
-          
-          <FlatList
-            data={employees}
-            keyExtractor={item => item.id}
-            renderItem={({ item }) => {
-              const att = getEmployeeAttendance(item.id);
-              const badge = getStatusBadge(att?.status);
-              return (
-                <View style={styles.employeeCard}>
-                  <View style={styles.employeeInfo}>
-                    <Text style={styles.employeeName}>{item.name}</Text>
-                    <Text style={styles.employeeDetails}>{item.position} • {item.department}</Text>
-                    {att?.check_in_time && (
-                      <Text style={styles.attendanceTime}>
-                        Check-in: {formatTime(att.check_in_time)}
-                      </Text>
-                    )}
-                  </View>
-                  
-                  <View style={styles.attendanceActions}>
-                    <View style={[styles.statusBadge, { backgroundColor: badge.color }]}>
-                      <Text style={styles.statusBadgeText}>{badge.label}</Text>
-                    </View>
-                    
-                    <View style={styles.actionButtons}>
-                      <TouchableOpacity 
-                        style={[styles.actionButton, att?.status === 'present' && styles.activeActionButton]}
-                        onPress={() => markAttendance(item.id, 'present')}
-                      >
-                        <Ionicons name="checkmark-circle" size={16} color={att?.status === 'present' ? '#fff' : '#10b981'} />
-                        <Text style={[styles.actionButtonText, att?.status === 'present' && styles.activeActionButtonText]}>
-                          Present
-                        </Text>
-                      </TouchableOpacity>
-                      
-                      <TouchableOpacity 
-                        style={[styles.actionButton, att?.status === 'absent' && styles.activeActionButton]}
-                        onPress={() => markAttendance(item.id, 'absent')}
-                      >
-                        <Ionicons name="close-circle" size={16} color={att?.status === 'absent' ? '#fff' : '#ef4444'} />
-                        <Text style={[styles.actionButtonText, att?.status === 'absent' && styles.activeActionButtonText]}>
-                          Absent
-                        </Text>
-                      </TouchableOpacity>
-                      
-                      <TouchableOpacity 
-                        style={[styles.actionButton, att?.status === 'late' && styles.activeActionButton]}
-                        onPress={() => markAttendance(item.id, 'late')}
-                      >
-                        <Ionicons name="time" size={16} color={att?.status === 'late' ? '#fff' : '#f59e0b'} />
-                        <Text style={[styles.actionButtonText, att?.status === 'late' && styles.activeActionButtonText]}>
-                          Late
-                        </Text>
-                      </TouchableOpacity>
-                      
-                      <TouchableOpacity 
-                        style={[styles.actionButton, att?.status === 'half_day' && styles.activeActionButton]}
-                        onPress={() => markAttendance(item.id, 'half_day')}
-                      >
-                        <Ionicons name="remove-circle" size={16} color={att?.status === 'half_day' ? '#fff' : '#64748b'} />
-                        <Text style={[styles.actionButtonText, att?.status === 'half_day' && styles.activeActionButtonText]}>
-                          Half Day
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
-              );
-            }}
-          />
-        </View>
-      )}
-      {/* Employee View: Check In/Out, Today’s Status, History */}
-      {isEmployee && (
-        <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 16 }}>
-          <TouchableOpacity
-            style={{ backgroundColor: '#10b981', padding: 12, borderRadius: 8, marginRight: 8 }}
-            onPress={async () => {
-              try {
-                if (!companyId) throw new Error('No company ID');
-                const employeeId = profileData?.profile?.id;
-                if (!employeeId) throw new Error('No employee ID');
-                
-                const timeString = new Date().toISOString();
-                const today = new Date().toISOString().split('T')[0];
-                
-                // 1. Try to fetch existing attendance record
-                const { data: existing, error: fetchError } = await supabase
-                  .from('attendance')
-                  .select('id')
-                  .eq('employee_id', employeeId)
-                  .eq('company_id', companyId)
-                  .eq('date', today)
-                  .maybeSingle();
-                
-                if (fetchError) {
-                  console.error('Fetch error:', fetchError);
-                  throw fetchError;
-                }
-                
-                if (existing) {
-                  // 2. Update existing record
-                  const { error } = await supabase
-                    .from('attendance')
-                    .update({ 
-                      check_in_time: timeString, 
-                      status: 'present',
-                      updated_at: timeString
-                    })
-                    .eq('id', existing.id);
-                  if (error) {
-                    console.error('Update error:', error);
-                    throw error;
-                  }
-                } else {
-                  // 3. Insert new record
-                  const { error } = await supabase
-                    .from('attendance')
-                    .insert({
-                      employee_id: employeeId,
-                      company_id: companyId,
-                      date: today,
-                      check_in_time: timeString,
-                      status: 'present',
-                      created_at: timeString,
-                      updated_at: timeString
-                    });
-                  if (error) {
-                    console.error('Insert error:', error);
-                    throw error;
-                  }
-                }
-                Alert.alert('Success', 'Checked in successfully');
-                loadAttendanceRecords();
-              } catch (err) {
-                console.error('Check-in error:', err);
-                Alert.alert('Check-in Failed', err.message || 'Unknown error');
-              }
-            }}
-          >
-            <Text style={{ color: 'white', fontWeight: 'bold' }}>Check In</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={{ backgroundColor: '#3b82f6', padding: 12, borderRadius: 8 }}
-            onPress={async () => {
-              try {
-                if (!companyId) throw new Error('No company ID');
-                const employeeId = profileData?.profile?.id;
-                if (!employeeId) throw new Error('No employee ID');
-                
-                const timeString = new Date().toISOString();
-                const today = new Date().toISOString().split('T')[0];
-                
-                const result = await supabase.from('attendance').update({
-                  check_out_time: timeString,
-                  updated_at: timeString
-                }).eq('employee_id', employeeId).eq('company_id', companyId).eq('date', today);
-                if (result.error) throw result.error;
-                Alert.alert('Success', 'Checked out successfully');
-                loadAttendanceRecords();
-              } catch (err) {
-                console.error('Check-out error:', err);
-                Alert.alert('Check-out Failed', err.message || 'Unknown error');
-              }
-            }}
-          >
-            <Text style={{ color: 'white', fontWeight: 'bold' }}>Check Out</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
+      {/* Date Selector */}
       <View style={styles.dateSelector}>
         <TouchableOpacity onPress={() => handleDateChange('prev')}>
           <Ionicons name="chevron-back" size={24} color="#3b82f6" />
@@ -422,79 +335,229 @@ export default function AttendanceManagementScreen({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        style={styles.scrollView}
-        data={attendanceRecords}
-        keyExtractor={(item) => item.id}
-        refreshing={refreshing}
-        onRefresh={onRefresh}
-        ListEmptyComponent={
-          loading ? (
-            <View style={styles.loadingContainer}>
-              <Text style={styles.loadingText}>Loading attendance records...</Text>
-            </View>
-          ) : (
-            <View style={styles.emptyContainer}>
-              <Ionicons name="calendar-outline" size={64} color="#666" />
-              <Text style={styles.emptyText}>No attendance records found</Text>
-            </View>
-          )
-        }
-        renderItem={({ item: record }) => (
-          <View style={styles.attendanceCard}>
-            <View style={styles.employeeInfo}>
-              <Text style={styles.employeeName}>{record.employee_name}</Text>
-              <Text style={styles.employeeId}>ID: {record.employee_id}</Text>
-            </View>
-
-            <View style={styles.attendanceDetails}>
-              <View style={styles.timeRow}>
-                <View style={styles.timeItem}>
-                  <Text style={styles.timeLabel}>Check In</Text>
-                  <Text style={styles.timeValue}>{formatTime(record.check_in_time)}</Text>
-                </View>
-                <View style={styles.timeItem}>
-                  <Text style={styles.timeLabel}>Check Out</Text>
-                  <Text style={styles.timeValue}>{formatTime(record.check_out_time)}</Text>
-                </View>
-                <View style={styles.timeItem}>
-                  <Text style={styles.timeLabel}>Total Hours</Text>
-                  <Text style={styles.timeValue}>
-                    {calculateTotalHours(record.check_in_time, record.check_out_time)}h
-                  </Text>
-                </View>
+      {/* Admin/Manager View */}
+      {isAdminOrManager && (
+        <ScrollView 
+          style={styles.scrollView}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          {/* Attendance Overview Dashboard */}
+          <View style={styles.overviewContainer}>
+            <Text style={styles.overviewTitle}>Attendance Overview</Text>
+            
+            {/* Stats Cards */}
+            <View style={styles.statsContainer}>
+              <View style={styles.statCard}>
+                <Ionicons name="people" size={24} color="#3b82f6" />
+                <Text style={styles.statNumber}>{attendanceSummary.totalEmployees}</Text>
+                <Text style={styles.statLabel}>Total</Text>
               </View>
-
-              <View style={styles.statusContainer}>
-                <View
-                  style={[
-                    styles.statusBadge,
-                    {
-                      backgroundColor:
-                        record.status === 'present' ? '#10b981' :
-                        record.status === 'absent' ? '#ef4444' : '#f59e0b',
-                    },
-                  ]}
-                >
-                  <Text style={styles.statusText}>
-                    {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
-                  </Text>
-                </View>
+              
+              <View style={[styles.statCard, { backgroundColor: '#f0fdf4' }]}>
+                <Ionicons name="checkmark-circle" size={24} color="#16a34a" />
+                <Text style={styles.statNumber}>{attendanceSummary.present}</Text>
+                <Text style={styles.statLabel}>Present</Text>
+              </View>
+              
+              <View style={[styles.statCard, { backgroundColor: '#fef2f2' }]}>
+                <Ionicons name="close-circle" size={24} color="#dc2626" />
+                <Text style={styles.statNumber}>{attendanceSummary.absent}</Text>
+                <Text style={styles.statLabel}>Absent</Text>
               </View>
             </View>
-
-            <View style={styles.actionButtons}>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.editButton]}
-                onPress={() => handleUpdateAttendance(record.id, {})}
-              >
-                <Ionicons name="pencil" size={16} color="#3b82f6" />
-                <Text style={styles.editButtonText}>Edit</Text>
-              </TouchableOpacity>
+            
+            <View style={styles.statsContainer}>
+              <View style={[styles.statCard, { backgroundColor: '#fef3c7' }]}>
+                <Ionicons name="time" size={24} color="#d97706" />
+                <Text style={styles.statNumber}>{attendanceSummary.late}</Text>
+                <Text style={styles.statLabel}>Late</Text>
+              </View>
+              
+              <View style={[styles.statCard, { backgroundColor: '#f1f5f9' }]}>
+                <Ionicons name="remove-circle" size={24} color="#64748b" />
+                <Text style={styles.statNumber}>{attendanceSummary.halfDay}</Text>
+                <Text style={styles.statLabel}>Half Day</Text>
+              </View>
+              
+              <View style={[styles.statCard, { backgroundColor: '#f9fafb' }]}>
+                <Ionicons name="help-circle" size={24} color="#6b7280" />
+                <Text style={styles.statNumber}>{attendanceSummary.notMarked}</Text>
+                <Text style={styles.statLabel}>Not Marked</Text>
+              </View>
             </View>
           </View>
-        )}
-      />
+
+          {/* Employee List */}
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#3b82f6" />
+              <Text style={styles.loadingText}>Loading employees...</Text>
+            </View>
+          ) : (
+            employees.map((employee) => {
+              const attendance = getEmployeeAttendance(employee.id);
+              const badge = getStatusBadge(attendance?.status);
+              
+              return (
+                <View key={employee.id} style={styles.employeeCard}>
+                  <View style={styles.employeeInfo}>
+                    <Text style={styles.employeeName}>{employee.name}</Text>
+                    <Text style={styles.employeeDetails}>
+                      {employee.position} • {employee.department}
+                    </Text>
+                    {attendance?.check_in_time && (
+                      <Text style={styles.attendanceTime}>
+                        Check-in: {formatTime(attendance.check_in_time)}
+                        {attendance?.check_out_time && ` • Check-out: ${formatTime(attendance.check_out_time)}`}
+                      </Text>
+                    )}
+                  </View>
+                  
+                  <View style={styles.attendanceActions}>
+                    <View style={[styles.statusBadge, { backgroundColor: badge.color }]}>
+                      <Text style={styles.statusBadgeText}>{badge.label}</Text>
+                    </View>
+                    
+                    <View style={styles.actionButtons}>
+                      <TouchableOpacity 
+                        style={[styles.actionButton, attendance?.status === 'present' && styles.activeActionButton]}
+                        onPress={() => markAttendance(employee.id, 'present')}
+                      >
+                        <Ionicons name="checkmark-circle" size={16} color={attendance?.status === 'present' ? '#fff' : '#10b981'} />
+                        <Text style={[styles.actionButtonText, attendance?.status === 'present' && styles.activeActionButtonText]}>
+                          Present
+                        </Text>
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity 
+                        style={[styles.actionButton, attendance?.status === 'absent' && styles.activeActionButton]}
+                        onPress={() => markAttendance(employee.id, 'absent')}
+                      >
+                        <Ionicons name="close-circle" size={16} color={attendance?.status === 'absent' ? '#fff' : '#ef4444'} />
+                        <Text style={[styles.actionButtonText, attendance?.status === 'absent' && styles.activeActionButtonText]}>
+                          Absent
+                        </Text>
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity 
+                        style={[styles.actionButton, attendance?.status === 'late' && styles.activeActionButton]}
+                        onPress={() => markAttendance(employee.id, 'late')}
+                      >
+                        <Ionicons name="time" size={16} color={attendance?.status === 'late' ? '#fff' : '#f59e0b'} />
+                        <Text style={[styles.actionButtonText, attendance?.status === 'late' && styles.activeActionButtonText]}>
+                          Late
+                        </Text>
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity 
+                        style={[styles.actionButton, attendance?.status === 'half_day' && styles.activeActionButton]}
+                        onPress={() => markAttendance(employee.id, 'half_day')}
+                      >
+                        <Ionicons name="remove-circle" size={16} color={attendance?.status === 'half_day' ? '#fff' : '#64748b'} />
+                        <Text style={[styles.actionButtonText, attendance?.status === 'half_day' && styles.activeActionButtonText]}>
+                          Half Day
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </ScrollView>
+      )}
+
+      {/* Employee View */}
+      {isEmployee && (
+        <ScrollView 
+          style={styles.scrollView}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          {/* Today's Status Card */}
+          <View style={styles.todayStatusCard}>
+            <Text style={styles.todayStatusTitle}>Today's Attendance</Text>
+            {todayAttendance ? (
+              <View style={styles.todayStatusContent}>
+                <View style={styles.statusRow}>
+                  <View style={[styles.statusBadge, { backgroundColor: getStatusBadge(todayAttendance.status).color }]}>
+                    <Text style={styles.statusBadgeText}>{getStatusBadge(todayAttendance.status).label}</Text>
+                  </View>
+                </View>
+                
+                <View style={styles.timeRow}>
+                  <View style={styles.timeItem}>
+                    <Text style={styles.timeLabel}>Check In</Text>
+                    <Text style={styles.timeValue}>{formatTime(todayAttendance.check_in_time)}</Text>
+                  </View>
+                  <View style={styles.timeItem}>
+                    <Text style={styles.timeLabel}>Check Out</Text>
+                    <Text style={styles.timeValue}>{formatTime(todayAttendance.check_out_time)}</Text>
+                  </View>
+                  <View style={styles.timeItem}>
+                    <Text style={styles.timeLabel}>Total Hours</Text>
+                    <Text style={styles.timeValue}>
+                      {calculateTotalHours(todayAttendance.check_in_time, todayAttendance.check_out_time)}h
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.noAttendanceContainer}>
+                <Ionicons name="time-outline" size={48} color="#9ca3af" />
+                <Text style={styles.noAttendanceText}>No attendance record for today</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Check In/Out Buttons */}
+          <View style={styles.checkInOutContainer}>
+            <TouchableOpacity
+              style={[styles.checkInButton, todayAttendance?.check_in_time && styles.disabledButton]}
+              onPress={handleCheckIn}
+              disabled={!!todayAttendance?.check_in_time}
+            >
+              <Ionicons name="log-in" size={24} color="white" />
+              <Text style={styles.checkInOutText}>
+                {todayAttendance?.check_in_time ? 'Checked In' : 'Check In'}
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.checkOutButton, 
+                (!todayAttendance?.check_in_time || todayAttendance?.check_out_time) && styles.disabledButton]}
+              onPress={handleCheckOut}
+              disabled={!todayAttendance?.check_in_time || !!todayAttendance?.check_out_time}
+            >
+              <Ionicons name="log-out" size={24} color="white" />
+              <Text style={styles.checkInOutText}>
+                {todayAttendance?.check_out_time ? 'Checked Out' : 'Check Out'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Quick Stats */}
+          <View style={styles.quickStatsContainer}>
+            <Text style={styles.quickStatsTitle}>This Week</Text>
+            <View style={styles.quickStatsGrid}>
+              <View style={styles.quickStatCard}>
+                <Ionicons name="calendar" size={20} color="#3b82f6" />
+                <Text style={styles.quickStatNumber}>5</Text>
+                <Text style={styles.quickStatLabel}>Days Present</Text>
+              </View>
+              <View style={styles.quickStatCard}>
+                <Ionicons name="time" size={20} color="#10b981" />
+                <Text style={styles.quickStatNumber}>40h</Text>
+                <Text style={styles.quickStatLabel}>Total Hours</Text>
+              </View>
+              <View style={styles.quickStatCard}>
+                <Ionicons name="trending-up" size={20} color="#f59e0b" />
+                <Text style={styles.quickStatNumber}>98%</Text>
+                <Text style={styles.quickStatLabel}>Attendance</Text>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+      )}
 
       {/* Date Picker Modal */}
       {showDatePicker && (
@@ -739,4 +802,161 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     padding: 20,
   },
-}); 
+  // Overview styles
+  overviewContainer: {
+    backgroundColor: 'white',
+    margin: 16,
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  overviewTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 16,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  statCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    flex: 1,
+    marginHorizontal: 4,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  statNumber: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  // Employee view styles
+  todayStatusCard: {
+    backgroundColor: 'white',
+    margin: 16,
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  todayStatusTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 16,
+  },
+  todayStatusContent: {
+    alignItems: 'center',
+  },
+  statusRow: {
+    marginBottom: 16,
+  },
+  noAttendanceContainer: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  noAttendanceText: {
+    fontSize: 16,
+    color: '#9ca3af',
+    marginTop: 8,
+  },
+  checkInOutContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    gap: 12,
+  },
+  checkInButton: {
+    backgroundColor: '#10b981',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 12,
+    flex: 1,
+    gap: 8,
+  },
+  checkOutButton: {
+    backgroundColor: '#3b82f6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 12,
+    flex: 1,
+    gap: 8,
+  },
+  disabledButton: {
+    backgroundColor: '#9ca3af',
+    opacity: 0.6,
+  },
+  checkInOutText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  quickStatsContainer: {
+    backgroundColor: 'white',
+    margin: 16,
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  quickStatsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 16,
+  },
+  quickStatsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  quickStatCard: {
+    backgroundColor: '#f8fafc',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    flex: 1,
+  },
+  quickStatNumber: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  quickStatLabel: {
+    fontSize: 12,
+    color: '#64748b',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+});

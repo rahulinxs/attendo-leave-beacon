@@ -8,6 +8,7 @@ import LeaveManagementScreen from '../../screens/LeaveManagementScreen';
 import TeamManagementScreen from '../../screens/TeamManagementScreen';
 import HolidayManagementScreen from '../../screens/HolidayManagementScreen';
 import ProfileScreen from '../../screens/ProfileScreen';
+import LeaveTypesScreen from '../../screens/LeaveTypesScreen';
 
 const Stack = createStackNavigator();
 
@@ -20,6 +21,7 @@ export const RootStack = () => (
     <Stack.Screen name="LeaveManagement" component={LeaveManagementScreen} options={{ title: 'Leave Management' }} />
     <Stack.Screen name="TeamManagement" component={TeamManagementScreen} options={{ title: 'Team Management' }} />
     <Stack.Screen name="HolidayManagement" component={HolidayManagementScreen} options={{ title: 'Holiday Management' }} />
+    <Stack.Screen name="LeaveTypes" component={LeaveTypesScreen} options={{ title: 'Leave Types & Quotas' }} />
     <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false }} />
   </Stack.Navigator>
 );
