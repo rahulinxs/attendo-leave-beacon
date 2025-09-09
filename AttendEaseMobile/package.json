@@ -15,12 +15,16 @@
     "@react-native-community/datetimepicker": "8.4.1",
     "@react-native-picker/picker": "^2.11.1",
     "@react-navigation/bottom-tabs": "^7.4.6",
+    "@react-navigation/drawer": "^7.5.8",
     "@react-navigation/native": "^7.1.14",
     "@react-navigation/stack": "^7.4.2",
     "@supabase/supabase-js": "^2.50.3",
-    "expo": "53.0.20",
+    "expo": "~53.0.20",
+    "expo-linear-gradient": "~13.0.1",
+    "expo-location": "^18.1.6",
     "expo-status-bar": "~2.2.3",
     "react": "19.0.0",
+    "react-dom": "19.0.0",
     "react-native": "0.79.5",
     "react-native-collapsible": "^1.6.2",
     "react-native-gesture-handler": "~2.24.0",
@@ -34,7 +38,8 @@
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
-    "@react-native-community/cli": "latest"
+    "@react-native-community/cli": "latest",
+    "@types/react-native": "^0.71.0"
   },
   "private": true
 }

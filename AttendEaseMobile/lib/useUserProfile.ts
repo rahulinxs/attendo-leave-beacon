@@ -34,15 +34,25 @@ export function useUserProfile() {
     setLoading(true);
     setError(null);
     try {
+      console.log('Fetching profile for user ID:', user.id);
       // Fetch profile data (use id column)
       const { data: profile, error: profError } = await supabase
         .from('profiles')
         .select('id, email, name, role, department, position, hire_date, is_active, created_at, updated_at, reporting_manager_id, company_id, role_id, team_id')
         .eq('id', user.id)
         .single();
-      if (profError && profError.code !== 'PGRST116') setError(profError.message);
-      setProfileData({ profile });
+      
+      console.log('Profile query result:', { profile, profError });
+      
+      if (profError) {
+        console.error('Profile fetch error:', profError);
+        if (profError.code !== 'PGRST116') setError(profError.message);
+      } else {
+        console.log('Setting profile data:', profile);
+        setProfileData({ profile });
+      }
     } catch (err: any) {
+      console.error('Error in fetchUserProfile:', err);
       setError(err.message || 'Unknown error');
     } finally {
       setLoading(false);
