@@ -8,6 +8,7 @@ import AttendanceManagement from '@/components/AttendanceManagement';
 import LeaveManagement, { EmployeeLeaveView } from '@/components/LeaveManagement';
 import LeaveRequestManagement from '@/components/LeaveRequestManagement';
 import TeamManagement from '@/components/TeamManagement';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import ReportsAnalytics from '@/components/ReportsAnalytics';
 import HolidayManagement from '@/components/HolidayManagement';
 import SystemSettings from '@/components/SystemSettings';
@@ -110,7 +111,11 @@ const Index = () => {
       case 'reports':
         // Admins, super admins, and reporting managers can access reports
         if (['admin', 'super_admin', 'reporting_manager'].includes(user.role)) {
-          return <ReportsAnalytics />;
+          return (
+            <ErrorBoundary>
+              <ReportsAnalytics />
+            </ErrorBoundary>
+          );
         }
         return (
           <div className="glass-effect rounded-2xl p-8 border text-center">

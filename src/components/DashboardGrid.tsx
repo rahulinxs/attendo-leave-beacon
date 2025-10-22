@@ -296,7 +296,7 @@ export const DashboardGrid: React.FC<DashboardGridProps> = ({
                   </Badge>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Absent Days</span>
+                  <span className="text-sm text-gray-600">Leave Days</span>
                   <Badge variant="secondary" className="bg-red-100 text-red-800">
                     {attendanceStats.absent}
                   </Badge>

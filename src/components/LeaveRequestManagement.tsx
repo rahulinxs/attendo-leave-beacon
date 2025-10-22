@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Checkbox } from '@/components/ui/checkbox'; 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
@@ -39,8 +39,12 @@ import {
   Building,
   Mail,
   Volume2,
-  Smartphone
+  Smartphone,
+  MessageSquare,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
 
@@ -183,19 +187,45 @@ const LeaveRequestManagement: React.FC = () => {
     }
   };
 
-  const handleBulkAction = async (action: 'approve' | 'reject') => {
-    for (const requestId of selectedRequests) {
-      if (action === 'approve') {
-        await approveLeaveRequest(requestId);
-      } else {
-        await rejectLeaveRequest(requestId);
+  const handleRequestAction = async (requestId: string, action: 'approve' | 'reject') => {
+    const commentText = comments[requestId] || '';
+    
+    // For rejections, require a comment
+    if (action === 'reject' && !commentText.trim()) {
+      toast({
+        title: 'Comment Required',
+        description: 'Please provide a reason for rejection',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    let success = false;
+    
+    if (action === 'approve') {
+      success = await approveLeaveRequest(requestId, commentText);
+    } else {
+      success = await rejectLeaveRequest(requestId, commentText);
+    }
+    
+    if (success) {
+      toast({
+        title: 'Success',
+        description: `Request ${action}d successfully`,
+      });
+      // Clear the comment and close the input
+      setComments(prev => ({ ...prev, [requestId]: '' }));
+      setActiveRequest(null);
+      
+      // Remove from selected requests if it was selected
+      if (selectedRequests.includes(requestId)) {
+        setSelectedRequests(selectedRequests.filter(id => id !== requestId));
       }
     }
-    setSelectedRequests([]);
-    toast({
-      title: "Success",
-      description: `Bulk ${action} completed for ${selectedRequests.length} requests`,
-    });
+  };
+  
+  const toggleCommentInput = (requestId: string) => {
+    setActiveRequest(activeRequest === requestId ? null : requestId);
   };
 
   const exportRequests = (format: 'xlsx' | 'csv') => {
@@ -275,6 +305,10 @@ const LeaveRequestManagement: React.FC = () => {
       default: return 'secondary';
     }
   };
+
+  // Comment state for each request
+  const [comments, setComments] = useState<Record<string, string>>({});
+  const [activeRequest, setActiveRequest] = useState<string | null>(null);
 
   if (!canManageRequests) {
     return (
@@ -571,22 +605,58 @@ const LeaveRequestManagement: React.FC = () => {
               <CardContent>
                 <div className="space-y-3">
                   {pendingRequests.slice(0, 5).map((request) => (
-                    <div key={request.id} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg border border-orange-200">
-                      <div>
-                        <p className="font-medium">{request.employees?.name}</p>
-                        <p className="text-sm text-gray-600">
-                          {request.leave_types?.name} • {format(new Date(request.start_date), 'MMM dd')} - {format(new Date(request.end_date), 'MMM dd')}
-                        </p>
-                        <p className="text-xs text-gray-500">{request.reason}</p>
+                    <div key={request.id} className="space-y-2">
+                      <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg border border-orange-200">
+                        <div>
+                          <p className="font-medium">{request.employees?.name}</p>
+                          <p className="text-sm text-gray-600">
+                            {request.leave_types?.name} • {format(new Date(request.start_date), 'MMM dd')} - {format(new Date(request.end_date), 'MMM dd')}
+                          </p>
+                          <p className="text-xs text-gray-500">{request.reason}</p>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <div className="flex gap-2">
+                            <Button 
+                              size="sm" 
+                              variant="gradient" 
+                              onClick={() => handleRequestAction(request.id, 'approve')}
+                              disabled={activeRequest === request.id && !comments[request.id]?.trim()}
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="gradient" 
+                              onClick={() => handleRequestAction(request.id, 'reject')}
+                              disabled={activeRequest === request.id && !comments[request.id]?.trim()}
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={() => toggleCommentInput(request.id)}
+                              className="text-xs"
+                            >
+                              {activeRequest === request.id ? 'Hide Comment' : 'Add Comment'}
+                            </Button>
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="gradient" onClick={() => approveLeaveRequest(request.id)}>
-                          <CheckCircle className="w-4 h-4" />
-                        </Button>
-                        <Button size="sm" variant="gradient" onClick={() => rejectLeaveRequest(request.id)}>
-                          <XCircle className="w-4 h-4" />
-                        </Button>
-                      </div>
+                      
+                      {activeRequest === request.id && (
+                        <div className="ml-4 mb-2">
+                          <Textarea
+                            placeholder={comments[request.id] ? 'Update your comment...' : 'Add a comment (required for rejection)...'}
+                            value={comments[request.id] || ''}
+                            onChange={(e) => 
+                              setComments(prev => ({ ...prev, [request.id]: e.target.value }))
+                            }
+                            className="w-full"
+                            rows={2}
+                          />
+                        </div>
+                      )}
                     </div>
                   ))}
                   {pendingRequests.length === 0 && (
@@ -836,10 +906,10 @@ const LeaveRequestManagement: React.FC = () => {
                           <div className="flex gap-1">
                             {request.status === 'pending' && (
                               <>
-                                <Button size="sm" variant="gradient" onClick={() => approveLeaveRequest(request.id)}>
+                                <Button size="sm" variant="gradient" onClick={() => handleSingleAction(request.id, 'approve')}>
                                   <CheckCircle className="w-4 h-4" />
                                 </Button>
-                                <Button size="sm" variant="gradient" onClick={() => rejectLeaveRequest(request.id)}>
+                                <Button size="sm" variant="gradient" onClick={() => handleSingleAction(request.id, 'reject')}>
                                   <XCircle className="w-4 h-4" />
                                 </Button>
                               </>
@@ -995,8 +1065,9 @@ const LeaveRequestManagement: React.FC = () => {
           </div>
         </TabsContent>
       </Tabs>
+
     </div>
   );
 };
 
-export default LeaveRequestManagement; 
+export default LeaveRequestManagement;

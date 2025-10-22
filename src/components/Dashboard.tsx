@@ -36,7 +36,9 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const { user } = useAuth();
   const { todayAttendance, recentAttendance, checkIn, checkOut, isLoading: attendanceLoading, fetchTodayAttendance, fetchRecentAttendance } = useAttendance();
-  const { leaveRequests, leaveBalances, pendingRequests, approveLeaveRequest, rejectLeaveRequest, isLoading: leaveLoading, fetchLeaveRequests, fetchLeaveBalances } = useLeave('employee');
+  // Use 'manager' mode for users with admin/manager roles, 'employee' for others
+  const isManager = ['admin', 'super_admin', 'reporting_manager'].includes(user?.role || '');
+  const { leaveRequests, leaveBalances, pendingRequests, approveLeaveRequest, rejectLeaveRequest, isLoading: leaveLoading, fetchLeaveRequests, fetchLeaveBalances } = useLeave(isManager ? 'manager' : 'employee');
   const { currentCompany } = useCompany();
   const { theme } = useTheme();
   const themeClass = THEME_OPTIONS.find(t => t.key === theme)?.className || '';

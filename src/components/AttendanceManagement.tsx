@@ -113,8 +113,8 @@ const AttendanceManagement: React.FC = () => {
 
   const getStatusBadge = (status: string | undefined) => {
     // Use theme variables for color, and a more compact size
-    const badgeBase =
-      "flex items-center gap-1 px-2.5 py-0.5 text-sm font-semibold rounded-full shadow-sm border transition-all duration-200 animate-fadein";
+    const badgeBase = "flex items-center gap-1 px-2.5 py-0.5 text-sm font-semibold rounded-full shadow-sm border transition-all duration-200 animate-fadein";
+    
     switch (status) {
       case 'present':
         return (
@@ -122,8 +122,7 @@ const AttendanceManagement: React.FC = () => {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Badge
-                  variant="default"
-                  className={badgeBase + " bg-primary text-primary-foreground border border-primary/20"}
+                  className={`${badgeBase} bg-green-600 hover:bg-green-700 text-white border-green-700`}
                   aria-label="Present: Employee is present today"
                 >
                   <CheckCircle className="w-4 h-4 mr-1" /> Present
@@ -139,14 +138,13 @@ const AttendanceManagement: React.FC = () => {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Badge
-                  variant="destructive"
-                  className={badgeBase + " bg-destructive text-destructive-foreground border border-destructive/20"}
+                  className={`${badgeBase} bg-red-600 hover:bg-red-700 text-white border-red-700`}
                   aria-label="Absent: Employee is absent today"
                 >
-                  <XCircle className="w-4 h-4 mr-1" /> Absent
+                  <XCircle className="w-4 h-4 mr-1" /> Leave
                 </Badge>
               </TooltipTrigger>
-              <TooltipContent>Absent: Employee is absent today</TooltipContent>
+              <TooltipContent>Leave: Employee is on leave today</TooltipContent>
             </Tooltip>
           </TooltipProvider>
         );
@@ -156,11 +154,10 @@ const AttendanceManagement: React.FC = () => {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Badge
-                  variant="secondary"
-                  className={badgeBase + " bg-accent text-accent-foreground border border-yellow-400/30"}
+                  className={`${badgeBase} bg-yellow-400 hover:bg-yellow-500 text-yellow-900 border-yellow-500`}
                   aria-label="Late: Employee checked in late"
                 >
-                  <Clock className="w-4 h-4 mr-1 text-yellow-600" /> Late
+                  <Clock className="w-4 h-4 mr-1" /> Late
                 </Badge>
               </TooltipTrigger>
               <TooltipContent>Late: Employee checked in late</TooltipContent>
@@ -173,14 +170,29 @@ const AttendanceManagement: React.FC = () => {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Badge
-                  variant="secondary"
-                  className={badgeBase + " bg-secondary text-secondary-foreground border border-secondary/20"}
+                  className={`${badgeBase} bg-blue-600 hover:bg-blue-700 text-white border-blue-700`}
                   aria-label="Half Day: Employee worked half a day"
                 >
-                  <Circle className="w-4 h-4 mr-1 text-purple-600" /> Half Day
+                  <Circle className="w-4 h-4 mr-1" /> Half Day
                 </Badge>
               </TooltipTrigger>
               <TooltipContent>Half Day: Employee worked half a day</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      case 'holiday':
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  className={`${badgeBase} bg-purple-600 hover:bg-purple-700 text-white border-purple-700`}
+                  aria-label="Holiday: Company holiday"
+                >
+                  <Crown className="w-4 h-4 mr-1" /> Holiday
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>Holiday: Company holiday</TooltipContent>
             </Tooltip>
           </TooltipProvider>
         );
@@ -714,7 +726,7 @@ const AttendanceManagement: React.FC = () => {
                         className="bg-red-600 hover:bg-red-700 text-white rounded shadow focus:ring-2 focus:ring-red-400"
                         onClick={() => markAttendanceForEmployee(emp.id, 'absent')}
                       >
-                        Absent
+                        Leave
                       </Button>
                       <Button
                         size="sm"
@@ -729,6 +741,13 @@ const AttendanceManagement: React.FC = () => {
                         onClick={() => markAttendanceForEmployee(emp.id, 'half_day')}
                       >
                         Half Day
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="bg-purple-600 hover:bg-purple-700 text-white rounded shadow focus:ring-2 focus:ring-purple-400"
+                        onClick={() => markAttendanceForEmployee(emp.id, 'holiday')}
+                      >
+                        Holiday
                       </Button>
                     </td>
                   </tr>

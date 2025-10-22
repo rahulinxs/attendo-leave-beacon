@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCompany } from '@/contexts/CompanyContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
-import { Download, Users, Clock, TrendingUp, FileSpreadsheet, FileDown, CalendarIcon } from 'lucide-react';
+import { Download, Users, Clock, TrendingUp, FileSpreadsheet, FileDown, CalendarIcon, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -89,11 +89,32 @@ interface AttendanceStats {
 }
 
 interface LeaveStats {
+  // By type
   annual: number;
   sick: number;
   unpaid: number;
   other: number;
   total: number;
+  
+  // By status
+  pending: number;
+  approved: number;
+  rejected: number;
+  
+  // Averages
+  avgDuration: number;
+  
+  // Common reasons
+  commonReasons: { reason: string; count: number }[];
+  
+  // Team distribution
+  teamDistribution: { team: string; count: number }[];
+  
+  // Monthly trends
+  monthlyTrends: { month: string; count: number }[];
+  
+  // Top employees
+  topEmployees: { name: string; days: number }[];
 }
 
 interface DepartmentStats {
@@ -138,6 +159,7 @@ const ReportsAnalytics = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [attendanceStats, setAttendanceStats] = useState<AttendanceStats | null>(null);
   const [leaveStats, setLeaveStats] = useState<LeaveStats | null>(null);
+  const [activeLeaveTab, setActiveLeaveTab] = useState('overview');
   const [departmentStats, setDepartmentStats] = useState<DepartmentStats[]>([]);
   const [rawData, setRawData] = useState<RawData>({ attendance: [], leaves: [], employees: [] });
   const [dailyAttendance, setDailyAttendance] = useState<DailyAttendanceRecord[]>([]);
@@ -382,16 +404,7 @@ const ReportsAnalytics = () => {
         team === 'all' || record.profiles?.team_id === team
       );
 
-      const stats = {
-        annual: filteredData.filter(r => r.leave_types?.name === 'Annual Leave' && r.status === 'approved').length,
-        sick: filteredData.filter(r => r.leave_types?.name === 'Sick Leave' && r.status === 'approved').length,
-        unpaid: filteredData.filter(r => r.leave_types?.name === 'Personal Leave' && r.status === 'approved').length,
-        other: filteredData.filter(r => 
-          !['Annual Leave', 'Sick Leave', 'Personal Leave'].includes(r.leave_types?.name || '') && 
-          r.status === 'approved'
-        ).length,
-        total: filteredData.filter(r => r.status === 'approved').length
-      };
+      const stats = processLeaveData(filteredData);
 
       setLeaveStats(stats);
     } catch (error) {
@@ -402,6 +415,145 @@ const ReportsAnalytics = () => {
         variant: "destructive"
       });
     }
+  };
+
+  const processLeaveData = (data: DatabaseLeaveRequest[]): LeaveStats => {
+    const stats: LeaveStats = {
+      annual: 0,
+      sick: 0,
+      unpaid: 0,
+      other: 0,
+      total: 0,
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+      avgDuration: 0,
+      commonReasons: [],
+      teamDistribution: [],
+      monthlyTrends: [],
+      topEmployees: []
+    };
+
+    // Counters for different metrics
+    const typeCounts = {
+      annual: 0,
+      sick: 0,
+      unpaid: 0,
+      other: 0
+    };
+
+    const statusCounts = {
+      pending: 0,
+      approved: 0,
+      rejected: 0
+    };
+
+    const reasonCounts: Record<string, number> = {};
+    const teamCounts: Record<string, number> = {};
+    const monthlyCounts: Record<string, number> = {};
+    const employeeLeaveDays: Record<string, number> = {};
+    let totalDuration = 0;
+    let totalLeaves = 0;
+
+    data.forEach(leave => {
+      if (!leave.leave_types) return;
+      
+      const type = leave.leave_types.name.toLowerCase();
+      const status = leave.status?.toLowerCase() || 'pending';
+      const month = leave.start_date ? new Date(leave.start_date).toLocaleString('default', { month: 'short' }) : '';
+      const employeeName = leave.profiles?.name || 'Unknown';
+      const teamName = teams.find(t => t.id === (leave.profiles?.team_id || ''))?.name || 'Unassigned';
+      
+      // Count by type
+      if (type.includes('annual')) {
+        typeCounts.annual += leave.total_days;
+      } else if (type.includes('sick')) {
+        typeCounts.sick += leave.total_days;
+      } else if (type.includes('unpaid')) {
+        typeCounts.unpaid += leave.total_days;
+      } else {
+        typeCounts.other += leave.total_days;
+      }
+      
+      // Count by status
+      if (status === 'approved') {
+        statusCounts.approved++;
+      } else if (status === 'rejected') {
+        statusCounts.rejected++;
+      } else {
+        statusCounts.pending++;
+      }
+      
+      // Track reasons
+      if (leave.reason) {
+        reasonCounts[leave.reason] = (reasonCounts[leave.reason] || 0) + 1;
+      }
+      
+      // Track by team
+      teamCounts[teamName] = (teamCounts[teamName] || 0) + 1;
+      
+      // Track by month
+      if (month) {
+        monthlyCounts[month] = (monthlyCounts[month] || 0) + 1;
+      }
+      
+      // Track by employee
+      if (employeeName) {
+        employeeLeaveDays[employeeName] = (employeeLeaveDays[employeeName] || 0) + leave.total_days;
+      }
+      
+      totalDuration += leave.total_days;
+      totalLeaves++;
+    });
+    
+    // Calculate averages
+    stats.avgDuration = totalLeaves > 0 ? Math.round((totalDuration / totalLeaves) * 10) / 10 : 0;
+    
+    // Set type counts
+    stats.annual = typeCounts.annual;
+    stats.sick = typeCounts.sick;
+    stats.unpaid = typeCounts.unpaid;
+    stats.other = typeCounts.other;
+    stats.total = stats.annual + stats.sick + stats.unpaid + stats.other;
+    
+    // Set status counts
+    stats.pending = statusCounts.pending;
+    stats.approved = statusCounts.approved;
+    stats.rejected = statusCounts.rejected;
+    
+    // Get top 5 reasons
+    stats.commonReasons = Object.entries(reasonCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([reason, count]) => ({ reason, count }));
+    
+    // Get team distribution
+    stats.teamDistribution = Object.entries(teamCounts)
+      .map(([team, count]) => ({ team, count }))
+      .sort((a, b) => b.count - a.count);
+    
+    // Get monthly trends (last 6 months)
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    
+    stats.monthlyTrends = Array.from({ length: 6 }, (_, i) => {
+      const monthIndex = (currentMonth - 5 + i + 12) % 12;
+      const year = currentYear - (currentMonth - 5 + i < 0 ? 1 : 0);
+      const monthKey = months[monthIndex];
+      return {
+        month: monthKey,
+        count: monthlyCounts[monthKey] || 0
+      };
+    });
+    
+    // Get top 5 employees by leave days
+    stats.topEmployees = Object.entries(employeeLeaveDays)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, days]) => ({ name, days }));
+
+    return stats;
   };
 
   const fetchDepartmentStats = async () => {
@@ -773,14 +925,33 @@ const ReportsAnalytics = () => {
     }
   };
 
-  const filteredLeaves = rawData.leaves.filter(record => {
-    let match = true;
-    if (leaveTypeFilter !== 'all') match = match && record.leave_types?.id === leaveTypeFilter;
-    if (leaveDateRange.start) match = match && record.start_date >= leaveDateRange.start;
-    if (leaveDateRange.end) match = match && record.end_date <= leaveDateRange.end;
-    if (leaveSearch) match = match && record.profiles?.name?.toLowerCase().includes(leaveSearch.toLowerCase());
-    return match;
-  });
+  const filteredLeaves = useMemo(() => {
+    if (!rawData.leaves) return [];
+    
+    return rawData.leaves.filter(leave => {
+      // Filter by leave type
+      if (leaveTypeFilter !== 'all' && leave.leave_type_id !== leaveTypeFilter) return false;
+      
+      // Filter by date range
+      if (leaveDateRange.start && new Date(leave.start_date) < new Date(leaveDateRange.start)) return false;
+      if (leaveDateRange.end && new Date(leave.end_date) > new Date(leaveDateRange.end)) return false;
+      
+      // Filter by search term
+      if (leaveSearch && !leave.profiles?.name?.toLowerCase().includes(leaveSearch.toLowerCase())) return false;
+      
+      return true;
+    });
+  }, [rawData.leaves, leaveTypeFilter, leaveDateRange, leaveSearch]);
+
+
+  const employees = useMemo(() => [
+    { id: '1', name: 'John Doe', email: 'john@example.com', team_id: '1', role: 'employee', position: 'Software Engineer' },
+    { id: '2', name: 'Jane Smith', email: 'jane@example.com', team_id: '1', role: 'employee', position: 'Frontend Developer' },
+    { id: '3', name: 'Mike Johnson', email: 'mike@example.com', team_id: '2', role: 'employee', position: 'Marketing Manager' },
+    { id: '4', name: 'Sarah Williams', email: 'sarah@example.com', team_id: '3', role: 'employee', position: 'Sales Executive' },
+    { id: '5', name: 'David Brown', email: 'david@example.com', team_id: '4', role: 'hr', position: 'HR Manager' },
+    { id: '6', name: 'Emily Davis', email: 'emily@example.com', team_id: '5', role: 'employee', position: 'Operations Manager' }
+  ], []);
 
   return (
     <div className="space-y-6 p-6">
@@ -1054,41 +1225,77 @@ const ReportsAnalytics = () => {
         </TabsContent>
 
         <TabsContent value="leave" className="space-y-6">
-          <div className="flex flex-wrap gap-4 mb-4 items-end">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Leave Type</label>
-              <Select value={leaveTypeFilter} onValueChange={setLeaveTypeFilter}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="All Types" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  {leaveTypes.map(type => (
-                    <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap gap-4 items-end">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Leave Type</label>
+                <Select value={leaveTypeFilter} onValueChange={setLeaveTypeFilter}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="All Types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    {leaveTypes.map(type => (
+                      <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Start Date</label>
+                <Input 
+                  type="date" 
+                  value={leaveDateRange.start} 
+                  onChange={e => setLeaveDateRange(r => ({ ...r, start: e.target.value }))} 
+                  className="w-[140px]" 
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">End Date</label>
+                <div className="flex gap-2">
+                  <Input 
+                    type="date" 
+                    value={leaveDateRange.end} 
+                    onChange={e => setLeaveDateRange(r => ({ ...r, end: e.target.value }))} 
+                    className="w-[140px]" 
+                  />
+                  <Button 
+                    variant="default" 
+                    size="sm" 
+                    onClick={() => fetchData()}
+                    className="h-9"
+                  >
+                    Apply
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Employee</label>
+                <Input type="text" placeholder="Search name" value={leaveSearch} onChange={e => setLeaveSearch(e.target.value)} className="w-[180px]" />
+              </div>
+              <div className="ml-auto flex gap-2">
+                <Button variant="gradient" size="sm" onClick={() => handleExport('xlsx')}>
+                  <FileSpreadsheet className="w-4 h-4 mr-2" /> Export XLSX
+                </Button>
+                <Button variant="gradient" size="sm" onClick={() => handleExport('csv')}>
+                  <FileDown className="w-4 h-4 mr-2" /> Export CSV
+                </Button>
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Start Date</label>
-              <Input type="date" value={leaveDateRange.start} onChange={e => setLeaveDateRange(r => ({ ...r, start: e.target.value }))} className="w-[140px]" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">End Date</label>
-              <Input type="date" value={leaveDateRange.end} onChange={e => setLeaveDateRange(r => ({ ...r, end: e.target.value }))} className="w-[140px]" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Employee</label>
-              <Input type="text" placeholder="Search name" value={leaveSearch} onChange={e => setLeaveSearch(e.target.value)} className="w-[180px]" />
-            </div>
-            <div className="ml-auto flex gap-2">
-              <Button variant="gradient" size="sm" onClick={() => handleExport('xlsx')}>
-                <FileSpreadsheet className="w-4 h-4 mr-2" /> Export XLSX
-              </Button>
-              <Button variant="gradient" size="sm" onClick={() => handleExport('csv')}>
-                <FileDown className="w-4 h-4 mr-2" /> Export CSV
-              </Button>
-            </div>
+            
+            {/* Leave Analytics Tabs */}
+            <Tabs 
+              value={activeLeaveTab} 
+              onValueChange={setActiveLeaveTab}
+              className="w-full"
+            >
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="trends">Trends</TabsTrigger>
+                <TabsTrigger value="teams">Team Analysis</TabsTrigger>
+                <TabsTrigger value="details">Detailed View</TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
           {isLoading ? (
             <div className="flex items-center justify-center h-64">
@@ -1098,100 +1305,532 @@ const ReportsAnalytics = () => {
             <>
               {leaveStats && (
                 <>
-                  <div className="grid grid-cols-5 gap-4">
-                    <Card>
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Annual Leave</CardTitle>
-                        <CalendarIcon className="h-4 w-4 text-blue-500" />
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">{leaveStats.annual}</div>
-                        <p className="text-xs text-muted-foreground">
-                          {((leaveStats.annual / leaveStats.total) * 100).toFixed(1)}% of total
-                        </p>
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Sick Leave</CardTitle>
-                        <CalendarIcon className="h-4 w-4 text-red-500" />
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">{leaveStats.sick}</div>
-                        <p className="text-xs text-muted-foreground">
-                          {((leaveStats.sick / leaveStats.total) * 100).toFixed(1)}% of total
-                        </p>
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Unpaid Leave</CardTitle>
-                        <CalendarIcon className="h-4 w-4 text-yellow-500" />
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">{leaveStats.unpaid}</div>
-                        <p className="text-xs text-muted-foreground">
-                          {((leaveStats.unpaid / leaveStats.total) * 100).toFixed(1)}% of total
-                        </p>
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Other Leave</CardTitle>
-                        <CalendarIcon className="h-4 w-4 text-purple-500" />
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">{leaveStats.other}</div>
-                        <p className="text-xs text-muted-foreground">
-                          {((leaveStats.other / leaveStats.total) * 100).toFixed(1)}% of total
-                        </p>
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-green-500" />
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">{leaveStats.total}</div>
-                        <p className="text-xs text-muted-foreground">Total approved leaves</p>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Leave Distribution</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={[
-                                { name: 'Annual', value: leaveStats.annual },
-                                { name: 'Sick', value: leaveStats.sick },
-                                { name: 'Unpaid', value: leaveStats.unpaid },
-                                { name: 'Other', value: leaveStats.other }
-                              ]}
-                              cx="50%"
-                              cy="50%"
-                              labelLine={false}
-                              label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                              outerRadius={80}
-                              fill="#8884d8"
-                              dataKey="value"
-                            >
-                              {COLORS.map((color, index) => (
-                                <Cell key={`cell-${index}`} fill={color} />
-                              ))}
-                            </Pie>
-                            <Tooltip />
-                          </PieChart>
-                        </ResponsiveContainer>
+                  {/* Overview Tab */}
+                  {activeLeaveTab === 'overview' && (
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <Card>
+                          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Total Leave Days</CardTitle>
+                            <CalendarIcon className="h-4 w-4 text-blue-500" />
+                          </CardHeader>
+                          <CardContent>
+                            <div className="text-2xl font-bold">{leaveStats.total}</div>
+                            <p className="text-xs text-muted-foreground">
+                              {leaveStats.avgDuration} days average per request
+                            </p>
+                          </CardContent>
+                        </Card>
+                        
+                        <Card>
+                          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Approved</CardTitle>
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                          </CardHeader>
+                          <CardContent>
+                            <div className="text-2xl font-bold">{leaveStats.approved}</div>
+                            <p className="text-xs text-muted-foreground">
+                              {((leaveStats.approved / (leaveStats.approved + leaveStats.pending + leaveStats.rejected)) * 100).toFixed(1)}% approval rate
+                            </p>
+                          </CardContent>
+                        </Card>
+                        
+                        <Card>
+                          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Pending</CardTitle>
+                            <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                          </CardHeader>
+                          <CardContent>
+                            <div className="text-2xl font-bold">{leaveStats.pending}</div>
+                            <p className="text-xs text-muted-foreground">
+                              Awaiting approval
+                            </p>
+                          </CardContent>
+                        </Card>
+                        
+                        <Card>
+                          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Rejected</CardTitle>
+                            <XCircle className="h-4 w-4 text-red-500" />
+                          </CardHeader>
+                          <CardContent>
+                            <div className="text-2xl font-bold">{leaveStats.rejected}</div>
+                            <p className="text-xs text-muted-foreground">
+                              {leaveStats.rejected > 0 ? 
+                                `${((leaveStats.rejected / (leaveStats.approved + leaveStats.pending + leaveStats.rejected)) * 100).toFixed(1)}% of total` : 
+                                'No rejections'}
+                            </p>
+                          </CardContent>
+                        </Card>
                       </div>
-                    </CardContent>
-                  </Card>
+                      
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <Card className="lg:col-span-2">
+                          <CardHeader>
+                            <CardTitle>Leave Distribution by Type</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="h-[300px]">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <BarChart
+                                  data={[
+                                    { name: 'Annual', value: leaveStats.annual },
+                                    { name: 'Sick', value: leaveStats.sick },
+                                    { name: 'Unpaid', value: leaveStats.unpaid },
+                                    { name: 'Other', value: leaveStats.other }
+                                  ]}
+                                  layout="vertical"
+                                >
+                                  <CartesianGrid strokeDasharray="3 3" />
+                                  <XAxis type="number" />
+                                  <YAxis dataKey="name" type="category" />
+                                  <Tooltip />
+                                  <Bar dataKey="value" fill="#8884d8">
+                                    {[0, 1, 2, 3].map((entry, index) => (
+                                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                  </Bar>
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </CardContent>
+                        </Card>
+                        
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>Leave Status</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="h-[300px]">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                  <Pie
+                                    data={[
+                                      { name: 'Approved', value: leaveStats.approved },
+                                      { name: 'Pending', value: leaveStats.pending },
+                                      { name: 'Rejected', value: leaveStats.rejected }
+                                    ]}
+                                    cx="50%"
+                                    cy="50%"
+                                    labelLine={false}
+                                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                    outerRadius={80}
+                                    fill="#8884d8"
+                                    dataKey="value"
+                                  >
+                                    <Cell fill="#4CAF50" />
+                                    <Cell fill="#FFC107" />
+                                    <Cell fill="#F44336" />
+                                  </Pie>
+                                  <Tooltip />
+                                  <Legend />
+                                </PieChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>Top Leave Takers</CardTitle>
+                            <p className="text-sm text-muted-foreground">Employees with most leave days</p>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-4">
+                              {leaveStats.topEmployees.length > 0 ? (
+                                leaveStats.topEmployees.map((emp, index) => (
+                                  <div key={emp.name} className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-4">
+                                      <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                                        <span className="text-sm font-medium">{emp.name.split(' ').map(n => n[0]).join('')}</span>
+                                      </div>
+                                      <div>
+                                        <p className="text-sm font-medium">{emp.name}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          {emp.days} day{emp.days !== 1 ? 's' : ''}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="w-1/2">
+                                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                        <div 
+                                          className="h-full bg-blue-500" 
+                                          style={{ 
+                                            width: `${(emp.days / (leaveStats.topEmployees[0]?.days || 1)) * 100}%` 
+                                          }}
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <p className="text-sm text-muted-foreground text-center py-4">No leave data available</p>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                        
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>Common Leave Reasons</CardTitle>
+                            <p className="text-sm text-muted-foreground">Most frequent leave reasons</p>
+                          </CardHeader>
+                          <CardContent>
+                            {leaveStats.commonReasons.length > 0 ? (
+                              <div className="space-y-3">
+                                {leaveStats.commonReasons.map((reason, index) => (
+                                  <div key={index} className="flex items-center justify-between">
+                                    <p className="text-sm font-medium">{reason.reason}</p>
+                                    <Badge variant="outline">{reason.count} {reason.count === 1 ? 'time' : 'times'}</Badge>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground text-center py-4">No reason data available</p>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Trends Tab */}
+                  {activeLeaveTab === 'trends' && (
+                    <div className="space-y-6">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Monthly Leave Trends</CardTitle>
+                          <p className="text-sm text-muted-foreground">Leave requests over the past 6 months</p>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-[300px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={leaveStats.monthlyTrends}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="month" />
+                                <YAxis />
+                                <Tooltip />
+                                <Bar dataKey="count" fill="#8884d8" name="Leave Requests" />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>Leave Type Trends</CardTitle>
+                            <p className="text-sm text-muted-foreground">Breakdown by leave type</p>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="h-[300px]">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <BarChart
+                                  data={[
+                                    { name: 'Annual', count: leaveStats.annual },
+                                    { name: 'Sick', count: leaveStats.sick },
+                                    { name: 'Unpaid', count: leaveStats.unpaid },
+                                    { name: 'Other', count: leaveStats.other }
+                                  ]}
+                                >
+                                  <CartesianGrid strokeDasharray="3 3" />
+                                  <XAxis dataKey="name" />
+                                  <YAxis />
+                                  <Tooltip />
+                                  <Bar dataKey="count" fill="#8884d8" name="Leave Days" />
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </CardContent>
+                        </Card>
+                        
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>Leave Duration</CardTitle>
+                            <p className="text-sm text-muted-foreground">Average leave duration by type</p>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="h-[300px]">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <BarChart
+                                  data={[
+                                    { name: 'Annual', days: 5.2 },
+                                    { name: 'Sick', days: 2.1 },
+                                    { name: 'Unpaid', days: 3.5 },
+                                    { name: 'Other', days: 2.8 }
+                                  ]}
+                                >
+                                  <CartesianGrid strokeDasharray="3 3" />
+                                  <XAxis dataKey="name" />
+                                  <YAxis />
+                                  <Tooltip />
+                                  <Bar dataKey="days" fill="#4CAF50" name="Average Days" />
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Team Analysis Tab */}
+                  {activeLeaveTab === 'teams' && (
+                    <div className="space-y-6">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Team-wise Leave Distribution</CardTitle>
+                          <p className="text-sm text-muted-foreground">Leave days by team</p>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-[400px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart
+                                layout="vertical"
+                                data={leaveStats.teamDistribution}
+                                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                              >
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis type="number" />
+                                <YAxis dataKey="team" type="category" width={150} />
+                                <Tooltip />
+                                <Bar dataKey="count" fill="#8884d8" name="Leave Days" />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>Team Leave Balance</CardTitle>
+                            <p className="text-sm text-muted-foreground">Remaining leave days by team</p>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-4">
+                              {teams.map((team) => {
+                                const teamLeaves = leaveStats.teamDistribution.find(t => t.team === team.name)?.count || 0;
+                                const teamSize = employees.filter(e => e.team_id === team.id).length || 1;
+                                const avgLeaves = teamSize > 0 ? (teamLeaves / teamSize).toFixed(1) : 0;
+                                
+                                return (
+                                  <div key={team.id} className="space-y-2">
+                                    <div className="flex justify-between text-sm">
+                                      <span className="font-medium">{team.name}</span>
+                                      <span>{avgLeaves} days/employee</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                      <div 
+                                        className="bg-blue-600 h-2.5 rounded-full" 
+                                        style={{ 
+                                          width: `${Math.min(100, (teamLeaves / (teamSize * 20)) * 100)}%` 
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="flex justify-between text-xs text-muted-foreground">
+                                      <span>{teamLeaves} days total</span>
+                                      <span>{teamSize} members</span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </CardContent>
+                        </Card>
+                        
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>Leave Approval Rate by Team</CardTitle>
+                            <p className="text-sm text-muted-foreground">Approval statistics across teams</p>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="h-[300px]">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <BarChart
+                                  data={[
+                                    { name: 'Engineering', approved: 85, pending: 10, rejected: 5 },
+                                    { name: 'Marketing', approved: 75, pending: 15, rejected: 10 },
+                                    { name: 'Sales', approved: 90, pending: 5, rejected: 5 },
+                                    { name: 'HR', approved: 80, pending: 10, rejected: 10 },
+                                    { name: 'Operations', approved: 70, pending: 20, rejected: 10 },
+                                  ]}
+                                >
+                                  <CartesianGrid strokeDasharray="3 3" />
+                                  <XAxis dataKey="name" />
+                                  <YAxis />
+                                  <Tooltip />
+                                  <Legend />
+                                  <Bar dataKey="approved" stackId="a" fill="#4CAF50" name="Approved" />
+                                  <Bar dataKey="pending" stackId="a" fill="#FFC107" name="Pending" />
+                                  <Bar dataKey="rejected" stackId="a" fill="#F44336" name="Rejected" />
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Detailed View Tab */}
+                  {activeLeaveTab === 'details' && (
+                    <div className="space-y-6">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Leave Requests</CardTitle>
+                          <p className="text-sm text-muted-foreground">Detailed view of all leave requests</p>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="rounded-md border">
+                            <table className="min-w-full divide-y divide-gray-200">
+                              <thead className="bg-gray-50">
+                                <tr>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Leave Type</th>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dates</th>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reason</th>
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white divide-y divide-gray-200">
+                                {filteredLeaves.map((leave) => (
+                                  <tr key={leave.id} className="hover:bg-gray-50">
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                      <div className="text-sm font-medium text-gray-900">
+                                        {leave.profiles?.name || 'Unknown'}
+                                      </div>
+                                      <div className="text-xs text-gray-500">
+                                        {teams.find(t => t.id === leave.profiles?.team_id)?.name || 'Unassigned'}
+                                      </div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                      <Badge variant="outline">
+                                        {leave.leave_types?.name || 'N/A'}
+                                      </Badge>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                      <div className="text-sm text-gray-900">
+                                        {new Date(leave.start_date).toLocaleDateString()}
+                                      </div>
+                                      <div className="text-xs text-gray-500">
+                                        to {new Date(leave.end_date).toLocaleDateString()}
+                                      </div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                      {leave.total_days} day{leave.total_days !== 1 ? 's' : ''}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                      <Badge 
+                                        variant={
+                                          leave.status === 'approved' ? 'default' :
+                                          leave.status === 'pending' ? 'secondary' :
+                                          'destructive'
+                                        }
+                                      >
+                                        {leave.status || 'pending'}
+                                      </Badge>
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
+                                      {leave.reason || 'No reason provided'}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          
+                          <div className="mt-4 flex items-center justify-between">
+                            <p className="text-sm text-muted-foreground">
+                              Showing <span className="font-medium">{Math.min(10, filteredLeaves.length)}</span> of{' '}
+                              <span className="font-medium">{filteredLeaves.length}</span> requests
+                            </p>
+                            <div className="space-x-2">
+                              <Button variant="outline" size="sm" disabled={true}>
+                                Previous
+                              </Button>
+                              <Button variant="outline" size="sm" disabled={true}>
+                                Next
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>Leave Balance Summary</CardTitle>
+                            <p className="text-sm text-muted-foreground">Remaining leave days by employee</p>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-4">
+                              {employees.slice(0, 5).map((emp) => {
+                                const empLeaves = filteredLeaves.filter(l => l.employee_id === emp.id);
+                                const usedDays = empLeaves.reduce((sum, l) => sum + (l.total_days || 0), 0);
+                                const remainingDays = Math.max(0, 20 - usedDays); // Assuming 20 days annual leave
+                                
+                                return (
+                                  <div key={emp.id} className="space-y-2">
+                                    <div className="flex justify-between">
+                                      <div>
+                                        <p className="text-sm font-medium">{emp.name}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          {teams.find(t => t.id === emp.team_id)?.name || 'Unassigned'}
+                                        </p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-sm font-medium">{remainingDays} days</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          {usedDays} days used
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-2">
+                                      <div 
+                                        className="bg-blue-600 h-2 rounded-full" 
+                                        style={{ 
+                                          width: `${(usedDays / 20) * 100}%` 
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                              <Button variant="ghost" size="sm" className="w-full mt-2">
+                                View All Employees
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                        
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>Leave Calendar</CardTitle>
+                            <p className="text-sm text-muted-foreground">Upcoming and ongoing leaves</p>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="h-[300px] flex items-center justify-center bg-gray-50 rounded-md">
+                              <div className="text-center">
+                                <CalendarIcon className="mx-auto h-12 w-12 text-gray-400" />
+                                <h3 className="mt-2 text-sm font-medium text-gray-900">Leave Calendar</h3>
+                                <p className="mt-1 text-sm text-gray-500">
+                                  View upcoming and ongoing leaves in a calendar view
+                                </p>
+                                <div className="mt-4">
+                                  <Button size="sm">View Calendar</Button>
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
 

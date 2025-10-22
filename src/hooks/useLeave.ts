@@ -142,12 +142,27 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
 
       // Set pending requests based on role and mode
       if (mode === 'manager') {
-        if (user.role === 'reporting_manager') {
-          setPendingRequests(formattedData.filter(req => req.status === 'pending' && req.employee_id !== user.id));
-        } else if (user.role === 'admin' || user.role === 'super_admin') {
-          setPendingRequests(formattedData.filter(req => req.status === 'pending' && req.employee_id !== user.id));
+        if (['admin', 'super_admin'].includes(user.role)) {
+          // For admins/super_admins, show all pending requests except their own
+          setPendingRequests(formattedData.filter(req => 
+            req.status === 'pending' && req.employee_id !== user.id
+          ));
+        } else if (user.role === 'reporting_manager') {
+          // For reporting managers, show pending requests from their direct reports
+          const teamMemberIds = (employeeData as any[])
+            ?.filter(emp => emp.reporting_manager_id === user.id)
+            .map(emp => emp.id) || [];
+          
+          setPendingRequests(formattedData.filter(req => 
+            req.status === 'pending' && 
+            (teamMemberIds.includes(req.employee_id) || req.employee_id === user.id)
+          ));
+        } else {
+          // For regular employees, don't show any pending requests in manager mode
+          setPendingRequests([]);
         }
       } else {
+        // In employee mode, don't show any pending requests in the list
         setPendingRequests([]);
       }
     } catch (error) {
@@ -296,18 +311,26 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
     }
   };
 
-  const approveLeaveRequest = async (requestId: string) => {
+  const approveLeaveRequest = async (requestId: string, comment: string = '') => {
     if (!user || !['reporting_manager', 'admin', 'super_admin'].includes(user.role)) return false;
 
     setIsLoading(true);
     try {
+      const updateData: any = {
+        status: 'approved',
+        approved_by: user.id,
+        approved_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      // Only add comment if provided
+      if (comment) {
+        updateData.admin_comments = comment;
+      }
+
       const { error } = await supabase
         .from('leave_requests')
-        .update({
-          status: 'approved',
-          approved_by: user.id,
-          approved_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', requestId);
 
       if (error) {
@@ -325,14 +348,24 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
     }
   };
 
-  const rejectLeaveRequest = async (requestId: string) => {
+  const rejectLeaveRequest = async (requestId: string, comment: string = '') => {
     if (!user || !['reporting_manager', 'admin', 'super_admin'].includes(user.role)) return false;
 
     setIsLoading(true);
     try {
+      const updateData: any = {
+        status: 'rejected',
+        updated_at: new Date().toISOString()
+      };
+
+      // Only add comment if provided
+      if (comment) {
+        updateData.admin_comments = comment;
+      }
+
       const { error } = await supabase
         .from('leave_requests')
-        .update({ status: 'rejected' })
+        .update(updateData)
         .eq('id', requestId);
 
       if (error) {

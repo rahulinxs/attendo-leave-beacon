@@ -1305,7 +1305,7 @@ const EmployeeLeaveView: React.FC = () => {
                   <p className="text-2xl font-bold text-red-600">
                     {recentAttendance.filter(a => a.status === 'absent').length}
                   </p>
-                  <p className="text-sm text-gray-600">Absent Days</p>
+                  <p className="text-sm text-gray-600">Leave Days</p>
                 </div>
                 <div className="p-4 bg-orange-50 rounded-lg text-center">
                   <p className="text-2xl font-bold text-orange-600">

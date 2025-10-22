@@ -62,7 +62,7 @@ const EmployeeAttendance: React.FC = () => {
       case 'present':
         return <span className="bg-green-500 text-white px-2 py-1 rounded">Present</span>;
       case 'absent':
-        return <span className="bg-red-500 text-white px-2 py-1 rounded">Absent</span>;
+        return <span className="bg-red-500 text-white px-2 py-1 rounded">Leave</span>;
       case 'late':
         return <span className="bg-yellow-500 text-white px-2 py-1 rounded">Late</span>;
       case 'half_day':
@@ -307,7 +307,7 @@ const EmployeeAttendance: React.FC = () => {
                 >
                   <option value="select">Select status</option>
                   <option value="present">Present</option>
-                  <option value="absent">Absent</option>
+                  <option value="absent">Leave</option>
                   <option value="late">Late</option>
                   <option value="half_day">Half Day</option>
                 </select>

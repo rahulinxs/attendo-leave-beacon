@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCompany } from '@/contexts/CompanyContext';
@@ -9,7 +10,7 @@ interface AttendanceRecord {
   date: string;
   check_in_time: string | null;
   check_out_time: string | null;
-  status: 'present' | 'absent' | 'holiday' | 'late';
+  status: 'present' | 'absent' | 'holiday' | 'late' | 'half_day';
   notes?: string;
 }
 
@@ -167,19 +168,29 @@ export const useAttendance = () => {
     }
   };
 
-  const markAttendanceForEmployee = async (employeeId: string, status: 'present' | 'absent' | 'late' | 'half_day', date?: Date) => {
+  const markAttendanceForEmployee = async (employeeId: string, status: 'present' | 'absent' | 'late' | 'half_day', selectedDate?: Date) => {
     if (!currentCompany) return false;
 
     try {
-      const dateStr = (date || new Date()).toISOString().split('T')[0];
       const now = new Date().toISOString();
-      let updateObj: any = { status };
+      const isHalfDay = status === 'half_day';
       
+      // Format the date for the database
+      const targetDate = selectedDate || new Date();
+      const dateStr = format(targetDate, 'yyyy-MM-dd');
+      
+      const updateObj: any = {
+        status: status, // Use the status directly since 'half_day' is now allowed
+        date: dateStr,
+        check_in_time: null,
+        check_out_time: null,
+        updated_at: now
+      };
+
       if (status === 'present' || status === 'late' || status === 'half_day') {
         updateObj.check_in_time = now;
-      } else {
-        updateObj.check_in_time = null;
-        updateObj.check_out_time = null;
+        // For half day, set check_out_time to the same as check_in_time
+        updateObj.check_out_time = isHalfDay ? now : null;
       }
 
       const { error } = await supabase
