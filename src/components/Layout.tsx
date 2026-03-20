@@ -86,31 +86,31 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       id: 'dashboard',
       label: 'Dashboard',
       icon: Building2,
-      roles: ['employee', 'reporting_manager', 'admin', 'super_admin']
+      roles: ['employee', 'admin', 'super_admin', 'reporting_manager']
     },
     {
       id: 'attendance',
       label: 'Attendance',
       icon: Clock,
-      roles: ['employee', 'reporting_manager', 'admin', 'super_admin']
+      roles: ['employee', 'admin', 'super_admin']
     },
     {
       id: 'leave',
       label: 'Leave Requests',
       icon: Calendar,
-      roles: ['employee', 'reporting_manager', 'admin', 'super_admin']
+      roles: ['employee', 'admin', 'super_admin']
     },
     {
       id: 'holidays',
       label: 'Holidays',
       icon: CalendarDays,
-      roles: ['employee', 'reporting_manager', 'admin', 'super_admin']
+      roles: ['employee', 'admin', 'super_admin']
     },
     {
       id: 'manage-attendance',
       label: 'Manage Attendance',
       icon: UserCheck,
-      roles: ['reporting_manager', 'admin', 'super_admin'],
+      roles: ['admin', 'super_admin'],
       requiresPermission: true
     },
     
@@ -119,14 +119,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       id: 'leave-management',
       label: 'Manage Leave Requests',
       icon: ClipboardList,
-      roles: ['reporting_manager', 'admin', 'super_admin'],
+      roles: ['admin', 'super_admin'],
       requiresPermission: true
     },
     {
       id: 'teams',
       label: 'Team Management',
       icon: Network,
-      roles: ['admin', 'super_admin', 'reporting_manager'],
+      roles: ['admin', 'super_admin'],
       requiresPermission: true
     },
     {
@@ -147,21 +147,21 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       id: 'reports',
       label: 'Reports & Analytics',
       icon: BarChart3,
-      roles: ['admin', 'super_admin', 'reporting_manager'],
+      roles: ['admin', 'super_admin'],
       requiresPermission: true
     },
     {
       id: 'performance-report',
       label: 'Performance Report',
       icon: BarChart3,
-      roles: ['admin', 'super_admin', 'reporting_manager'],
+      roles: ['admin', 'super_admin'],
       requiresPermission: true
     },
     {
       id: 'recruitment-report',
       label: 'Recruitment Report',
       icon: BarChart3,
-      roles: ['admin', 'super_admin', 'reporting_manager', 'recruiter'],
+      roles: ['admin', 'super_admin', 'recruiter'],
       requiresPermission: true
     },
     
@@ -170,22 +170,21 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       id: 'profile',
       label: 'Profile',
       icon: User,
-      roles: ['employee', 'reporting_manager', 'admin', 'super_admin']
+      roles: ['employee', 'admin', 'super_admin']
     },
     // System Settings - available to all, just before Profile
     {
       id: 'settings',
       label: 'System Settings',
       icon: Settings,
-      roles: ['employee', 'reporting_manager', 'admin', 'super_admin'],
-      requiresPermission: true
+      roles: ['employee', 'admin', 'reporting_manager', 'super_admin']
     },
     // Session Settings - available to all users
     {
       id: 'session-settings',
       label: 'Session Settings',
       icon: Shield,
-      roles: ['employee', 'reporting_manager', 'admin', 'super_admin']
+      roles: ['employee', 'admin', 'reporting_manager', 'super_admin']
     },
     // Commission Calculator - only available to admin and super admin
     {
@@ -391,105 +390,157 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                   </button>
                 );
               })}
-
-              {/* Human Resource retractable menu (admins only) */}
-              {['admin', 'super_admin'].includes(user?.role) && (
-                <>
+              
+              {/* Human Resource retractable menu */}
+              {['admin', 'super_admin', 'reporting_manager'].includes(user?.role || '') && (
+                <div>
                   <button
                     className="w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left font-semibold transition-colors sidebar-nav-btn bg-[rgba(0,0,0,0.03)] hover:bg-[rgba(0,0,0,0.06)]"
-                    onClick={() => {
-                      toggleSection('hr');
-                    }}
+                    onClick={() => toggleSection('hr')}
                     aria-expanded={isSectionOpen('hr')}
                     aria-controls="hr-menu"
                   >
                     <Users className="w-5 h-5" />
                     <span>Human Resource</span>
-                    {isSectionOpen('hr') ? <ChevronDown className="w-4 h-4 ml-auto" /> : <ChevronRight className="w-4 h-4 ml-auto" />}
+                    {isSectionOpen('hr') 
+                      ? <ChevronDown className="w-4 h-4 ml-auto" /> 
+                      : <ChevronRight className="w-4 h-4 ml-auto" />}
                   </button>
+
                   <div
                     id="hr-menu"
-                    className={`pl-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${isSectionOpen('hr') ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-2'}`}
+                    className={`pl-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${
+                      isSectionOpen('hr')
+                        ? 'max-h-96 opacity-100 translate-y-0'
+                        : 'max-h-0 opacity-0 -translate-y-2'
+                    }`}
                     style={{ willChange: 'max-height, opacity, transform' }}
                   >
                     <button
                       onClick={() => onTabChange('attendance')}
-                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'attendance' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${
+                        activeTab === 'attendance'
+                          ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold'
+                          : 'hover:bg-[rgba(0,0,0,0.02)]'
+                      }`}
                     >
                       <Clock className="w-5 h-5" />
                       <span className="sidebar-label text-sm">Attendance</span>
                     </button>
+
                     <button
                       onClick={() => onTabChange('leave')}
-                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'leave' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${
+                        activeTab === 'leave'
+                          ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold'
+                          : 'hover:bg-[rgba(0,0,0,0.02)]'
+                      }`}
                     >
                       <Calendar className="w-5 h-5" />
                       <span className="sidebar-label text-sm">Leave Requests</span>
                     </button>
+
                     <button
                       onClick={() => onTabChange('manage-attendance')}
-                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'manage-attendance' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${
+                        activeTab === 'manage-attendance'
+                          ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold'
+                          : 'hover:bg-[rgba(0,0,0,0.02)]'
+                      }`}
                     >
                       <UserCheck className="w-5 h-5" />
                       <span className="sidebar-label text-sm">Manage Attendance</span>
                     </button>
+
                     <button
                       onClick={() => onTabChange('leave-management')}
-                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'leave-management' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${
+                        activeTab === 'leave-management'
+                          ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold'
+                          : 'hover:bg-[rgba(0,0,0,0.02)]'
+                      }`}
                     >
                       <ClipboardList className="w-5 h-5" />
                       <span className="sidebar-label text-sm">Manage Leave Requests</span>
                     </button>
                   </div>
+                </div>
+              )}
 
-                  {/* Management retractable menu immediately after HR */}
+              {/* Management retractable menu */}
+              {['admin', 'super_admin'].includes(user?.role || '') && (
+                <div>
                   <button
                     className="w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left font-semibold transition-colors sidebar-nav-btn bg-[rgba(0,0,0,0.03)] hover:bg-[rgba(0,0,0,0.06)] mt-2"
-                    onClick={() => {
-                      toggleSection('management');
-                    }}
+                    onClick={() => toggleSection('management')}
                     aria-expanded={isSectionOpen('management')}
                     aria-controls="management-menu"
                   >
                     <Settings className="w-5 h-5" />
                     <span>Management</span>
-                    {isSectionOpen('management') ? <ChevronDown className="w-4 h-4 ml-auto" /> : <ChevronRight className="w-4 h-4 ml-auto" />}
+                    {isSectionOpen('management') 
+                      ? <ChevronDown className="w-4 h-4 ml-auto" /> 
+                      : <ChevronRight className="w-4 h-4 ml-auto" />}
                   </button>
+
                   <div
                     id="management-menu"
-                    className={`pl-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${isSectionOpen('management') ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-2'}`}
+                    className={`pl-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${
+                      isSectionOpen('management')
+                        ? 'max-h-96 opacity-100 translate-y-0'
+                        : 'max-h-0 opacity-0 -translate-y-2'
+                    }`}
                     style={{ willChange: 'max-height, opacity, transform' }}
                   >
                     <button
                       onClick={() => onTabChange('employees')}
-                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'employees' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${
+                        activeTab === 'employees'
+                          ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold'
+                          : 'hover:bg-[rgba(0,0,0,0.02)]'
+                      }`}
                     >
                       <Users className="w-5 h-5" />
                       <span className="sidebar-label text-sm">Employee Management</span>
                     </button>
+
                     <button
                       onClick={() => onTabChange('teams')}
-                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'teams' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${
+                        activeTab === 'teams'
+                          ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold'
+                          : 'hover:bg-[rgba(0,0,0,0.02)]'
+                      }`}
                     >
                       <Network className="w-5 h-5" />
                       <span className="sidebar-label text-sm">Team Management</span>
                     </button>
+
                     <button
                       onClick={() => onTabChange('leave-type-management')}
-                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'leave-type-management' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${
+                        activeTab === 'leave-type-management'
+                          ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold'
+                          : 'hover:bg-[rgba(0,0,0,0.02)]'
+                      }`}
                     >
                       <Calendar className="w-5 h-5" />
                       <span className="sidebar-label text-sm">Leave Type Management</span>
                     </button>
+
                     <button
                       onClick={() => onTabChange('profile-management')}
-                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'profile-management' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${
+                        activeTab === 'profile-management'
+                          ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold'
+                          : 'hover:bg-[rgba(0,0,0,0.02)]'
+                      }`}
                     >
                       <UserCircle className="w-5 h-5" />
                       <span className="sidebar-label text-sm">Profile Management</span>
                     </button>
                   </div>
-                </>
+                </div>
               )}
 
               {/* Reports retractable menu */}
