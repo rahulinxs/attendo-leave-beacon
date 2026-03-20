@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { CommissionProvider } from '@/contexts/CommissionContext';
 import Auth from '@/components/Auth';
 import Layout from '@/components/Layout';
 import Dashboard from '@/components/Dashboard';
@@ -19,6 +20,12 @@ import CompanyProfile from '@/components/CompanyProfile';
 import PerformanceReport from '@/components/PerformanceReport';
 import RecruitmentReport from '@/components/RecruitmentReport';
 import { SessionSettings } from '@/components/SessionSettings';
+import CommissionDashboard from '@/components/commission/CommissionDashboard';
+import CommissionCalculator from '@/components/commission/CommissionCalculator';
+import CommissionEngagements from '@/components/commission/CommissionEngagements';
+import CommissionSplits from '@/components/commission/CommissionSplits';
+import CommissionReports from '@/components/commission/CommissionReports';
+import CommissionIndex from '@/components/commission/CommissionIndex';
 
 const Index = () => {
   const { user, isLoading } = useAuth();
@@ -143,6 +150,30 @@ const Index = () => {
       
       case 'session-settings':
         return <SessionSettings />;
+      
+      case 'commission-calculator':
+        // Only admins and super admins can access commission calculator
+        if (['admin', 'super_admin'].includes(user.role)) {
+          return <CommissionIndex initialTab="commission-calculator" onNavigate={setActiveTab} />;
+        }
+        return (
+          <div className="glass-effect rounded-2xl p-8 border text-center">
+            <h2 className="text-2xl font-bold mb-4">Access Denied</h2>
+            <p className="text-gray-600">You don't have permission to access this section</p>
+          </div>
+        );
+      
+      case 'commission-report':
+        // Only admins and super admins can access commission reports
+        if (['admin', 'super_admin'].includes(user.role)) {
+          return <CommissionIndex initialTab="commission-report" onNavigate={setActiveTab} />;
+        }
+        return (
+          <div className="glass-effect rounded-2xl p-8 border text-center">
+            <h2 className="text-2xl font-bold mb-4">Access Denied</h2>
+            <p className="text-gray-600">You don't have permission to access this section</p>
+          </div>
+        );
       
       default:
         return <Dashboard onNavigate={setActiveTab} />;

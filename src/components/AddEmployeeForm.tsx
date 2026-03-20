@@ -106,9 +106,18 @@ const AddEmployeeForm: React.FC<AddEmployeeFormProps> = ({ onSuccess, onCancel }
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        toast({ title: "Error", description: "You must be logged in to create employees", variant: "destructive" });
+        toast({ 
+          title: 'Authentication Error', 
+          description: 'You must be logged in to create employees', 
+          variant: 'destructive' 
+        });
         return;
       }
+
+      if (!currentCompany?.id) {
+        throw new Error('No company selected');
+      }
+
       const payload = {
         ...data,
         team_id: data.team_id === 'no_team' ? null : data.team_id || null,
@@ -118,27 +127,47 @@ const AddEmployeeForm: React.FC<AddEmployeeFormProps> = ({ onSuccess, onCancel }
             : data.reporting_manager_id,
         hire_date: data.hire_date || null,
         is_active: data.is_active,
-        company_id: currentCompany?.id, // Always use current company
+        company_id: currentCompany.id,
       };
-      const { data: result, error } = await supabase.functions.invoke('create-employee', {
-        body: payload,
-        headers: { Authorization: `Bearer ${session.access_token}` },
+
+      // First, try with the direct fetch API to have better control over CORS
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/create-employee`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+        },
+        body: JSON.stringify(payload),
       });
-      if (error) {
-        toast({ title: "Error", description: error.message || "Failed to create employee", variant: "destructive" });
-        return;
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error?.message || 'Failed to create employee');
       }
-      if (result?.success) {
-        toast({ title: "Success", description: result.message || "Employee created successfully and welcome email sent" });
+
+      if (result.success) {
+        toast({ 
+          title: 'Success', 
+          description: result.message || 'Employee created successfully',
+          variant: 'default'
+        });
         form.reset();
         onSuccess();
       } else {
-        throw new Error(result?.error || 'Unknown error occurred');
+        throw new Error(result.error || 'Failed to create employee');
       }
     } catch (error) {
-      toast({ title: "Error", description: "Failed to create employee", variant: "destructive" });
+      console.error('Error creating employee:', error);
+      toast({ 
+        title: 'Error', 
+        description: error.message || 'Failed to create employee. Please try again.', 
+        variant: 'destructive' 
+      });
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   return (

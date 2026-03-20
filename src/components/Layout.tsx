@@ -14,6 +14,7 @@ import {
   User,
   Users,
   ChevronDown,
+  ChevronRight,
   CalendarDays,
   UserCheck,
   BarChart3,
@@ -27,10 +28,11 @@ import {
   Network,
   FlaskConical,
   ClipboardList,
-  ChevronRight,
   TrendingUp,
   FileSpreadsheet,
-  UserCircle
+  UserCircle,
+  Calculator,
+  DollarSign
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -43,6 +45,7 @@ import CompanyLogo from './CompanyLogo';
 import { THEME_OPTIONS } from '@/contexts/ThemeContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { APP_NAME } from "../branding";
+import CommissionDashboard from './commission/CommissionDashboard';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -183,6 +186,20 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       label: 'Session Settings',
       icon: Shield,
       roles: ['employee', 'reporting_manager', 'admin', 'super_admin']
+    },
+    // Commission Calculator - only available to admin and super admin
+    {
+      id: 'commission-calculator',
+      label: 'Calculate Commission',
+      icon: Calculator,
+      roles: ['admin', 'super_admin']
+    },
+    // Commission Report - only available to admin and super admin
+    {
+      id: 'commission-report',
+      label: 'Commission Report',
+      icon: DollarSign,
+      roles: ['admin', 'super_admin']
     }
   ].filter(item => item.id !== 'dummy-attendance' && item.id !== 'company-profile' && item.id !== 'leave-type-management');
 
@@ -524,13 +541,53 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                 </>
               )}
 
+              {/* Commission Calculator retractable menu - only available to admin and super admin */}
+              {['admin', 'super_admin'].includes(user?.role) && (
+                <>
+                  <button
+                    className="w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left font-semibold transition-colors sidebar-nav-btn bg-[rgba(0,0,0,0.03)] hover:bg-[rgba(0,0,0,0.06)] mt-2"
+                    onClick={() => {
+                      toggleSection('commission');
+                    }}
+                    aria-expanded={isSectionOpen('commission')}
+                    aria-controls="commission-menu"
+                  >
+                    <Calculator className="w-5 h-5" />
+                    <span>Commission Calculator</span>
+                    {isSectionOpen('commission') ? <ChevronDown className="w-4 h-4 ml-auto" /> : <ChevronRight className="w-4 h-4 ml-auto" />}
+                  </button>
+                  <div
+                    id="commission-menu"
+                    className={`pl-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${isSectionOpen('commission') ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-2'}`}
+                    style={{ willChange: 'max-height, opacity, transform' }}
+                  >
+                    <button
+                      onClick={() => onTabChange('commission-calculator')}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'commission-calculator' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                    >
+                      <Calculator className="w-5 h-5" />
+                      <span className="sidebar-label text-sm">Commission Calculator</span>
+                    </button>
+                    <button
+                      onClick={() => onTabChange('commission-report')}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'commission-report' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                    >
+                      <DollarSign className="w-5 h-5" />
+                      <span className="sidebar-label text-sm">Commission Report</span>
+                    </button>
+                  </div>
+                </>
+              )}
+
               {/* Render the rest of the navigation items */}
               {navItems.filter(item => ![
                 'dashboard', 
                 'reports', 
                 'performance-report', 
                 'recruitment-report',
-                'profile-management'  // Exclude from main navigation as it's in the Management section
+                'profile-management',  // Exclude from main navigation as it's in the Management section
+                'commission-calculator',  // Exclude from main navigation as it's in the Commission section
+                'commission-report'  // Exclude from main navigation as it's in the Commission section
               ].includes(item.id)).map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
