@@ -191,7 +191,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       id: 'commission-calculator',
       label: 'Calculate Commission',
       icon: Calculator,
-      roles: ['admin', 'super_admin']
+      roles: ['super_admin']
     },
     // Commission Report - only available to admin and super admin
     {
@@ -593,7 +593,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
               )}
 
               {/* Commission Calculator retractable menu - only available to admin and super admin */}
-              {['admin', 'super_admin'].includes(user?.role) && (
+              {['super_admin'].includes(user?.role) && (
                 <>
                   <button
                     className="w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left font-semibold transition-colors sidebar-nav-btn bg-[rgba(0,0,0,0.03)] hover:bg-[rgba(0,0,0,0.06)] mt-2"
