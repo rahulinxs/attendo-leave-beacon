@@ -23,6 +23,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface Holiday {
   id: string;
@@ -37,13 +44,24 @@ interface Holiday {
 const HolidayManagement: React.FC = () => {
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Helper to get holidays for current visible month
+  // Generate year options (current year ± 5 years)
+  const yearOptions = Array.from({ length: 11 }, (_, i) => new Date().getFullYear() - 5 + i);
+
+  // Helper to get holidays for current visible month and year
   const holidaysInMonth = holidays.filter(h => {
     const date = parseISO(h.date);
-    return date.getFullYear() === selectedMonth.getFullYear() && date.getMonth() === selectedMonth.getMonth();
+    return date.getFullYear() === selectedYear && 
+           date.getMonth() === selectedMonth.getMonth();
+  });
+
+  // Helper to get holidays for selected year
+  const holidaysInYear = holidays.filter(h => {
+    const date = parseISO(h.date);
+    return date.getFullYear() === selectedYear;
   });
   const { user } = useAuth();
   const [showAddForm, setShowAddForm] = useState(false);
@@ -179,6 +197,11 @@ const HolidayManagement: React.FC = () => {
 
   const canManageHolidays = user?.role === 'admin' || user?.role === 'super_admin';
 
+  // Fetch holidays when component mounts or year changes
+  useEffect(() => {
+    fetchHolidays();
+  }, [selectedYear]); // Re-fetch when year changes
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -187,6 +210,24 @@ const HolidayManagement: React.FC = () => {
           <h2 className="text-2xl font-bold">Holiday Management</h2>
         </div>
         <div className="flex items-center gap-2">
+          {/* Year Picker */}
+          <div className="flex items-center space-x-2">
+            <Label htmlFor="year-select" className="text-sm font-medium">
+              Year:
+            </Label>
+            <Select value={selectedYear.toString()} onValueChange={(value) => setSelectedYear(parseInt(value))}>
+              <SelectTrigger className="w-24" id="year-select">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {yearOptions.map(year => (
+                  <SelectItem key={year} value={year.toString()}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <Button
             variant={viewMode === 'calendar' ? 'default' : 'outline'}
             onClick={() => setViewMode('calendar')}
@@ -226,7 +267,7 @@ const HolidayManagement: React.FC = () => {
             <CardHeader>
               <CardTitle className="flex items-center">
                 <CalendarIcon className="w-5 h-5 mr-2 text-blue-600" />
-                Holidays Calendar
+                Holidays Calendar - {selectedYear}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -264,7 +305,7 @@ const HolidayManagement: React.FC = () => {
         <CardHeader>
           <CardTitle className="flex items-center">
                 <CalendarIcon className="w-5 h-5 mr-2 text-blue-600" />
-            Holidays ({holidays.length})
+            Holidays {selectedYear} ({holidaysInYear.length})
           </CardTitle>
         </CardHeader>
         <CardContent>

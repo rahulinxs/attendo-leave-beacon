@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Clock, MapPin, User, TrendingUp, Download, CheckCircle, XCircle, CalendarIcon, Circle, HelpCircle, Edit, Crown, Users, Sparkles } from 'lucide-react';
+import { Calendar, Clock, MapPin, User, TrendingUp, Download, CheckCircle, XCircle, CalendarIcon, Circle, HelpCircle, Edit, Crown, Users, Sparkles, Upload } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import AttendanceCalendar from './AttendanceCalendar';
@@ -22,9 +22,11 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { THEME_OPTIONS } from '@/contexts/ThemeContext';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import BulkAttendanceImport from './BulkAttendanceImport';
+import CustomAttendanceImport from './CustomAttendanceImport';
 
 const AttendanceManagement: React.FC = () => {
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const [showCustomImport, setShowCustomImport] = useState(false);
   const { user } = useAuth();
   const { todayAttendance, recentAttendance, checkIn, checkOut, isLoading } = useAttendance();
   const { employees, isLoading: isEmployeesLoading, fetchEmployees } = useEmployees();
@@ -617,7 +619,12 @@ const AttendanceManagement: React.FC = () => {
                 Export Report
               </Button>
               <Button variant="outline" onClick={() => setShowBulkImport(true)}>
-                Bulk Import Attendance
+                <Upload className="w-4 h-4 mr-2" />
+                Bulk Import (Biometric)
+              </Button>
+              <Button variant="outline" onClick={() => setShowCustomImport(true)}>
+                <Upload className="w-4 h-4 mr-2" />
+                Custom Import (Excel Format)
               </Button>
             </div>
           </div>
@@ -764,6 +771,17 @@ const AttendanceManagement: React.FC = () => {
         <BulkAttendanceImport
           open={showBulkImport}
           setOpen={setShowBulkImport}
+          companyId={currentCompany.id}
+          onImportComplete={() => {
+            // Refresh attendance data if needed
+            if (typeof window !== 'undefined') window.location.reload();
+          }}
+        />
+      )}
+      {currentCompany && (
+        <CustomAttendanceImport
+          open={showCustomImport}
+          setOpen={setShowCustomImport}
           companyId={currentCompany.id}
           onImportComplete={() => {
             // Refresh attendance data if needed

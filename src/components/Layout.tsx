@@ -32,7 +32,18 @@ import {
   FileSpreadsheet,
   UserCircle,
   Calculator,
-  DollarSign
+  DollarSign,
+  MapPin,
+  Download,
+  CheckCircle,
+  XCircle,
+  CalendarIcon,
+  Circle,
+  HelpCircle,
+  Edit,
+  Sparkles,
+  Upload,
+  Book
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -43,6 +54,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import CompanyLogo from './CompanyLogo';
 import { THEME_OPTIONS } from '@/contexts/ThemeContext';
+import UserHandbook from './UserHandbook';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { APP_NAME } from "../branding";
 import CommissionDashboard from './commission/CommissionDashboard';
@@ -67,6 +79,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
   const { sidebarPosition, theme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [showHandbook, setShowHandbook] = useState(false);
   // Track which section is currently open (null if none)
   const [openSection, setOpenSection] = useState<string | null>(null);
   
@@ -186,19 +199,19 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       icon: Shield,
       roles: ['employee', 'admin', 'reporting_manager', 'super_admin']
     },
-    // Commission Calculator - only available to admin and super admin
+    // Commission Calculator - only available to super admin
     {
       id: 'commission-calculator',
       label: 'Calculate Commission',
       icon: Calculator,
-      roles: ['admin', 'super_admin']
+      roles: ['super_admin']
     },
     // Commission Report - only available to admin and super admin
     {
       id: 'commission-report',
       label: 'Commission Report',
       icon: DollarSign,
-      roles: ['admin', 'super_admin']
+      roles: ['super_admin']
     }
   ].filter(item => item.id !== 'dummy-attendance' && item.id !== 'company-profile' && item.id !== 'leave-type-management');
 
@@ -293,7 +306,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
             <Menu className="w-5 h-5" />
           </Button>
           <div className="flex items-center space-x-3">
-            <CompanyLogo size="md" />
+            <CompanyLogo size="md" className="flex-shrink-0" />
             <div className="flex flex-col">
             <span className="font-bold">{APP_NAME}</span>
               {user?.platform_super_admin && companies.length > 1 ? (
@@ -337,12 +350,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
             {/* Sidebar Header */}
             <div className="flex flex-col items-center p-4 border-b border-border header-theme bg-white">
               {/* Product Branding */}
-              <div className="flex items-center space-x-2 mb-2">
-                <img src="/attendedge-logo.png" alt="Product Logo" className="w-8 h-8 object-contain" />
-                <span className="font-['Cambria'] text-[27px] font-bold tracking-wide">
-                  <span className="text-blue-600">Attend</span>
-                  <span className="text-green-400">Edge</span>
-                </span>
+              <div className="flex items-center justify-center w-full mb-2">
+                <div className="flex items-center space-x-2">
+                  <img src="/attendedge-logo.png" alt="Product Logo" className="w-8 h-8 object-contain" />
+                  <span className="font-['Cambria'] text-[27px] font-bold tracking-wide">
+                    <span className="text-blue-600">Attend</span>
+                    <span className="text-green-400">Edge</span>
+                  </span>
+                </div>
               </div>
               <div className="w-full border-t border-border my-2" />
               {/* Company Branding */}
@@ -593,7 +608,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
               )}
 
               {/* Commission Calculator retractable menu - only available to admin and super admin */}
-              {['admin', 'super_admin'].includes(user?.role) && (
+              {['super_admin'].includes(user?.role) && (
                 <>
                   <button
                     className="w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left font-semibold transition-colors sidebar-nav-btn bg-[rgba(0,0,0,0.03)] hover:bg-[rgba(0,0,0,0.06)] mt-2"
@@ -702,6 +717,11 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                     )}
                   </div>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setShowHandbook(true)}>
+                    <Book className="w-4 h-4 mr-2" />
+                    User Handbook
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout}>
                     <LogOut className="w-4 h-4 mr-2" />
                     Logout
@@ -728,6 +748,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
           onClick={() => setSidebarOpen(false)}
         />
       )}
+
+      {/* User Handbook */}
+      <UserHandbook 
+        open={showHandbook} 
+        setOpen={setShowHandbook} 
+      />
     </div>
   );
 };
