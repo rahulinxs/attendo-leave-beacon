@@ -288,7 +288,7 @@ export default function UpdatePassword() {
                 <div className="mt-4 text-center">
                   <button
                     type="button"
-                    onClick={() => navigate('/home')}
+                    onClick={() => navigate('/')}
                     className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline transition-colors"
                     disabled={isLoading}
                   >
