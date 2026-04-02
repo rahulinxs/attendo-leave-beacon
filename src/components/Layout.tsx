@@ -43,7 +43,8 @@ import {
   Edit,
   Sparkles,
   Upload,
-  Book
+  Book,
+  Key
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -174,7 +175,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       id: 'recruitment-report',
       label: 'Recruitment Report',
       icon: BarChart3,
-      roles: ['admin', 'super_admin', 'recruiter'],
+      roles: ['admin', 'super_admin'],
       requiresPermission: true
     },
     
@@ -183,7 +184,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       id: 'profile',
       label: 'Profile',
       icon: User,
-      roles: ['employee', 'admin', 'super_admin']
+      roles: ['employee', 'admin', 'super_admin', 'reporting_manager']
     },
     // System Settings - available to all, just before Profile
     {
@@ -211,6 +212,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       id: 'commission-report',
       label: 'Commission Report',
       icon: DollarSign,
+      roles: ['super_admin']
+    },
+    // Bulk Password Reset - only available to super admin
+    {
+      id: 'bulk-password-reset',
+      label: 'Bulk Password Reset',
+      icon: Key,
       roles: ['super_admin']
     }
   ].filter(item => item.id !== 'dummy-attendance' && item.id !== 'company-profile' && item.id !== 'leave-type-management');

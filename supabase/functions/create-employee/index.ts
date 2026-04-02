@@ -16,6 +16,9 @@ interface CreateEmployeeRequest {
   password: string;
   company_id?: string;
   team_id?: string;
+  reporting_manager_id?: string;
+  hire_date?: string;
+  is_active?: boolean;
 }
 
 serve(async (req) => {
@@ -72,9 +75,13 @@ serve(async (req) => {
       throw new Error('Only admins can create employees')
     }
 
-    const { name, email, role, department, position, password, company_id, team_id }: CreateEmployeeRequest = await req.json()
+    const { name, email, role, department, position, password, company_id, team_id, reporting_manager_id, hire_date, is_active }: CreateEmployeeRequest = await req.json()
 
-    console.log('Creating employee:', email)
+    console.log('Creating employee:', email);
+    console.log('Company ID:', company_id);
+    console.log('Team ID:', team_id);
+    console.log('Reporting Manager ID:', reporting_manager_id);
+    console.log('Full payload:', { name, email, role, department, position, company_id, team_id, reporting_manager_id, hire_date, is_active });
 
     // Create user with admin client
     const { data: authData, error: createError } = await supabaseAdmin.auth.admin.createUser({
@@ -109,19 +116,32 @@ serve(async (req) => {
       }
 
       // Also insert into employees table with all fields
-      const { error: employeeError } = await supabaseAdmin
+      const employeeData = {
+        name,
+        email,
+        role,
+        department: department || null,
+        position: position || null,
+        company_id: company_id, // Don't use null fallback - ensure we always send the company_id
+        team_id: team_id || null,
+        reporting_manager_id: reporting_manager_id || null,
+        hire_date: hire_date || null,
+        is_active: is_active !== undefined ? is_active : true,
+      };
+
+      console.log('Employee data to insert:', employeeData);
+
+      // Use upsert to ensure we override any defaults
+      const { data: insertedEmployee, error: employeeError } = await supabaseAdmin
         .from('employees')
-        .insert([{
-          user_id: authData.user.id,
-          name,
-          email,
-          role,
-          department: department || null,
-          position: position || null,
-          company_id: company_id || null,
-          team_id: team_id || null,
-          is_active: true,
-        }])
+        .upsert([employeeData], {
+          onConflict: 'email',
+          ignoreDuplicates: false
+        })
+        .select()
+        .single();
+
+      console.log('Insert result:', { insertedEmployee, employeeError });
 
       if (employeeError) {
         console.error('Employee insert error:', employeeError)

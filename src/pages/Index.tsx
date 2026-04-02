@@ -21,6 +21,7 @@ import PerformanceReport from '@/components/PerformanceReport';
 import RecruitmentReport from '@/components/RecruitmentReport';
 import { SessionSettings } from '@/components/SessionSettings';
 import CommissionDashboard from '@/components/commission/CommissionDashboard';
+import BulkPasswordReset from '@/components/BulkPasswordReset';
 import CommissionCalculator from '@/components/commission/CommissionCalculator';
 import CommissionEngagements from '@/components/commission/CommissionEngagements';
 import CommissionSplits from '@/components/commission/CommissionSplits';
@@ -164,14 +165,34 @@ const Index = () => {
         );
       
       case 'commission-report':
-        // Only admins and super admins can access commission reports
+        // Only admin and super admin can access commission reports
         if (['admin', 'super_admin'].includes(user.role)) {
-          return <CommissionIndex initialTab="commission-report" onNavigate={setActiveTab} />;
+          return (
+            <ErrorBoundary>
+              <ReportsAnalytics />
+            </ErrorBoundary>
+          );
         }
         return (
           <div className="glass-effect rounded-2xl p-8 border text-center">
             <h2 className="text-2xl font-bold mb-4">Access Denied</h2>
-            <p className="text-gray-600">You don't have permission to access this section</p>
+            <p className="text-gray-600">Only admins and super admins can access Commission Reports</p>
+          </div>
+        );
+      
+      case 'bulk-password-reset':
+        // Only super admin can access bulk password reset
+        if (['super_admin'].includes(user.role)) {
+          return (
+            <ErrorBoundary>
+              <BulkPasswordReset />
+            </ErrorBoundary>
+          );
+        }
+        return (
+          <div className="glass-effect rounded-2xl p-8 border text-center">
+            <h2 className="text-2xl font-bold mb-4">Access Denied</h2>
+            <p className="text-gray-600">Only super admins can access Bulk Password Reset</p>
           </div>
         );
       
