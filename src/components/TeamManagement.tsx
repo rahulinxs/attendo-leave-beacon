@@ -273,13 +273,15 @@ const TeamManagement: React.FC = () => {
   const updateTeam = async () => {
     if (!selectedTeam) return;
 
+    const teamData = {
+      name: selectedTeam.name,
+      description: selectedTeam.description,
+      manager_id: selectedTeam.manager_id === 'no_manager' ? null : selectedTeam.manager_id
+    };
+
     const { error } = await supabase
       .from('teams')
-      .update({
-        name: selectedTeam.name,
-        description: selectedTeam.description,
-        manager_id: selectedTeam.manager_id
-      })
+      .update(teamData)
       .eq('id', selectedTeam.id);
 
     if (error) {
@@ -591,6 +593,55 @@ const TeamManagement: React.FC = () => {
                 </div>
               </DialogContent>
             </Dialog>
+
+            {/* Edit Team Dialog */}
+            <Dialog open={showEditTeam} onOpenChange={setShowEditTeam}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Edit Team</DialogTitle>
+                </DialogHeader>
+                {selectedTeam && (
+                  <div className="space-y-4">
+                    <div>
+                      <Label>Team Name</Label>
+                      <Input
+                        value={selectedTeam.name}
+                        onChange={(e) => setSelectedTeam({...selectedTeam, name: e.target.value})}
+                        placeholder="Enter team name"
+                      />
+                    </div>
+                    <div>
+                      <Label>Description</Label>
+                      <Input
+                        value={selectedTeam.description}
+                        onChange={(e) => setSelectedTeam({...selectedTeam, description: e.target.value})}
+                        placeholder="Enter team description"
+                      />
+                    </div>
+                    <div>
+                      <Label>Team Manager</Label>
+                      <Select value={selectedTeam.manager_id || ''} onValueChange={(value) => setSelectedTeam({...selectedTeam, manager_id: value})}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a manager" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="no_manager">No Manager</SelectItem>
+                          {getReportingManagers().map(manager => (
+                            <SelectItem key={manager.id} value={manager.id}>
+                              {manager.name} ({manager.department})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={updateTeam} className="flex-1">Update Team</Button>
+                      <Button variant="outline" onClick={() => { setShowEditTeam(false); setSelectedTeam(null); }}>Cancel</Button>
+                    </div>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -606,7 +657,7 @@ const TeamManagement: React.FC = () => {
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button variant="ghost" size="sm" onClick={() => setSelectedTeam(team)}>
+                            <Button variant="ghost" size="sm" onClick={() => { setSelectedTeam(team); setShowEditTeam(true); }} disabled={!canManageTeams}>
                               <Edit className="w-4 h-4" />
                             </Button>
                           </TooltipTrigger>
