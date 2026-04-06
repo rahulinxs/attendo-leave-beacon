@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar, Clock, CheckCircle, XCircle, MapPin, CalendarIcon, TrendingUp } from 'lucide-react';
 import { format } from 'date-fns';
+import { utcToZonedTime } from 'date-fns-tz';
 import { toast } from '@/hooks/use-toast';
 import AttendanceCalendar from './AttendanceCalendar';
 import { useCompany } from '@/contexts/CompanyContext';
@@ -270,7 +271,7 @@ const EmployeeAttendance: React.FC = () => {
                   <tbody>
                     {employeeAttendance.map((rec) => (
                       <tr key={rec.date} className="border-b">
-                        <td className="px-4 py-2">{format(new Date(rec.date), 'MMM dd, yyyy')}</td>
+                        <td className="px-4 py-2">{format(new Date(rec.date + 'T00:00:00'), 'MMM dd, yyyy')}</td>
                         <td className="px-4 py-2">{getStatusBadge(rec.status)}</td>
                         <td className="px-4 py-2">{rec.check_in_time ? format(new Date(rec.check_in_time), 'HH:mm') : '-'}</td>
                         <td className="px-4 py-2">{rec.check_out_time ? format(new Date(rec.check_out_time), 'HH:mm') : '-'}</td>
