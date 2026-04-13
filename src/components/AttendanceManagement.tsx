@@ -22,11 +22,9 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { THEME_OPTIONS } from '@/contexts/ThemeContext';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import BulkAttendanceImport from './BulkAttendanceImport';
-import CustomAttendanceImport from './CustomAttendanceImport';
 
 const AttendanceManagement: React.FC = () => {
   const [showBulkImport, setShowBulkImport] = useState(false);
-  const [showCustomImport, setShowCustomImport] = useState(false);
   const { user } = useAuth();
   const { todayAttendance, recentAttendance, checkIn, checkOut, isLoading } = useAttendance();
   const { employees, isLoading: isEmployeesLoading, fetchEmployees } = useEmployees();
@@ -618,13 +616,9 @@ const AttendanceManagement: React.FC = () => {
                 <Download className="w-4 h-4 mr-2" />
                 Export Report
               </Button>
-              <Button variant="outline" onClick={() => setShowBulkImport(true)}>
+              <Button variant="gradient" onClick={() => setShowBulkImport(true)}>
                 <Upload className="w-4 h-4 mr-2" />
                 Bulk Import (Biometric)
-              </Button>
-              <Button variant="outline" onClick={() => setShowCustomImport(true)}>
-                <Upload className="w-4 h-4 mr-2" />
-                Custom Import (Excel Format)
               </Button>
             </div>
           </div>
@@ -778,18 +772,7 @@ const AttendanceManagement: React.FC = () => {
           }}
         />
       )}
-      {currentCompany && (
-        <CustomAttendanceImport
-          open={showCustomImport}
-          setOpen={setShowCustomImport}
-          companyId={currentCompany.id}
-          onImportComplete={() => {
-            // Refresh attendance data if needed
-            if (typeof window !== 'undefined') window.location.reload();
-          }}
-        />
-      )}
-    </div>
+          </div>
   );
 };
 

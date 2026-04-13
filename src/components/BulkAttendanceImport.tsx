@@ -2,8 +2,9 @@ import React, { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import * as XLSX from 'xlsx';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { Upload, FileText, Table } from 'lucide-react';
 
 interface BulkAttendanceImportProps {
   open: boolean;
@@ -17,158 +18,635 @@ interface ImportStats {
   imported: number;
   failed: number;
   unmatched: number;
-  multiple: number;
+}
+
+interface AttendanceRecord {
+  employeeId: string;
+  employeeName: string;
+  date: string;
+  checkIn: string;
+  checkOut: string;
+  lateBy: string;
+  earlyBy: string;
+  totalHours: string;
+  overtime: string;
+  status: string;
 }
 
 const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOpen, companyId, onImportComplete }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
   const [importErrors, setImportErrors] = useState<string[]>([]);
-  const [importStats, setImportStats] = useState<ImportStats|null>(null);
+  const [importStats, setImportStats] = useState<ImportStats | null>(null);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importMode, setImportMode] = useState<'replace' | 'upsert' | null>(null);
+  const [importPreview, setImportPreview] = useState<AttendanceRecord[]>([]);
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [reviewData, setReviewData] = useState<AttendanceRecord[]>([]);
+  const [fileType, setFileType] = useState<'excel' | 'csv'>('excel');
+  const [employeeNameToId, setEmployeeNameToId] = useState<Record<string, string>>({});
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [reviewMode, setReviewMode] = useState<'replace' | 'upsert' | null>(null);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Fetch profiles for name matching (attendance table references profiles.id)
+  React.useEffect(() => {
+    const fetchProfiles = async () => {
+      if (!companyId) return;
+      
+      console.log('Fetching profiles for company:', companyId);
+      
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('id, name, is_active')
+        .eq('company_id', companyId);
+        // Remove is_active filter to include both active and inactive employees
+
+      console.log('Profiles query result:', { profiles, error });
+
+      if (!error && profiles) {
+        const nameToIdMap: Record<string, string> = {};
+        profiles.forEach(profile => {
+          const profileName = profile.name?.trim().toLowerCase() || '';
+          nameToIdMap[profileName] = profile.id;
+          console.log(`Mapping profile: "${profile.name}" (${profile.is_active ? 'active' : 'inactive'}) -> ${profile.id}`);
+        });
+        setEmployeeNameToId(nameToIdMap);
+        console.log('Final name-to-id map:', nameToIdMap);
+      } else {
+        console.error('Error fetching profiles:', error);
+      }
+    };
+
+    if (open) {
+      fetchProfiles();
+    }
+  }, [open, companyId]);
+
+  // Excel/CSV import handler
+  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setImporting(true);
-    setImportErrors([]);
-    try {
-      const workbook = await XLSX.read(await file.arrayBuffer());
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(worksheet);
-      let success = 0, fail = 0;
-      const errors: string[] = [];
+    
+    setImportFile(file);
+    setImportDialogOpen(true);
+  };
 
-      // Fetch active employees for name matching
-      const { data: employees, error: empError } = await supabase
-        .from('employees')
-        .select('id, name')
-        .eq('company_id', companyId)
-        .eq('is_active', true);
-      if (empError || !employees) {
-        toast({ title: 'Error', description: 'Could not fetch employee list', variant: 'destructive' });
-        setImporting(false);
-        return;
+  // Process import after user chooses mode (show preview for review)
+  const processImport = async (mode: 'replace' | 'upsert') => {
+    if (!importFile) return;
+    
+    setImportDialogOpen(false);
+    let workbook;
+    
+    if (importFile.name.endsWith('.csv')) {
+      // For CSV, XLSX.read expects a string, not arrayBuffer
+      const text = await importFile.text();
+      workbook = XLSX.read(text, { type: 'string' });
+    } else {
+      workbook = XLSX.read(await importFile.arrayBuffer());
+    }
+    
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    const json = XLSX.utils.sheet_to_json(worksheet);
+
+    // Helper function to format Excel serial dates for display
+    const formatDateForDisplay = (dateValue: any): string => {
+      if (!dateValue) return '';
+      
+      const dateStr = dateValue.toString();
+      
+      // Handle Excel serial numbers (e.g., 46054, 46055)
+      const serialNumber = parseInt(dateStr);
+      if (!isNaN(serialNumber) && serialNumber > 40000 && serialNumber < 60000) {
+        const excelEpoch = new Date(1900, 0, 1);
+        const daysOffset = serialNumber - 2;
+        const date = new Date(excelEpoch.getTime() + (daysOffset * 24 * 60 * 60 * 1000));
+        if (!isNaN(date.getTime())) {
+          return date.toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: '2-digit', 
+            day: '2-digit' 
+          });
+        }
       }
-      // Group records by name + date
-      const grouped: Record<string, { name: string; date: string; times: string[] } > = {};
-      for (const row of json as any[]) {
-        if (!row['Name'] || !row['Log Date']) {
-          errors.push(`Missing Name or Log Date in row: ${JSON.stringify(row)}`);
-          fail++;
-          continue;
-        }
-        // Parse date/time
-        const logDate = new Date(row['Log Date']);
-        if (isNaN(logDate.getTime())) {
-          errors.push(`Invalid Log Date: ${row['Log Date']} in row: ${JSON.stringify(row)}`);
-          fail++;
-          continue;
-        }
-        const dateStr = logDate.toISOString().split('T')[0];
-        const nameKey = row['Name'].toString().trim().toLowerCase();
-        const groupKey = `${nameKey}__${dateStr}`;
-        if (!grouped[groupKey]) {
-          grouped[groupKey] = { name: row['Name'], date: dateStr, times: [] };
-        }
-        grouped[groupKey].times.push(logDate.toISOString());
+      
+      return dateStr;
+    };
+
+    // Map Excel columns to DB fields using employee name for matching
+    const mapped = (json as any[]).map((row: any, index: number) => {
+      // Debug: Log the raw row data
+      console.log(`Row ${index + 1} raw data:`, row);
+      
+      const employeeName = row['Employee Name']?.toString().trim() || '';
+      const employeeId = employeeNameToId[employeeName.toLowerCase()] || '';
+      
+      // Debug: Log individual field values
+      console.log(`Row ${index + 1} parsed values:`, {
+        employeeName,
+        employeeId,
+        date: row['Date'],
+        checkIn: row['Check In'],
+        checkOut: row['Check Out'],
+        totalHours: row['Total Hours'],
+        status: row['Status']
+      });
+      
+      return {
+        employeeId: employeeId,
+        employeeName: employeeName,
+        date: formatDateForDisplay(row['Date']),
+        checkIn: row['Check In']?.toString() || '',
+        checkOut: row['Check Out']?.toString() || '',
+        lateBy: '', // Not available in this Excel format
+        earlyBy: '', // Not available in this Excel format
+        totalHours: row['Total Hours']?.toString() || '',
+        overtime: '', // Not available in this Excel format
+        status: row['Status']?.toString() || 'present'
+      };
+    });
+
+    // Validate and collect errors
+    const errors: string[] = [];
+    mapped.forEach((row, idx) => {
+      if (!row.employeeId) {
+        errors.push(`Row ${idx + 1}: Employee '${row.employeeName}' not found.`);
       }
-      // For each group, match name and import
-      for (const groupKey in grouped) {
-        const { name, date, times } = grouped[groupKey];
-        const safeName = typeof name === 'string' ? name : String(name || '').trim();
-        const nameKey = safeName.trim().toLowerCase();
-        const matches = employees.filter((emp: any) => {
-          const empSafe = typeof emp.name === 'string' ? emp.name : String(emp.name || '').trim();
-          return empSafe.trim().toLowerCase() === nameKey;
-        });
-        if (matches.length !== 1) {
-          errors.push(`Name '${name}' on ${date}: ${matches.length === 0 ? 'No match' : 'Multiple matches'} among active employees.`);
+      if (!row.date) {
+        errors.push(`Row ${idx + 1}: Date is required.`);
+      }
+    });
+
+    setImportPreview(mapped);
+    setImportErrors(errors);
+    setReviewDialogOpen(true);
+    setReviewData(mapped);
+    setReviewMode(mode);
+  };
+
+  // Save imported data to database
+  const saveImport = async () => {
+    if (!reviewData.length || !reviewMode) return;
+    
+    setImporting(true);
+    let success = 0, fail = 0;
+    const errors: string[] = [];
+
+    console.log('Starting import with', reviewData.length, 'records');
+    console.log('Company ID:', companyId);
+
+    try {
+      for (const record of reviewData) {
+        console.log('Processing record:', record);
+        
+        if (!record.employeeId) {
+          const errorMsg = `Skipped ${record.employeeName} - employee not found in profiles table`;
+          console.error(errorMsg);
+          errors.push(errorMsg);
           fail++;
           continue;
         }
-        // Sort times to get first (check-in) and last (check-out)
-        const sortedTimes = times.sort();
-        const checkIn = sortedTimes[0];
-        const checkOut = sortedTimes[sortedTimes.length - 1];
-        const { error } = await supabase.from('attendance').upsert({
-          employee_id: matches[0].id,
+
+        // Convert times to ISO format
+        let checkInTime = null;
+        let checkOutTime = null;
+        
+        try {
+          // Helper function to parse various date formats
+          const parseDate = (dateStr: string): Date | null => {
+            if (!dateStr) return null;
+            
+            // Handle Excel serial numbers (e.g., 46054, 46055)
+            const serialNumber = parseInt(dateStr);
+            if (!isNaN(serialNumber) && serialNumber > 40000 && serialNumber < 60000) {
+              // Excel dates start from 1/1/1900, but Excel incorrectly treats 1900 as a leap year
+              // So we need to adjust by 1 day for dates after 2/28/1900
+              const excelEpoch = new Date(1900, 0, 1); // January 1, 1900
+              const daysOffset = serialNumber - 2; // Adjust for Excel's leap year bug
+              const date = new Date(excelEpoch.getTime() + (daysOffset * 24 * 60 * 60 * 1000));
+              if (!isNaN(date.getTime())) {
+                console.log(`Parsed Excel serial ${dateStr} as ${date.toISOString()}`);
+                return date;
+              }
+            }
+            
+            // Try MM/DD/YYYY format first (e.g., "2/25/2026")
+            if (dateStr.includes('/')) {
+              const parts = dateStr.split('/');
+              if (parts.length === 3) {
+                const month = parseInt(parts[0]);
+                const day = parseInt(parts[1]);
+                const year = parseInt(parts[2]);
+                
+                if (!isNaN(month) && !isNaN(day) && !isNaN(year)) {
+                  const date = new Date(year, month - 1, day); // month is 0-indexed in Date constructor
+                  if (!isNaN(date.getTime())) {
+                    console.log(`Parsed date ${dateStr} as ${date.toISOString()}`);
+                    return date;
+                  }
+                }
+              }
+            }
+            
+            // Try YYYY-MM-DD format (e.g., "2026-02-25")
+            if (dateStr.includes('-')) {
+              const parts = dateStr.split('-');
+              if (parts.length === 3) {
+                const year = parseInt(parts[0]);
+                const month = parseInt(parts[1]);
+                const day = parseInt(parts[2]);
+                
+                if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+                  const date = new Date(year, month - 1, day);
+                  if (!isNaN(date.getTime())) {
+                    console.log(`Parsed date ${dateStr} as ${date.toISOString()}`);
+                    return date;
+                  }
+                }
+              }
+            }
+            
+            // Fallback to standard Date parsing
+            const fallbackDate = new Date(dateStr);
+            if (!isNaN(fallbackDate.getTime())) {
+              console.log(`Fallback parsed date ${dateStr} as ${fallbackDate.toISOString()}`);
+              return fallbackDate;
+            }
+            
+            return null;
+          };
+
+          // Parse check-in time
+          if (record.checkIn && record.checkIn.trim()) {
+            const baseDate = parseDate(record.date);
+            if (baseDate) {
+              const checkInStr = record.checkIn.toString().trim();
+              
+              // Handle time formats: "19:41", "04:32", "15:39:31", "9:06:00 PM", etc.
+              let hours = 0, minutes = 0, seconds = 0;
+              
+              if (checkInStr.includes(':')) {
+                const parts = checkInStr.split(' ');
+                const timePart = parts[0];
+                const period = parts[1]; // Might be AM/PM or undefined
+                
+                const timeComponents = timePart.split(':');
+                hours = parseInt(timeComponents[0]);
+                minutes = parseInt(timeComponents[1]) || 0;
+                seconds = parseInt(timeComponents[2]) || 0;
+                
+                // Handle AM/PM if present
+                if (period) {
+                  if (period.toUpperCase() === 'PM' && hours !== 12) hours += 12;
+                  if (period.toUpperCase() === 'AM' && hours === 12) hours = 0;
+                }
+                // If no AM/PM and hours <= 12, assume it's 24-hour format (like "19:41")
+              } else {
+                // Handle simple time like "9" or "14"
+                hours = parseInt(checkInStr);
+                if (hours <= 12 && !checkInStr.includes('24')) {
+                  // Assume AM/PM format - if PM, add 12
+                  if (hours < 12) hours += 12; // Default to PM for single digit hours
+                }
+              }
+              
+              const checkInDate = new Date(baseDate);
+              checkInDate.setHours(hours, minutes, seconds, 0);
+              
+              if (!isNaN(checkInDate.getTime())) {
+                checkInTime = checkInDate.toISOString();
+                console.log(`Check-in time: ${record.checkIn} -> ${checkInTime}`);
+              }
+            }
+          }
+
+          // Parse check-out time
+          if (record.checkOut && record.checkOut.trim()) {
+            const baseDate = parseDate(record.date);
+            if (baseDate) {
+              const checkOutStr = record.checkOut.toString().trim();
+              
+              // Handle time formats: "04:32", "18:04:37", "15:39:31", "6:30:00 PM", etc.
+              let hours = 0, minutes = 0, seconds = 0;
+              
+              if (checkOutStr.includes(':')) {
+                const parts = checkOutStr.split(' ');
+                const timePart = parts[0];
+                const period = parts[1]; // Might be AM/PM or undefined
+                
+                const timeComponents = timePart.split(':');
+                hours = parseInt(timeComponents[0]);
+                minutes = parseInt(timeComponents[1]) || 0;
+                seconds = parseInt(timeComponents[2]) || 0;
+                
+                // Handle AM/PM if present
+                if (period) {
+                  if (period.toUpperCase() === 'PM' && hours !== 12) hours += 12;
+                  if (period.toUpperCase() === 'AM' && hours === 12) hours = 0;
+                }
+                // If no AM/PM and hours <= 12, assume it's 24-hour format (like "04:32")
+              } else {
+                hours = parseInt(checkOutStr);
+                if (hours <= 12 && !checkOutStr.includes('24')) {
+                  if (hours < 12) hours += 12; // Default to PM for single digit hours
+                }
+              }
+              
+              const checkOutDate = new Date(baseDate);
+              checkOutDate.setHours(hours, minutes, seconds, 0);
+              
+              if (!isNaN(checkOutDate.getTime())) {
+                checkOutTime = checkOutDate.toISOString();
+                console.log(`Check-out time: ${record.checkOut} -> ${checkOutTime}`);
+              }
+            }
+          }
+        } catch (dateError) {
+          console.error('Date conversion error:', dateError);
+          errors.push(`Invalid date/time format for ${record.employeeName} on ${record.date}`);
+          fail++;
+          continue;
+        }
+
+        // Convert the parsed date to YYYY-MM-DD format for storage
+        const parsedDate = parseDate(record.date);
+        const formattedDate = parsedDate ? parsedDate.toISOString().split('T')[0] : record.date;
+
+        const attendanceData = {
+          employee_id: record.employeeId,
           company_id: companyId,
-          date: date,
-          check_in_time: checkIn,
-          check_out_time: checkOut,
-          status: 'present', // Default to present for biometric import
-          notes: 'Imported from biometric device',
-        }, {
+          date: formattedDate,
+          check_in_time: checkInTime,
+          check_out_time: checkOutTime,
+          status: record.status,
+          notes: `Bulk import - Total Hours: ${record.totalHours}`
+        };
+
+        console.log('Inserting attendance data:', attendanceData);
+
+        const { error } = await supabase.from('attendance').upsert(attendanceData, {
           onConflict: 'employee_id,date'
         });
+
         if (error) {
-          errors.push(`Import failed for ${name} on ${date}: ${error.message}`);
+          const errorMsg = `Import failed for ${record.employeeName} on ${record.date}: ${error.message}`;
+          console.error('Database error:', error);
+          errors.push(errorMsg);
           fail++;
         } else {
+          console.log('Successfully imported record for:', record.employeeName);
           success++;
         }
       }
-      toast({
-        title: 'Import Complete',
-        description: `${success} records imported, ${fail} failed.`,
-        variant: fail > 0 ? 'destructive' : 'default',
-      });
-      setImportErrors(errors);
+
       setImportStats({
-        processed: Object.keys(grouped).length,
+        processed: reviewData.length,
         imported: success,
         failed: fail,
-        unmatched: errors.filter(e => e.includes('No match')).length,
-        multiple: errors.filter(e => e.includes('Multiple matches')).length,
+        unmatched: errors.filter(e => e.includes('not found')).length
       });
-      if (onImportComplete) onImportComplete();
-    } catch (err: any) {
-      setImportErrors([err.message || 'Failed to import attendance.']);
+
+      toast({
+        title: 'Import Complete',
+        description: `${success} rows imported, ${fail} failed.`
+      });
+
+      setReviewDialogOpen(false);
+      setImportFile(null);
+      setImportMode(null);
+      setImportPreview([]);
+      setReviewData([]);
+      
+      if (onImportComplete) {
+        onImportComplete();
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Import Error',
+        description: error.message,
+        variant: 'destructive'
+      });
     } finally {
       setImporting(false);
-      setOpen(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Bulk Import Attendance</DialogTitle>
-        </DialogHeader>
-        <div className="mb-4">Upload an Excel or CSV file with columns: <b>Name, Log Date</b>.<br/>All other columns will be ignored. Name must match an active employee exactly.</div>
-        <input
-          type="file"
-          accept=".xlsx, .xls, .csv"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          disabled={importing}
-        />
-        {importStats && (
-          <div className="mt-2 text-sm text-gray-700">
-            <div><b>Statistics:</b></div>
-            <ul className="ml-4 list-disc">
-              <li>Total records processed: {importStats.processed}</li>
-              <li>Imported successfully: {importStats.imported}</li>
-              <li>Failed: {importStats.failed}</li>
-              <li>Unmatched names: {importStats.unmatched}</li>
-              <li>Multiple matches: {importStats.multiple}</li>
-            </ul>
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Bulk Attendance Import (Biometric)</DialogTitle>
+          </DialogHeader>
+          
+          <div className="mb-4 space-y-4">
+            <div className="mb-4">
+              <h3 className="font-semibold mb-2">File Type:</h3>
+              <div className="flex gap-2">
+                <Button
+                  variant={fileType === 'excel' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFileType('excel')}
+                  disabled={importing}
+                >
+                  <Table className="w-4 h-4 mr-2" />
+                  Excel (.xlsx, .xls)
+                </Button>
+                <Button
+                  variant={fileType === 'csv' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFileType('csv')}
+                  disabled={importing}
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  CSV (.csv)
+                </Button>
+              </div>
+            </div>
+
+            <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
+              <p><strong>Required Columns:</strong></p>
+              <ul className="ml-4 list-disc">
+                <li>Employee Name (used for matching with database)</li>
+                <li>Date (YYYY-MM-DD format)</li>
+                <li>Check In (HH:MM format)</li>
+                <li>Check Out (HH:MM format)</li>
+                <li>Late By (optional)</li>
+                <li>Early By (optional)</li>
+                <li>Total Hours (optional)</li>
+                <li>Overtime (optional)</li>
+                <li>Status (optional, defaults to 'present')</li>
+              </ul>
+              <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded">
+                <p className="text-sm">
+                  <strong>Important:</strong> Employee matching is done by <strong>Employee Name</strong> (not Employee ID). 
+                  Make sure employee names match exactly with the <strong>profiles</strong> table in the database.
+                  Both <strong>active and inactive</strong> employees are included for historical data import.
+                </p>
+              </div>
+            </div>
           </div>
-        )}
-        {importErrors.length > 0 && (
-          <div className="mt-2 text-red-600 text-sm max-h-40 overflow-y-auto">
-            {importErrors.map((err, i) => <div key={i}>{err}</div>)}
+
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <input
+                type="file"
+                accept={fileType === 'csv' ? '.csv' : '.xlsx, .xls'}
+                ref={fileInputRef}
+                onChange={handleImportExcel}
+                disabled={importing}
+                className="flex-1"
+              />
+              <Button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importing}
+                variant="gradient"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                {importing ? 'Processing...' : 'Choose File'}
+              </Button>
+            </div>
+            <p className="text-sm text-gray-600">
+              Selected format: <strong>{fileType === 'csv' ? 'CSV' : 'Excel'}</strong> - 
+              {fileType === 'csv' ? 'Accepts .csv files with comma-separated values' : 'Accepts .xlsx and .xls Excel files'}
+            </p>
           </div>
-        )}
-        <div className="flex gap-2 mt-4">
-          <Button onClick={() => fileInputRef.current?.click()} disabled={importing}>
-            {importing ? 'Importing...' : 'Select File'}
-          </Button>
-          <Button variant="outline" onClick={() => setOpen(false)} disabled={importing}>Cancel</Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+
+          {importStats && (
+            <div className="mb-4 text-sm text-gray-700 bg-blue-50 p-3 rounded">
+              <div className="font-semibold mb-2">Import Statistics:</div>
+              <ul className="ml-4 list-disc">
+                <li>Total records processed: {importStats.processed}</li>
+                <li>Imported successfully: {importStats.imported}</li>
+                <li>Failed: {importStats.failed}</li>
+                <li>Unmatched employees: {importStats.unmatched}</li>
+              </ul>
+            </div>
+          )}
+
+          {importErrors.length > 0 && (
+            <div className="mb-4 text-sm text-red-600 bg-red-50 p-3 rounded max-h-32 overflow-y-auto">
+              <div className="font-semibold mb-2">Import Errors:</div>
+              <ul className="ml-4 list-disc">
+                {importErrors.map((error, idx) => (
+                  <li key={idx}>{error}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Mode Dialog */}
+      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import Mode</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="mb-4">Choose how you want to import the data:</p>
+            <div className="space-y-2">
+              <div className="p-3 border rounded">
+                <h4 className="font-semibold">Replace All</h4>
+                <p className="text-sm text-gray-600">Delete existing attendance records and replace with imported data.</p>
+              </div>
+              <div className="p-3 border rounded">
+                <h4 className="font-semibold">Upsert Only</h4>
+                <p className="text-sm text-gray-600">Update existing records and add new ones without deleting anything.</p>
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-4">
+            <Button onClick={() => { setImportMode('replace'); processImport('replace'); }}>
+              Replace All
+            </Button>
+            <Button onClick={() => { setImportMode('upsert'); processImport('upsert'); }}>
+              Upsert Only
+            </Button>
+            <Button variant="outline" onClick={() => setImportDialogOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Review Dialog */}
+      <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Review Import Data</DialogTitle>
+          </DialogHeader>
+          
+          {importErrors.length > 0 && (
+            <div className="mb-4 text-sm text-red-600 bg-red-50 p-3 rounded">
+              <div className="font-semibold mb-2">Validation Errors:</div>
+              <ul className="ml-4 list-disc">
+                {importErrors.map((error, idx) => (
+                  <li key={idx}>{error}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="mb-4">
+            <div className="text-sm text-gray-600 mb-2">
+              Showing {reviewData.length} records to import
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-collapse border border-gray-300">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="border border-gray-300 px-2 py-1 text-xs">Employee Name</th>
+                    <th className="border border-gray-300 px-2 py-1 text-xs">Date</th>
+                    <th className="border border-gray-300 px-2 py-1 text-xs">Check In</th>
+                    <th className="border border-gray-300 px-2 py-1 text-xs">Check Out</th>
+                    <th className="border border-gray-300 px-2 py-1 text-xs">Status</th>
+                    <th className="border border-gray-300 px-2 py-1 text-xs">Total Hours</th>
+                    <th className="border border-gray-300 px-2 py-1 text-xs">Overtime</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reviewData.slice(0, 10).map((row, idx) => (
+                    <tr key={idx} className={row.employeeId ? '' : 'bg-red-50'}>
+                      <td className="border border-gray-300 px-2 py-1 text-xs">
+                        {row.employeeName}
+                        {!row.employeeId && <span className="text-red-500 ml-1"> (Not found)</span>}
+                      </td>
+                      <td className="border border-gray-300 px-2 py-1 text-xs">{row.date}</td>
+                      <td className="border border-gray-300 px-2 py-1 text-xs">{row.checkIn}</td>
+                      <td className="border border-gray-300 px-2 py-1 text-xs">{row.checkOut}</td>
+                      <td className="border border-gray-300 px-2 py-1 text-xs">{row.status}</td>
+                      <td className="border border-gray-300 px-2 py-1 text-xs">{row.totalHours}</td>
+                      <td className="border border-gray-300 px-2 py-1 text-xs">{row.overtime}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {reviewData.length > 10 && (
+                <div className="text-sm text-gray-500 mt-2">
+                  ... and {reviewData.length - 10} more records
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex gap-4">
+            <Button onClick={saveImport} disabled={importing}>
+              {importing ? 'Importing...' : 'Confirm Import'}
+            </Button>
+            <Button variant="outline" onClick={() => setReviewDialogOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
