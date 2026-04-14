@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import * as XLSX from 'xlsx';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/hooks/use-toast';
+import { FileText, Table } from 'lucide-react';
 
 interface CustomAttendanceImportProps {
   open: boolean;
@@ -44,6 +45,7 @@ const CustomAttendanceImport: React.FC<CustomAttendanceImportProps> = ({
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [importStats, setImportStats] = useState<ImportStats | null>(null);
   const [showDebugInfo, setShowDebugInfo] = useState(false);
+  const [fileType, setFileType] = useState<'excel' | 'csv'>('excel');
 
   // Date format converter for DD-MMM-YY to YYYY-MM-DD
   const convertCustomDate = (dateStr: string): string => {
@@ -131,9 +133,70 @@ const CustomAttendanceImport: React.FC<CustomAttendanceImportProps> = ({
     setImportStats(null);
 
     try {
-      const workbook = await XLSX.read(await file.arrayBuffer());
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(worksheet);
+      // Detect file type and set accordingly
+      const extension = file.name.split('.').pop()?.toLowerCase();
+      if (extension === 'csv') {
+        setFileType('csv');
+      } else if (['xlsx', 'xls'].includes(extension || '')) {
+        setFileType('excel');
+      }
+
+      let json: any[] = [];
+
+      if (fileType === 'csv' || extension === 'csv') {
+        // Handle CSV file
+        const text = await file.text();
+        const lines = text.split('\n').filter(line => line.trim());
+        
+        if (lines.length < 2) {
+          throw new Error('CSV file appears to be empty or invalid');
+        }
+
+        // Improved CSV parsing to handle quoted fields
+        const parseCSVLine = (line: string): string[] => {
+          const result: string[] = [];
+          let current = '';
+          let inQuotes = false;
+          
+          for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            
+            if (char === '"') {
+              inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+              result.push(current.trim());
+              current = '';
+            } else {
+              current += char;
+            }
+          }
+          
+          result.push(current.trim());
+          return result;
+        };
+
+        // Parse CSV headers
+        const headers = parseCSVLine(lines[0]).map(h => h.replace(/^"(.*)"$/, '$1'));
+        
+        // Parse CSV rows
+        for (let i = 1; i < lines.length; i++) {
+          if (lines[i].trim() === '') continue; // Skip empty lines
+          
+          const values = parseCSVLine(lines[i]);
+          const row: any = {};
+          
+          headers.forEach((header, index) => {
+            row[header] = values[index] || '';
+          });
+          
+          json.push(row);
+        }
+      } else {
+        // Handle Excel file
+        const workbook = await XLSX.read(await file.arrayBuffer());
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        json = XLSX.utils.sheet_to_json(worksheet);
+      }
       
       let success = 0, fail = 0, skip = 0;
       const errors: string[] = [];
@@ -196,13 +259,37 @@ const CustomAttendanceImport: React.FC<CustomAttendanceImportProps> = ({
 
       // Import processed records
       for (const record of processedRecords) {
-        // Try to match by employee name only (since we don't have employee_id field)
+        // Match by employee name (primary method since Employee ID won't match database format)
         let matchedEmployee = employees.find(emp => 
           emp.name?.trim().toLowerCase() === record.employeeName.toLowerCase()
         );
 
+        // If no match found, try to match with profiles table as fallback
         if (!matchedEmployee) {
-          errors.push(`No employee found for Name: ${record.employeeName} (ID: ${record.employeeId})`);
+          console.log(`No employee found in employees table for: ${record.employeeName}, checking profiles table...`);
+          
+          // Try to fetch from profiles table as fallback
+          const { data: profiles, error: profileError } = await supabase
+            .from('profiles')
+            .select('id, name')
+            .eq('company_id', companyId)
+            .ilike('name', `%${record.employeeName}%`)
+            .limit(5);
+
+          if (!profileError && profiles && profiles.length > 0) {
+            // Try to match with profile names
+            matchedEmployee = profiles.find(profile => 
+              profile.name?.trim().toLowerCase() === record.employeeName.toLowerCase()
+            );
+            
+            if (matchedEmployee) {
+              console.log(`Found match in profiles table: ${matchedEmployee.name}`);
+            }
+          }
+        }
+
+        if (!matchedEmployee) {
+          errors.push(`No employee found for Name: ${record.employeeName} (Employee ID from file: ${record.employeeId})`);
           fail++;
           continue;
         }
@@ -296,11 +383,35 @@ const CustomAttendanceImport: React.FC<CustomAttendanceImportProps> = ({
               {showDebugInfo ? 'Hide' : 'Show'} Debug Info
             </Button>
           </div>
+
+          <div className="mb-4">
+            <h3 className="font-semibold mb-2">File Type:</h3>
+            <div className="flex gap-2">
+              <Button
+                variant={fileType === 'excel' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setFileType('excel')}
+                disabled={importing}
+              >
+                <Table className="w-4 h-4 mr-2" />
+                Excel (.xlsx, .xls)
+              </Button>
+              <Button
+                variant={fileType === 'csv' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setFileType('csv')}
+                disabled={importing}
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                CSV (.csv)
+              </Button>
+            </div>
+          </div>
           <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
             <p><strong>Required Columns:</strong></p>
             <ul className="ml-4 list-disc">
-              <li>Employee ID</li>
-              <li>Employee Name</li>
+              <li>Employee ID (for reference only - not used for matching)</li>
+              <li>Employee Name (used for matching with database)</li>
               <li>Date (DD-MMM-YY format, e.g., 28-Jan-26)</li>
               <li>Day</li>
               <li>Status (P, A, L, H, etc.)</li>
@@ -309,6 +420,12 @@ const CustomAttendanceImport: React.FC<CustomAttendanceImportProps> = ({
               <li>Duration (HH:MM format)</li>
               <li>Source File</li>
             </ul>
+            <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded">
+              <p className="text-sm">
+                <strong>Important:</strong> Employee matching is done by <strong>Employee Name</strong> (not Employee ID). 
+                The Employee ID column is for reference only.
+              </p>
+            </div>
           </div>
 
           {showDebugInfo && (
@@ -338,14 +455,29 @@ const CustomAttendanceImport: React.FC<CustomAttendanceImportProps> = ({
           </div>
         </div>
 
-        <input
-          type="file"
-          accept=".xlsx, .xls, .csv"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          disabled={importing}
-          className="mb-4"
-        />
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <input
+              type="file"
+              accept={fileType === 'csv' ? '.csv' : '.xlsx, .xls'}
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              disabled={importing}
+              className="flex-1"
+            />
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              variant="gradient"
+            >
+              {importing ? 'Processing...' : `Choose ${fileType === 'csv' ? 'CSV' : 'Excel'} File`}
+            </Button>
+          </div>
+          <p className="text-sm text-gray-600">
+            Selected format: <strong>{fileType === 'csv' ? 'CSV' : 'Excel'}</strong> - 
+            {fileType === 'csv' ? 'Accepts .csv files with comma-separated values' : 'Accepts .xlsx and .xls Excel files'}
+          </p>
+        </div>
 
         {importStats && (
           <div className="mb-4 text-sm text-gray-700 bg-blue-50 p-3 rounded">

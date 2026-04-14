@@ -169,7 +169,7 @@ const Index = () => {
         if (['admin', 'super_admin'].includes(user.role)) {
           return (
             <ErrorBoundary>
-              <ReportsAnalytics />
+              <CommissionReports />
             </ErrorBoundary>
           );
         }

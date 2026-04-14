@@ -221,15 +221,55 @@ export const CommissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     });
     setReportByCycle(Array.from(cycleMap.values()));
 
-    // Team Earnings (same as splits by person but with different structure)
-    const earnings = splitsByPerson.map(person => ({
+    // Team Earnings - calculate directly from engagement data
+    const personMap = new Map<string, { name: string; roles: string[]; engagement_count: number; total_commission: number }>();
+
+    engagementData.forEach(engagement => {
+      const teamMembers = [
+        { name: engagement.recruiter_name, commission: engagement.recruiter_commission },
+        { name: engagement.recruitment_lead_name, commission: engagement.recruitment_lead_commission },
+        { name: engagement.sales_name, commission: engagement.sales_commission },
+        { name: engagement.sales_lead_name, commission: engagement.sales_lead_commission }
+      ];
+
+      teamMembers.forEach(member => {
+        if (member.name && member.commission > 0) {
+          const existing = personMap.get(member.name) || {
+            name: member.name,
+            roles: [],
+            engagement_count: 0,
+            total_commission: 0
+          };
+          
+          existing.total_commission += member.commission;
+          existing.engagement_count += 1;
+          
+          if (!existing.roles.includes('Recruiter') && member.name === engagement.recruiter_name) {
+            existing.roles.push('Recruiter');
+          }
+          if (!existing.roles.includes('Recruitment Lead') && member.name === engagement.recruitment_lead_name) {
+            existing.roles.push('Recruitment Lead');
+          }
+          if (!existing.roles.includes('Sales') && member.name === engagement.sales_name) {
+            existing.roles.push('Sales');
+          }
+          if (!existing.roles.includes('Sales Lead') && member.name === engagement.sales_lead_name) {
+            existing.roles.push('Sales Lead');
+          }
+          
+          personMap.set(member.name, existing);
+        }
+      });
+    });
+
+    const earnings = Array.from(personMap.values()).map(person => ({
       name: person.name,
       roles: person.roles,
       engagement_count: person.engagement_count,
       total_earned: person.total_commission
     }));
     setTeamEarnings(earnings);
-  }, [splitsByPerson]);
+  }, []); // Remove splitsByPerson dependency
 
   // Fetch engagements
   const fetchEngagements = useCallback(async () => {
@@ -256,7 +296,8 @@ export const CommissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // Fetch active employees
   const fetchEmployees = useCallback(async () => {
-    if (!currentCompany) {
+    const company = currentCompany; // Capture current value
+    if (!company) {
       setEmployees([]);
       setIsLoadingEmployees(false);
       return;
@@ -267,7 +308,7 @@ export const CommissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const { data, error } = await supabase
         .from('employees')
         .select('id, name, email, role')
-        .eq('company_id', currentCompany.id)
+        .eq('company_id', company.id)
         .eq('is_active', true)
         .in('role', ['employee', 'reporting_manager', 'admin', 'super_admin'])
         .order('name');
@@ -291,7 +332,7 @@ export const CommissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } finally {
       setIsLoadingEmployees(false);
     }
-  }, [currentCompany]);
+  }, []); // Remove currentCompany dependency
 
   // Create engagement
   const createEngagement = useCallback(async (data: CommissionFormData) => {
@@ -447,13 +488,13 @@ export const CommissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     calculateSplitsByPerson(engagements);
     calculateSplitsByEngagement(engagements);
     calculateReports(engagements);
-  }, [engagements, calculateKPIs, calculateSplitsByPerson, calculateSplitsByEngagement, calculateReports]);
+  }, [engagements]); // Only depend on engagements data
 
   // Load data on mount
   useEffect(() => {
     fetchEngagements();
     fetchEmployees();
-  }, [fetchEngagements, fetchEmployees]);
+  }, []); // Empty dependency array - only run on mount
 
   const value: CommissionContextType = {
     engagements,

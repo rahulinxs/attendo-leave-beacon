@@ -7,11 +7,14 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Filter, Users, UserCheck, UserX, Building, BarChart2, Loader2, RefreshCw, Eye, Pencil } from 'lucide-react';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Search, Filter, Users, UserCheck, UserX, Building, BarChart2, Loader2, RefreshCw, Eye, Pencil, ChevronLeft, ChevronRight, Download, X, Check, ChevronsUpDown } from 'lucide-react';
 import Profile from './Profile';
 import { Employee } from '@/types/employee';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 const PROFILE_ROLES = ['admin', 'super_admin'];
 
@@ -33,6 +36,14 @@ const ProfileManagement: React.FC = () => {
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
+  
+  // Searchable combobox state
+  const [consultantOpen, setConsultantOpen] = useState(false);
+  const [consultantId, setConsultantId] = useState('all');
   
   // Handle errors from useEmployees
   useEffect(() => {
@@ -63,6 +74,17 @@ const ProfileManagement: React.FC = () => {
     }
   }, [employees]);
   
+  // Get unique departments for filter options
+  const departments = useMemo(() => {
+    const depts = new Set(employees.map(emp => emp.department).filter(Boolean));
+    return Array.from(depts).sort();
+  }, [employees]);
+
+  const selectedConsultant = useMemo(() => {
+    if (consultantId === 'all') return null;
+    return employees.find(e => e.id === consultantId) || null;
+  }, [consultantId, employees]);
+
   // Filter employees based on search and filters
   const filteredEmployees = useMemo(() => {
     return employees.filter(emp => {
@@ -81,9 +103,79 @@ const ProfileManagement: React.FC = () => {
         emp.department === departmentFilter ||
         (!emp.department && departmentFilter === 'Unassigned');
       
-      return matchesSearch && matchesStatus && matchesDepartment;
+      // Consultant filter (from searchable combobox)
+      const matchesConsultant = !selectedConsultant || emp.id === selectedConsultant.id;
+      
+      return matchesSearch && matchesStatus && matchesDepartment && matchesConsultant;
     });
-  }, [employees, searchTerm, statusFilter, departmentFilter]);
+  }, [employees, searchTerm, statusFilter, departmentFilter, selectedConsultant]);
+
+  const totalPages = Math.ceil(filteredEmployees.length / pageSize);
+  const paginatedEmployees = useMemo(() => {
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    return filteredEmployees.slice(startIndex, endIndex);
+  }, [filteredEmployees, page, pageSize]);
+
+  const handlePageChange = (newPage: number) => {
+    setPage(Math.max(1, Math.min(newPage, totalPages)));
+  };
+
+  const handlePageSizeChange = (newPageSize: string) => {
+    setPageSize(Number(newPageSize));
+    setPage(1);
+  };
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, statusFilter, departmentFilter, consultantId]);
+
+  const toTitleCase = (str: string) => {
+    if (!str) return '';
+    return str
+      .toLowerCase()
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+
+  const exportToCSV = () => {
+    if (employees.length === 0) return;
+
+    const headers = ['Name', 'Email', 'Role', 'Department', 'Designation', 'Status'];
+    
+    const csvRows = employees.map(emp => [
+      `"${emp.name}"`,
+      `"${emp.email}"`,
+      `"${emp.role}"`,
+      `"${emp.department || ''}"`,
+      `"${emp.designation || ''}"`,
+      `"${emp.is_active ? 'Active' : 'Inactive'}"`
+    ].join(','));
+
+    const csvContent = [
+      headers.join(','),
+      ...csvRows
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `employee_profiles_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('all');
+    setDepartmentFilter('all');
+    setConsultantId('all');
+  };
   
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -134,17 +226,32 @@ const ProfileManagement: React.FC = () => {
   }, []);
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold">Profile Management</h2>
-          <p className="text-muted-foreground">Manage and update employee profiles</p>
-        </div>
-        <Button onClick={handleRefresh} disabled={isRefreshing}>
-          {isRefreshing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-          Refresh
-        </Button>
-      </div>
+    <div className="space-y-6">
+      <Card className="border-0 shadow-lg">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <Users className="w-6 h-6 text-blue-600" />
+              <div>
+                <h1 className="text-2xl font-bold">Profile Management</h1>
+                <p className="text-sm text-muted-foreground">
+                  {filteredEmployees.length} of {employees.length} employee profiles
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={exportToCSV}>
+                <Download className="h-4 w-4 mr-2" />
+                Export
+              </Button>
+              <Button onClick={handleRefresh} disabled={isRefreshing} variant="gradient">
+                {isRefreshing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                Refresh
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+      </Card>
 
       {/* Stats Overview */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -207,151 +314,242 @@ const ProfileManagement: React.FC = () => {
         </Card>
       </div>
 
-      {/* Search and Filters */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="relative w-full md:w-1/3">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      {/* Filters Section */}
+      <Card className="border-0 shadow-lg">
+        <CardHeader>
+          <div className="space-y-4">
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
-                placeholder="Search employees..."
-                className="pl-10"
+                placeholder="Search employees by name, email, or employee ID..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
               />
             </div>
-            <div className="flex gap-2">
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[180px]">
-                  <Filter className="w-4 h-4 mr-2 opacity-50" />
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-              
-              <Select 
-                value={departmentFilter} 
-                onValueChange={setDepartmentFilter}
-                disabled={Object.keys(stats.departments).length === 0}
-              >
-                <SelectTrigger className="w-[180px]">
-                  <Building className="w-4 h-4 mr-2 opacity-50" />
-                  <SelectValue placeholder="All Departments" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Departments</SelectItem>
-                  {Object.keys(stats.departments)
-                    .sort((a, b) => a.localeCompare(b))
-                    .map(dept => (
-                      <SelectItem key={dept} value={dept}>
-                        {dept} ({stats.departments[dept]})
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+
+            {/* Filter Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {/* Consultant Filter */}
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Employee</label>
+                <Popover open={consultantOpen} onOpenChange={setConsultantOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" role="combobox" aria-expanded={consultantOpen} className="w-full justify-between">
+                      {selectedConsultant ? `${selectedConsultant.name} (${selectedConsultant.email})` : 'All Employees'}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                    <Command>
+                      <CommandInput placeholder="Search employee..." />
+                      <CommandList>
+                        <CommandEmpty>No employee found.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem value="all" onSelect={() => { setConsultantId('all'); setConsultantOpen(false); }}>
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                consultantId === "all" ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            All Employees
+                          </CommandItem>
+                          {employees.map((employee) => (
+                            <CommandItem
+                              key={employee.id}
+                              value={`${employee.name} ${employee.email}`}
+                              onSelect={() => { setConsultantId(employee.id); setConsultantOpen(false); }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  consultantId === employee.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {employee.name} ({employee.email})
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Status Filter */}
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Status</label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Department Filter */}
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Department</label>
+                <Select 
+                  value={departmentFilter} 
+                  onValueChange={setDepartmentFilter}
+                  disabled={Object.keys(stats.departments).length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Departments" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Departments</SelectItem>
+                    {Object.keys(stats.departments)
+                      .sort((a, b) => a.localeCompare(b))
+                      .map(dept => (
+                        <SelectItem key={dept} value={dept}>
+                          {dept} ({stats.departments[dept]})
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+
+            {/* Filter Summary */}
+            {(searchTerm || statusFilter !== 'all' || departmentFilter !== 'all' || consultantId !== 'all') && (
+              <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                <span className="text-sm text-blue-800">
+                  {filteredEmployees.length} of {employees.length} employees match filters
+                </span>
+                <Button variant="gradient" size="sm" onClick={clearFilters}>
+                  <X className="h-4 w-4 mr-2" />
+                  Clear Filters
+                </Button>
+              </div>
+            )}
           </div>
         </CardHeader>
-        
-        <CardContent>
-          {employeesLoading ? (
-            <div className="flex justify-center items-center h-40">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              <span className="ml-2">Loading employees...</span>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="text-sm text-muted-foreground">
-                Showing <span className="font-medium">{filteredEmployees.length}</span> of {employees.length} employees
-              </div>
-              
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {filteredEmployees.map(emp => (
-                  <Card key={emp.id} className="hover:shadow-md transition-shadow">
-                    <CardHeader className="pb-2">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <CardTitle className="text-lg">{emp.name}</CardTitle>
-                          <p className="text-sm text-muted-foreground">{emp.designation || 'No designation'}</p>
-                        </div>
-                        <Badge variant={emp.is_active ? 'default' : 'destructive'} className="ml-2">
-                          {emp.is_active ? 'Active' : 'Inactive'}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      <div className="text-sm">
-                        <p className="text-muted-foreground">{emp.email}</p>
-                        <p className="font-medium">{emp.department || 'No department'}</p>
-                      </div>
-                      <div className="flex justify-end gap-2 pt-2">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => { 
-                                  setSelectedEmployeeId(emp.id); 
-                                  setViewDialogOpen(true); 
-                                }}
-                                className="h-8 w-8 p-0"
-                              >
-                                <Eye className="h-4 w-4" />
-                                <span className="sr-only">View</span>
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>View Profile</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => { 
-                                  setSelectedEmployeeId(emp.id); 
-                                  setEditDialogOpen(true); 
-                                }}
-                                className="h-8 w-8 p-0"
-                              >
-                                <Pencil className="h-4 w-4" />
-                                <span className="sr-only">Edit</span>
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Edit Profile</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-                
-                {filteredEmployees.length === 0 && (
-                  <div className="col-span-full py-12 text-center text-muted-foreground">
-                    <Search className="w-10 h-10 mx-auto mb-2 opacity-40" />
-                    <p>No employees found matching your criteria</p>
-                    <Button 
-                      variant="ghost" 
-                      className="mt-2"
-                      onClick={() => {
-                        setSearchTerm('');
-                        setStatusFilter('all');
-                        setDepartmentFilter('all');
-                      }}
-                    >
-                      Clear filters
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </CardContent>
       </Card>
+        {/* Employee Grid */}
+      {paginatedEmployees.length === 0 ? (
+        <Card className="border-0 shadow-lg">
+          <CardContent className="p-12 text-center">
+            <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">No employees found</h3>
+            <p className="text-gray-500 mb-6">Try adjusting your search or filter criteria</p>
+            <Button variant="gradient" onClick={clearFilters}>
+              Clear Filters
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {paginatedEmployees.map(emp => (
+            <Card key={emp.id} className="border-0 shadow-lg card-hover">
+              <CardHeader className="pb-3">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle className="text-lg font-semibold">{toTitleCase(emp.name)}</CardTitle>
+                    <p className="text-sm text-muted-foreground">{emp.designation || 'No designation'}</p>
+                  </div>
+                  <Badge variant={emp.is_active ? 'default' : 'destructive'} className="ml-2">
+                    {emp.is_active ? 'Active' : 'Inactive'}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="text-sm">
+                  <p className="text-muted-foreground">{emp.email}</p>
+                  <p className="font-medium">{emp.department || 'No department'}</p>
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => { 
+                            setSelectedEmployeeId(emp.id); 
+                            setViewDialogOpen(true); 
+                          }}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Eye className="h-4 w-4" />
+                          <span className="sr-only">View</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>View Profile</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => { 
+                            setSelectedEmployeeId(emp.id); 
+                            setEditDialogOpen(true); 
+                          }}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Pencil className="h-4 w-4" />
+                          <span className="sr-only">Edit</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Edit Profile</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">
+            Page {page} of {totalPages} - Showing {paginatedEmployees.length} of {filteredEmployees.length} employees
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Rows per page:</span>
+              <Select value={pageSize.toString()} onValueChange={handlePageSizeChange}>
+                <SelectTrigger className="w-20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="6">6</SelectItem>
+                  <SelectItem value="12">12</SelectItem>
+                  <SelectItem value="24">24</SelectItem>
+                  <SelectItem value="48">48</SelectItem>
+                  <SelectItem value="96">96</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              variant="gradient"
+              size="sm"
+              onClick={() => handlePageChange(page - 1)}
+              disabled={page === 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="gradient"
+              size="sm"
+              onClick={() => handlePageChange(page + 1)}
+              disabled={page === totalPages}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">

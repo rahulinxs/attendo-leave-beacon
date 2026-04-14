@@ -10,7 +10,7 @@ const corsHeaders = {
 interface CreateEmployeeRequest {
   name: string;
   email: string;
-  role: string;
+  role: string;  // This is the role name from frontend (e.g., "employee", "admin")
   department?: string;
   position?: string;
   password: string;
@@ -83,6 +83,24 @@ serve(async (req) => {
     console.log('Reporting Manager ID:', reporting_manager_id);
     console.log('Full payload:', { name, email, role, department, position, company_id, team_id, reporting_manager_id, hire_date, is_active });
 
+    // Get the correct role_id UUID from roles table
+    const { data: roleData, error: roleError } = await supabaseAdmin
+      .from('roles')
+      .select('id')
+      .eq('name', role)
+      .eq('is_active', true)
+      .single();
+
+    if (roleError || !roleData) {
+      console.error('Role lookup error:', roleError);
+      console.error('Requested role:', role);
+      console.error('Available roles: Check roles table for active entries');
+      throw new Error(`Invalid role: ${role}. Role must be one of: admin, employee, reporting_manager, super_admin`);
+    }
+
+    const roleId = roleData.id;
+    console.log('Using role_id:', roleId);
+
     // Create user with admin client
     const { data: authData, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
@@ -100,33 +118,51 @@ serve(async (req) => {
     }
 
     if (authData.user) {
-      // Update the profile with additional information
+      // Update the profile with additional information using UPSERT (profile may not exist)
       const { error: profileError } = await supabaseAdmin
         .from('profiles')
-        .update({
+        .upsert({
+          id: authData.user.id,
+          email,
+          name,
+          role_id: roleId,  // Use UUID from roles table, not role text
           department: department || null,
           position: position || null,
           company_id: company_id || null,
           team_id: team_id || null,
-        })
-        .eq('id', authData.user.id)
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' })
 
       if (profileError) {
-        console.error('Profile update error:', profileError)
+        console.error('Profile upsert error:', profileError);
+        console.error('Profile data attempted:', {
+          id: authData.user.id,
+          email,
+          name,
+          role,
+          department: department || null,
+          position: position || null,
+          company_id: company_id || null,
+          team_id: team_id || null
+        });
+        // Don't throw error here - profile creation is secondary to employee creation
       }
 
       // Also insert into employees table with all fields
       const employeeData = {
+        id: authData.user.id,   // VERY IMPORTANT - link to auth.users.id
         name,
         email,
-        role,
+        role_id: roleId,  // Use the UUID from roles table
         department: department || null,
         position: position || null,
-        company_id: company_id, // Don't use null fallback - ensure we always send the company_id
+        company_id: company_id || null,  // Safe handling of undefined
         team_id: team_id || null,
         reporting_manager_id: reporting_manager_id || null,
         hire_date: hire_date || null,
         is_active: is_active !== undefined ? is_active : true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
 
       console.log('Employee data to insert:', employeeData);
@@ -134,10 +170,7 @@ serve(async (req) => {
       // Use upsert to ensure we override any defaults
       const { data: insertedEmployee, error: employeeError } = await supabaseAdmin
         .from('employees')
-        .upsert([employeeData], {
-          onConflict: 'email',
-          ignoreDuplicates: false
-        })
+        .upsert(employeeData, { onConflict: 'id' })
         .select()
         .single();
 
@@ -145,6 +178,7 @@ serve(async (req) => {
 
       if (employeeError) {
         console.error('Employee insert error:', employeeError)
+        throw new Error(`Employee insert failed: ${employeeError.message}`)
       }
 
       return new Response(

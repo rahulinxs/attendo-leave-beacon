@@ -52,6 +52,10 @@ const EmployeeManagement = () => {
     <EmployeeList 
       onAddEmployee={handleAddEmployee} 
       refreshTrigger={refreshTrigger}
+      title="Employee Management"
+      emptyTitle="No employees found"
+      emptySubtitle="Get started by adding your first employee to the system"
+      addButtonLabel="Add Employee"
     />
   );
 };

@@ -135,7 +135,10 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
 
     // Map Excel columns to DB fields using employee name for matching
     const mapped = (json as any[]).map((row: any, index: number) => {
-      // Debug: Log the raw row data
+      // Debug: Log the raw row data and all available columns
+      if (index === 0) {
+        console.log('Available columns in Excel:', Object.keys(row));
+      }
       console.log(`Row ${index + 1} raw data:`, row);
       
       const employeeName = row['Employee Name']?.toString().trim() || '';
@@ -149,18 +152,23 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
         checkIn: row['Check In'],
         checkOut: row['Check Out'],
         totalHours: row['Total Hours'],
-        status: row['Status']
+        status: row['Status'],
+        // Try alternative column names
+        altCheckIn: row['Check In Time'],
+        altCheckOut: row['Check Out Time'],
+        altHours: row['Hours'],
+        altTotalHours: row['Total Hours']
       });
       
       return {
         employeeId: employeeId,
         employeeName: employeeName,
         date: formatDateForDisplay(row['Date']),
-        checkIn: row['Check In']?.toString() || '',
-        checkOut: row['Check Out']?.toString() || '',
+        checkIn: row['Check In']?.toString() || row['Check In Time']?.toString() || '',
+        checkOut: row['Check Out']?.toString() || row['Check Out Time']?.toString() || '',
         lateBy: '', // Not available in this Excel format
         earlyBy: '', // Not available in this Excel format
-        totalHours: row['Total Hours']?.toString() || '',
+        totalHours: row['Total Hours']?.toString() || row['Hours']?.toString() || '',
         overtime: '', // Not available in this Excel format
         status: row['Status']?.toString() || 'present'
       };
