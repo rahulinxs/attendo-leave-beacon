@@ -203,6 +203,70 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
     console.log('Starting import with', reviewData.length, 'records');
     console.log('Company ID:', companyId);
 
+    // Helper function to parse various date formats
+    const parseDate = (dateStr: string): Date | null => {
+      if (!dateStr) return null;
+      
+      // Handle Excel serial numbers (e.g., 46054, 46055)
+      const serialNumber = parseInt(dateStr);
+      if (!isNaN(serialNumber) && serialNumber > 40000 && serialNumber < 60000) {
+        // Excel dates start from 1/1/1900, but Excel incorrectly treats 1900 as a leap year
+        // So we need to adjust by 1 day for dates after 2/28/1900
+        const excelEpoch = new Date(1900, 0, 1); // January 1, 1900
+        const daysOffset = serialNumber - 2; // Adjust for Excel's leap year bug
+        const date = new Date(excelEpoch.getTime() + (daysOffset * 24 * 60 * 60 * 1000));
+        if (!isNaN(date.getTime())) {
+          console.log(`Parsed Excel serial ${dateStr} as ${date.toISOString()}`);
+          return date;
+        }
+      }
+      
+      // Try MM/DD/YYYY format first (e.g., "2/25/2026")
+      if (dateStr.includes('/')) {
+        const parts = dateStr.split('/');
+        if (parts.length === 3) {
+          const month = parseInt(parts[0]);
+          const day = parseInt(parts[1]);
+          const year = parseInt(parts[2]);
+          
+          if (!isNaN(month) && !isNaN(day) && !isNaN(year)) {
+            const date = new Date(year, month - 1, day); // month is 0-indexed in Date constructor
+            if (!isNaN(date.getTime())) {
+              console.log(`Parsed date ${dateStr} as ${date.toISOString()}`);
+              return date;
+            }
+          }
+        }
+      }
+      
+      // Try YYYY-MM-DD format (e.g., "2026-02-25")
+      if (dateStr.includes('-')) {
+        const parts = dateStr.split('-');
+        if (parts.length === 3) {
+          const year = parseInt(parts[0]);
+          const month = parseInt(parts[1]);
+          const day = parseInt(parts[2]);
+          
+          if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+            const date = new Date(year, month - 1, day);
+            if (!isNaN(date.getTime())) {
+              console.log(`Parsed date ${dateStr} as ${date.toISOString()}`);
+              return date;
+            }
+          }
+        }
+      }
+      
+      // Fallback to standard Date parsing
+      const fallbackDate = new Date(dateStr);
+      if (!isNaN(fallbackDate.getTime())) {
+        console.log(`Fallback parsed date ${dateStr} as ${fallbackDate.toISOString()}`);
+        return fallbackDate;
+      }
+      
+      return null;
+    };
+
     try {
       for (const record of reviewData) {
         console.log('Processing record:', record);
@@ -220,70 +284,6 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
         let checkOutTime = null;
         
         try {
-          // Helper function to parse various date formats
-          const parseDate = (dateStr: string): Date | null => {
-            if (!dateStr) return null;
-            
-            // Handle Excel serial numbers (e.g., 46054, 46055)
-            const serialNumber = parseInt(dateStr);
-            if (!isNaN(serialNumber) && serialNumber > 40000 && serialNumber < 60000) {
-              // Excel dates start from 1/1/1900, but Excel incorrectly treats 1900 as a leap year
-              // So we need to adjust by 1 day for dates after 2/28/1900
-              const excelEpoch = new Date(1900, 0, 1); // January 1, 1900
-              const daysOffset = serialNumber - 2; // Adjust for Excel's leap year bug
-              const date = new Date(excelEpoch.getTime() + (daysOffset * 24 * 60 * 60 * 1000));
-              if (!isNaN(date.getTime())) {
-                console.log(`Parsed Excel serial ${dateStr} as ${date.toISOString()}`);
-                return date;
-              }
-            }
-            
-            // Try MM/DD/YYYY format first (e.g., "2/25/2026")
-            if (dateStr.includes('/')) {
-              const parts = dateStr.split('/');
-              if (parts.length === 3) {
-                const month = parseInt(parts[0]);
-                const day = parseInt(parts[1]);
-                const year = parseInt(parts[2]);
-                
-                if (!isNaN(month) && !isNaN(day) && !isNaN(year)) {
-                  const date = new Date(year, month - 1, day); // month is 0-indexed in Date constructor
-                  if (!isNaN(date.getTime())) {
-                    console.log(`Parsed date ${dateStr} as ${date.toISOString()}`);
-                    return date;
-                  }
-                }
-              }
-            }
-            
-            // Try YYYY-MM-DD format (e.g., "2026-02-25")
-            if (dateStr.includes('-')) {
-              const parts = dateStr.split('-');
-              if (parts.length === 3) {
-                const year = parseInt(parts[0]);
-                const month = parseInt(parts[1]);
-                const day = parseInt(parts[2]);
-                
-                if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
-                  const date = new Date(year, month - 1, day);
-                  if (!isNaN(date.getTime())) {
-                    console.log(`Parsed date ${dateStr} as ${date.toISOString()}`);
-                    return date;
-                  }
-                }
-              }
-            }
-            
-            // Fallback to standard Date parsing
-            const fallbackDate = new Date(dateStr);
-            if (!isNaN(fallbackDate.getTime())) {
-              console.log(`Fallback parsed date ${dateStr} as ${fallbackDate.toISOString()}`);
-              return fallbackDate;
-            }
-            
-            return null;
-          };
-
           // Parse check-in time
           if (record.checkIn && record.checkIn.trim()) {
             const baseDate = parseDate(record.date);

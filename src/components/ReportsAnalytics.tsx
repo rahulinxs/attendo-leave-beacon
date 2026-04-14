@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCompany } from '@/contexts/CompanyContext';
+import { useCommission } from '@/contexts/CommissionContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
-import { Download, Users, Clock, TrendingUp, FileSpreadsheet, FileDown, CalendarIcon, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import { Download, Users, Clock, TrendingUp, FileSpreadsheet, FileDown, CalendarIcon, CheckCircle, AlertTriangle, XCircle, DollarSign, Target, Award } from 'lucide-react';
 import {
   BarChart,
   Bar,
