@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAttendance } from '@/hooks/useAttendance';
 import { useEmployees } from '@/hooks/useEmployees';
@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Clock, MapPin, User, TrendingUp, Download, CheckCircle, XCircle, CalendarIcon, Circle, HelpCircle, Edit, Crown, Users, Sparkles, Upload } from 'lucide-react';
+import { Calendar, Clock, MapPin, User, TrendingUp, Download, CheckCircle, XCircle, CalendarIcon, Circle, HelpCircle, Edit, Crown, Users, Sparkles, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import AttendanceCalendar from './AttendanceCalendar';
@@ -56,6 +56,12 @@ const AttendanceManagement: React.FC = () => {
   const [employeeAttendance, setEmployeeAttendance] = useState<any[]>([]);
   const [employeeTab, setEmployeeTab] = useState('today');
   const [backdateRequest, setBackdateRequest] = useState({ date: '', status: '', reason: '' });
+  
+  // Pagination state
+  const [pendingPage, setPendingPage] = useState(1);
+  const [pendingPageSize, setPendingPageSize] = useState(10);
+  const [employeePage, setEmployeePage] = useState(1);
+  const [employeePageSize, setEmployeePageSize] = useState(12);
   const [submittingBackdateRequest, setSubmittingBackdateRequest] = useState(false);
   const { theme } = useTheme();
   const themeClass = THEME_OPTIONS.find(t => t.key === theme)?.className || '';
@@ -601,6 +607,48 @@ const AttendanceManagement: React.FC = () => {
     managedEmployees = employees.filter(emp => emp.reporting_manager_id === user.id);
   }
 
+  // Pagination calculations
+  const pendingTotalPages = Math.ceil(pendingEntries.length / pendingPageSize);
+  const paginatedPendingEntries = useMemo(() => {
+    const startIndex = (pendingPage - 1) * pendingPageSize;
+    const endIndex = startIndex + pendingPageSize;
+    return pendingEntries.slice(startIndex, endIndex);
+  }, [pendingEntries, pendingPage, pendingPageSize]);
+
+  const employeeTotalPages = Math.ceil(managedEmployees.length / employeePageSize);
+  const paginatedEmployees = useMemo(() => {
+    const startIndex = (employeePage - 1) * employeePageSize;
+    const endIndex = startIndex + employeePageSize;
+    return managedEmployees.slice(startIndex, endIndex);
+  }, [managedEmployees, employeePage, employeePageSize]);
+
+  const handlePendingPageChange = (newPage: number) => {
+    setPendingPage(Math.max(1, Math.min(newPage, pendingTotalPages)));
+  };
+
+  const handleEmployeePageChange = (newPage: number) => {
+    setEmployeePage(Math.max(1, Math.min(newPage, employeeTotalPages)));
+  };
+
+  const handlePendingPageSizeChange = (newPageSize: string) => {
+    setPendingPageSize(Number(newPageSize));
+    setPendingPage(1);
+  };
+
+  const handleEmployeePageSizeChange = (newPageSize: string) => {
+    setEmployeePageSize(Number(newPageSize));
+    setEmployeePage(1);
+  };
+
+  // Reset pages when data changes
+  useEffect(() => {
+    setPendingPage(1);
+  }, [pendingEntries]);
+
+  useEffect(() => {
+    setEmployeePage(1);
+  }, [managedEmployees]);
+
   return (
     <div className="space-y-8">
       {(!user || (user.role !== 'admin' && user.role !== 'super_admin' && user.role !== 'reporting_manager')) ? (
@@ -629,61 +677,104 @@ const AttendanceManagement: React.FC = () => {
             {pendingEntries.length === 0 ? (
               <div className="text-gray-500">No pending approvals.</div>
             ) : (
-              <table className="min-w-full divide-y divide-gray-200 mb-4">
-                <thead>
-                  <tr>
-                    <th className="px-4 py-2 text-left">Employee</th>
-                    <th className="px-4 py-2 text-left">Date</th>
-                    <th className="px-4 py-2 text-left">Status</th>
-                    <th className="px-4 py-2 text-left">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pendingEntries.map((entry) => {
-                    const employee = employees.find(e => e.id === entry.employee_id);
-                    const canApprove = canApproveRequest(entry.requestor_role);
-                    return (
-                      <tr key={entry.id} className="hover:bg-blue-50 transition-all duration-150">
-                        <td className="px-4 py-2 font-medium text-gray-900">{employee ? employee.name : <span className="italic text-gray-400">Unknown</span>}</td>
-                        <td className="px-4 py-2 text-gray-700">{entry.date}</td>
-                        <td className="px-4 py-2">{getStatusBadge(entry.status)}</td>
-                        <td className="px-4 py-2 flex gap-2">
-                          <div className="relative group">
-                            <Button
-                              size="sm"
-                              onClick={() => handleApprove(entry.id)}
-                              className="bg-green-600 hover:bg-green-700 text-white shadow rounded-md border border-green-700 focus:ring-2 focus:ring-green-400 focus:outline-none transition"
-                              disabled={!canApprove}
-                            >
-                              Approve
-                            </Button>
-                            {!canApprove && (
-                              <span className="absolute left-1/2 -translate-x-1/2 top-full mt-1 w-max px-2 py-1 text-xs bg-gray-800 text-white rounded shadow opacity-0 group-hover:opacity-100 transition pointer-events-none z-10">
-                                You do not have permission to approve this request
-                              </span>
-                            )}
-                          </div>
-                          <div className="relative group">
-                            <Button
-                              size="sm"
-                              onClick={() => handleReject(entry.id)}
-                              className="bg-red-600 hover:bg-red-700 text-white shadow rounded-md border border-red-700 focus:ring-2 focus:ring-red-400 focus:outline-none transition"
-                              disabled={!canApprove}
-                            >
-                              Reject
-                            </Button>
-                            {!canApprove && (
-                              <span className="absolute left-1/2 -translate-x-1/2 top-full mt-1 w-max px-2 py-1 text-xs bg-gray-800 text-white rounded shadow opacity-0 group-hover:opacity-100 transition pointer-events-none z-10">
-                                You do not have permission to reject this request
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <>
+                <table className="min-w-full divide-y divide-gray-200 mb-4">
+                  <thead>
+                    <tr>
+                      <th className="px-4 py-2 text-left">Employee</th>
+                      <th className="px-4 py-2 text-left">Date</th>
+                      <th className="px-4 py-2 text-left">Status</th>
+                      <th className="px-4 py-2 text-left">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedPendingEntries.map((entry) => {
+                      const employee = employees.find(e => e.id === entry.employee_id);
+                      const canApprove = canApproveRequest(entry.requestor_role);
+                      return (
+                        <tr key={entry.id} className="hover:bg-blue-50 transition-all duration-150">
+                          <td className="px-4 py-2 font-medium text-gray-900">{employee ? employee.name : <span className="italic text-gray-400">Unknown</span>}</td>
+                          <td className="px-4 py-2 text-gray-700">{entry.date}</td>
+                          <td className="px-4 py-2">{getStatusBadge(entry.status)}</td>
+                          <td className="px-4 py-2 flex gap-2">
+                            <div className="relative group">
+                              <Button
+                                size="sm"
+                                onClick={() => handleApprove(entry.id)}
+                                className="bg-green-600 hover:bg-green-700 text-white shadow rounded-md border border-green-700 focus:ring-2 focus:ring-green-400 focus:outline-none transition"
+                                disabled={!canApprove}
+                              >
+                                Approve
+                              </Button>
+                              {!canApprove && (
+                                <span className="absolute left-1/2 -translate-x-1/2 top-full mt-1 w-max px-2 py-1 text-xs bg-gray-800 text-white rounded shadow opacity-0 group-hover:opacity-100 transition pointer-events-none z-10">
+                                  You do not have permission to approve this request
+                                </span>
+                              )}
+                            </div>
+                            <div className="relative group">
+                              <Button
+                                size="sm"
+                                onClick={() => handleReject(entry.id)}
+                                className="bg-red-600 hover:bg-red-700 text-white shadow rounded-md border border-red-700 focus:ring-2 focus:ring-red-400 focus:outline-none transition"
+                                disabled={!canApprove}
+                              >
+                                Reject
+                              </Button>
+                              {!canApprove && (
+                                <span className="absolute left-1/2 -translate-x-1/2 top-full mt-1 w-max px-2 py-1 text-xs bg-gray-800 text-white rounded shadow opacity-0 group-hover:opacity-100 transition pointer-events-none z-10">
+                                  You do not have permission to reject this request
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+
+                {/* Pending Approvals Pagination */}
+                {pendingTotalPages > 1 && (
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-muted-foreground">
+                      Page {pendingPage} of {pendingTotalPages} - Showing {paginatedPendingEntries.length} of {pendingEntries.length} pending approvals
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">Rows per page:</span>
+                        <Select value={pendingPageSize.toString()} onValueChange={handlePendingPageSizeChange}>
+                          <SelectTrigger className="w-20">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="5">5</SelectItem>
+                            <SelectItem value="10">10</SelectItem>
+                            <SelectItem value="20">20</SelectItem>
+                            <SelectItem value="50">50</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button
+                        variant="gradient"
+                        size="sm"
+                        onClick={() => handlePendingPageChange(pendingPage - 1)}
+                        disabled={pendingPage === 1}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="gradient"
+                        size="sm"
+                        onClick={() => handlePendingPageChange(pendingPage + 1)}
+                        disabled={pendingPage === pendingTotalPages}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -710,7 +801,7 @@ const AttendanceManagement: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {managedEmployees.map((emp) => (
+                {paginatedEmployees.map((emp) => (
                   <tr key={emp.id} className="border-b bg-gradient-to-r from-blue-50 to-green-50">
                     <td className="px-4 py-2">{emp.name}</td>
                     <td className="px-4 py-2">{getStatusBadge(dateAttendanceMap[emp.id])}</td>
@@ -755,6 +846,48 @@ const AttendanceManagement: React.FC = () => {
                 ))}
               </tbody>
             </table>
+
+            {/* Employee Attendance Pagination */}
+            {employeeTotalPages > 1 && (
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">
+                  Page {employeePage} of {employeeTotalPages} - Showing {paginatedEmployees.length} of {managedEmployees.length} employees
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Rows per page:</span>
+                    <Select value={employeePageSize.toString()} onValueChange={handleEmployeePageSizeChange}>
+                      <SelectTrigger className="w-20">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="6">6</SelectItem>
+                        <SelectItem value="12">12</SelectItem>
+                        <SelectItem value="24">24</SelectItem>
+                        <SelectItem value="48">48</SelectItem>
+                        <SelectItem value="96">96</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    variant="gradient"
+                    size="sm"
+                    onClick={() => handleEmployeePageChange(employeePage - 1)}
+                    disabled={employeePage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="gradient"
+                    size="sm"
+                    onClick={() => handleEmployeePageChange(employeePage + 1)}
+                    disabled={employeePage === employeeTotalPages}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Status Change Modal and Backdate Modal can be added here if needed */}
