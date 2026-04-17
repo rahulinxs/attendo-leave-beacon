@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useCommission } from '@/contexts/CommissionContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -29,8 +29,13 @@ interface CommissionReportRecord {
 }
 
 const CommissionReport: React.FC = () => {
-  const { engagements, isLoading } = useCommission();
+  const { engagements, isLoading, fetchEngagements } = useCommission();
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Ensure data is fetched when component mounts
+  useEffect(() => {
+    fetchEngagements();
+  }, [fetchEngagements]);
 
   // Transform engagements to report records
   const reportData = useMemo(() => {

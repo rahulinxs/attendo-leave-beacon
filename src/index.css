@@ -187,9 +187,10 @@
     @apply bg-background text-foreground;
     font-family: var(--font-family);
     font-size: var(--font-size);
-    background: #fff !important;
   }
-}
+
+  
+  }
 
 @layer utilities {
   .gradient-primary {

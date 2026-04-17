@@ -742,7 +742,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
         )}
 
         {/* Main Content */}
-        <div className="flex-1" style={{ marginLeft: sidebarVisible ? '16rem' : 0, height: '100vh', overflowY: 'auto', transition: 'margin-left 0.3s' }}>
+        <div className="flex-1 relative" style={{ marginLeft: sidebarVisible ? '16rem' : 0, minHeight: '100vh', transition: 'margin-left 0.3s' }}>
           <div className="p-3 lg:p-4">
             {children}
           </div>

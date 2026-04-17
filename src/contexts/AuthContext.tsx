@@ -62,10 +62,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setIsLoading(false);
           }
         }, 0);
-      } else {
+      } else if (event === 'SIGNED_OUT') {
+        // Only clear user state on explicit sign out
         setUser(null);
         setIsLoading(false);
       }
+      // Don't clear user state on other events to prevent session loss on refresh
     });
 
     // Check for existing session
@@ -114,7 +116,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       } else {
         console.log('No profile found for user:', userId);
-        await supabase.auth.signOut();
+        // Don't automatically sign out - let user handle this
+        // This prevents session clearing on page refresh
         setUser(null);
         setSession(null);
       }

@@ -273,11 +273,19 @@ export const CommissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // Fetch engagements
   const fetchEngagements = useCallback(async () => {
+    const company = currentCompany; // Capture current value
+    if (!company) {
+      setEngagements([]);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const { data, error } = await supabase
         .from('commission_engagements')
         .select('*')
+        .eq('company_id', company.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -292,7 +300,7 @@ export const CommissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [currentCompany]);
 
   // Fetch active employees
   const fetchEmployees = useCallback(async () => {
@@ -336,11 +344,20 @@ export const CommissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // Create engagement
   const createEngagement = useCallback(async (data: CommissionFormData) => {
+    const company = currentCompany; // Capture current value
+    if (!company) {
+      throw new Error('No company selected');
+    }
+
     setIsSaving(true);
     try {
       const { error } = await supabase
         .from('commission_engagements')
-        .insert([data]);
+        .insert([{
+          ...data,
+          company_id: company.id,
+          created_by: user?.id
+        }]);
 
       if (error) throw error;
       
@@ -359,7 +376,7 @@ export const CommissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } finally {
       setIsSaving(false);
     }
-  }, [fetchEngagements]);
+  }, [currentCompany, user, fetchEngagements]);
 
   // Update engagement
   const updateEngagement = useCallback(async (id: string, data: Partial<CommissionFormData>) => {
@@ -490,11 +507,11 @@ export const CommissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     calculateReports(engagements);
   }, [engagements]); // Only depend on engagements data
 
-  // Load data on mount
+  // Load data on mount and when company changes
   useEffect(() => {
     fetchEngagements();
     fetchEmployees();
-  }, []); // Empty dependency array - only run on mount
+  }, [currentCompany, fetchEngagements, fetchEmployees]); // Trigger when company changes
 
   const value: CommissionContextType = {
     engagements,

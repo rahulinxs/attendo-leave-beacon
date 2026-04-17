@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { CommissionProvider } from '@/contexts/CommissionContext';
 import Auth from '@/components/Auth';
 import Layout from '@/components/Layout';
+import ShaderBackground from '@/components/ui/shader-background';
 import Dashboard from '@/components/Dashboard';
 import EmployeeManagement from '@/components/EmployeeManagement';
 import AttendanceManagement from '@/components/AttendanceManagement';
@@ -35,7 +36,7 @@ const Index = () => {
   // Show loading spinner while checking authentication
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading...</p>
@@ -46,7 +47,14 @@ const Index = () => {
 
   // Show auth page if user is not logged in
   if (!user) {
-    return <Auth />;
+    return (
+      <div className="auth-window">
+        <ShaderBackground />
+        <div className="relative z-10">
+          <Auth />
+        </div>
+      </div>
+    );
   }
 
   const renderContent = () => {

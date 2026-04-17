@@ -12,6 +12,7 @@ import NotFound from "./pages/NotFound";
 import UpdatePassword from "./pages/UpdatePassword";
 import ResetPassword from "./pages/ResetPassword";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import ShaderBackground from "@/components/ui/shader-background";
 
 const queryClient = new QueryClient();
 
@@ -23,28 +24,36 @@ const App = () => (
           <CompanyProvider>
             <SessionProvider>
               <CommissionProvider>
-                <Toaster />
-                <Sonner />
-                <BrowserRouter>
+                <div className="relative z-10">
+                  <Toaster />
+                  <Sonner />
+                  <BrowserRouter>
                   <Routes>
                     <Route path="/" element={<Index />} />
                     <Route path="/update-password" element={
                       <AuthProvider>
-                        <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
-                          <UpdatePassword />
+                        <div className="auth-window">
+                          <ShaderBackground />
+                          <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
+                            <UpdatePassword />
+                          </div>
                         </div>
                       </AuthProvider>
                     } />
                     <Route path="/reset-password" element={
                       <AuthProvider>
-                        <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
-                          <ResetPassword />
+                        <div className="auth-window">
+                          <ShaderBackground />
+                          <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
+                            <ResetPassword />
+                          </div>
                         </div>
                       </AuthProvider>
                     } />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </BrowserRouter>
+                </div>
               </CommissionProvider>
             </SessionProvider>
           </CompanyProvider>

@@ -96,4 +96,10 @@ UNION ALL
 SELECT 
     'leave_requests' as table_name,
     COUNT(*) as accessible_records
-FROM leave_requests; 
+FROM leave_requests
+
+UNION ALL
+SELECT 
+    'commission_engagements' as table_name,
+    COUNT(*) as accessible_records
+FROM commission_engagements; 

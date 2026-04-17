@@ -1,6 +1,6 @@
 export interface CommissionEngagement {
   id: string;
-  company_id: string;
+  company_id: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -96,6 +96,10 @@ export interface CommissionTeamEarnings {
 }
 
 export interface CommissionFormData {
+  // System Fields
+  company_id: string;
+  created_by?: string;
+  
   // Engagement Details
   consultant_name: string;
   client: string;

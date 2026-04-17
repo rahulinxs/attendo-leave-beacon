@@ -166,7 +166,7 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100 flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
@@ -186,7 +186,7 @@ const Auth = () => {
   Edge
 </span>
          
-          <p className="text-gray-600">
+          <p className="text-white drop-shadow-lg">
             {APP_TAGLINE}
           </p>
         </div>
@@ -353,25 +353,23 @@ const Auth = () => {
                 </form>
               </TabsContent>
             </Tabs>
-            {/* Demo Credentials (moved here, compact) */}
+            {/* Login Tips */}
             <div className="mt-6">
-              <div className="font-semibold mb-2 text-sm">Demo Credentials</div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="bg-white border rounded p-3 text-gray-800 text-xs">
-                  <div className="font-bold">Super Admin</div>
-                  <div>Email: rahul@nytp.com</div>
-                  <div>Password: password123</div>
+              <div className="font-semibold mb-2 text-sm text-gray-700">Login Tips</div>
+              <div className="bg-blue-50 border border-blue-200 rounded p-4 text-sm space-y-2">
+                <div className="flex items-start space-x-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                  <p>Use your company email and password provided by your administrator</p>
                 </div>
-                <div className="bg-white border rounded p-3 text-gray-800 text-xs">
-                  <div className="font-bold">Admin</div>
-                  <div>Email: admin@company.com</div>
-                  <div>Password: password123</div>
+                <div className="flex items-start space-x-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                  <p>Ensure Caps Lock is off when entering your password</p>
                 </div>
-                <div className="bg-white border rounded p-3 text-gray-800 text-xs">
-                  <div className="font-bold">Employee</div>
-                  <div>Email: employee@company.com</div>
-                  <div>Password: password123</div>
+                <div className="flex items-start space-x-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                  <p>Contact HR if you need assistance with your login credentials</p>
                 </div>
+                
               </div>
             </div>
           </CardContent>
@@ -380,16 +378,16 @@ const Auth = () => {
         {/* Features */}
         <div className="grid grid-cols-3 gap-4 text-center">
           <div className="space-y-2">
-            <Clock className="w-6 h-6 mx-auto text-blue-600" />
-            <p className="text-xs text-gray-600">Track Time</p>
+            <Clock className="w-6 h-6 mx-auto text-white drop-shadow-lg" />
+            <p className="text-xs text-white drop-shadow">Track Time</p>
           </div>
           <div className="space-y-2">
-            <Users className="w-6 h-6 mx-auto text-blue-600" />
-            <p className="text-xs text-gray-600">Manage Team</p>
+            <Users className="w-6 h-6 mx-auto text-white drop-shadow-lg" />
+            <p className="text-xs text-white drop-shadow">Manage Team</p>
           </div>
           <div className="space-y-2">
-            <Building2 className="w-6 h-6 mx-auto text-blue-600" />
-            <p className="text-xs text-gray-600">Enterprise Ready</p>
+            <Building2 className="w-6 h-6 mx-auto text-white drop-shadow-lg" />
+            <p className="text-xs text-white drop-shadow">Enterprise Ready</p>
           </div>
         </div>
 
