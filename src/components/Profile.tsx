@@ -4,6 +4,8 @@ import { useUserProfile } from '@/hooks/useUserProfile';
 import { useTheme } from '@/contexts/ThemeContext';
 import { THEME_OPTIONS } from '@/contexts/ThemeContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from './ui/dialog';
+import { calculateProfileCompletion, getCompletionColor, getCompletionBgColor, getCompletionProgressColor } from '@/utils/profileCompletion';
+import { Progress } from './ui/progress';
 
 interface ProfileProps {
   employeeId: string;
@@ -65,6 +67,18 @@ const Profile: React.FC<ProfileProps> = ({ employeeId }) => {
   const [acceptAllSuccess, setAcceptAllSuccess] = useState(false);
   const { theme } = useTheme();
   const themeClass = THEME_OPTIONS.find(t => t.key === theme)?.className || '';
+
+  // Calculate profile completion
+  const profileCompletion = React.useMemo(() => {
+    if (!profileData?.profile) return { percentage: 0, completedSections: [], missingSections: [], totalFields: 0, completedFields: 0 };
+    
+    const allProfileData = {
+      ...profileData.profile,
+      documents: profileData.documents || []
+    };
+    
+    return calculateProfileCompletion(allProfileData);
+  }, [profileData]);
 
   useEffect(() => {
     fetchUserProfile();
@@ -280,7 +294,52 @@ const Profile: React.FC<ProfileProps> = ({ employeeId }) => {
 
   return (
     <div className="p-6">
-      <h2 className="font-bold text-foreground mb-6">Employee Profile</h2>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="font-bold text-foreground">Employee Profile</h2>
+        <div className={`${getCompletionBgColor(profileCompletion.percentage)} px-4 py-2 rounded-lg border`}>
+          <div className="flex items-center gap-3">
+            <div className="text-center">
+              <div className={`text-2xl font-bold ${getCompletionColor(profileCompletion.percentage)}`}>
+                {profileCompletion.percentage}%
+              </div>
+              <div className="text-xs text-gray-600">Complete</div>
+            </div>
+            <div className="w-16">
+              <Progress 
+                value={profileCompletion.percentage} 
+                className="h-2"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Profile Completion Details */}
+      <div className={`${getCompletionBgColor(profileCompletion.percentage)} border rounded-lg p-4 mb-6`}>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold text-sm">Profile Completion</h3>
+          <span className={`text-sm font-bold ${getCompletionColor(profileCompletion.percentage)}`}>
+            {profileCompletion.completedFields} of {profileCompletion.totalFields} fields
+          </span>
+        </div>
+        <Progress 
+          value={profileCompletion.percentage} 
+          className={`h-3 mb-3 ${getCompletionProgressColor(profileCompletion.percentage)}`}
+        />
+        <div className="flex flex-wrap gap-2">
+          {profileCompletion.completedSections.map(section => (
+            <span key={section} className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
+              {section}
+            </span>
+          ))}
+          {profileCompletion.missingSections.map(section => (
+            <span key={section} className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-medium">
+              {section}
+            </span>
+          ))}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         {/* Personal Info Card */}
         <div className={`${themeClass} card-theme rounded-2xl p-6 flex flex-col min-h-[160px]`}>

@@ -16,6 +16,7 @@ interface BulkAttendanceImportProps {
 interface ImportStats {
   processed: number;
   imported: number;
+  updated: number;
   failed: number;
   unmatched: number;
 }
@@ -33,6 +34,13 @@ interface AttendanceRecord {
   status: string;
 }
 
+interface ImportResult {
+  record: AttendanceRecord;
+  status: 'inserted' | 'updated' | 'failed';
+  error?: string;
+  databaseRecord?: any;
+}
+
 const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOpen, companyId, onImportComplete }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
@@ -47,6 +55,9 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
   const [employeeNameToId, setEmployeeNameToId] = useState<Record<string, string>>({});
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [reviewMode, setReviewMode] = useState<'replace' | 'upsert' | null>(null);
+  const [importResults, setImportResults] = useState<ImportResult[]>([]);
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<ImportResult | null>(null);
 
   // Fetch profiles for name matching (attendance table references profiles.id)
   React.useEffect(() => {
@@ -130,12 +141,24 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
         }
       }
       
+      // Handle "Month DD, YYYY" format (e.g., "January 01, 2026")
+      if (dateStr.includes(',')) {
+        const date = new Date(dateStr);
+        if (!isNaN(date.getTime())) {
+          return date.toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: '2-digit', 
+            day: '2-digit' 
+          });
+        }
+      }
+      
       return dateStr;
     };
 
     // Map Excel columns to DB fields using employee name for matching
     const mapped = (json as any[]).map((row: any, index: number) => {
-      // Debug: Log the raw row data and all available columns
+      // Debug: Log raw row data and all available columns
       if (index === 0) {
         console.log('Available columns in Excel:', Object.keys(row));
       }
@@ -149,26 +172,21 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
         employeeName,
         employeeId,
         date: row['Date'],
-        checkIn: row['Check In'],
-        checkOut: row['Check Out'],
-        totalHours: row['Total Hours'],
-        status: row['Status'],
-        // Try alternative column names
-        altCheckIn: row['Check In Time'],
-        altCheckOut: row['Check Out Time'],
-        altHours: row['Hours'],
-        altTotalHours: row['Total Hours']
+        checkIn: row['In Time'],
+        checkOut: row['Out Time'],
+        totalHours: row['Duration'],
+        status: row['Status']
       });
       
       return {
         employeeId: employeeId,
         employeeName: employeeName,
         date: formatDateForDisplay(row['Date']),
-        checkIn: row['Check In']?.toString() || row['Check In Time']?.toString() || '',
-        checkOut: row['Check Out']?.toString() || row['Check Out Time']?.toString() || '',
+        checkIn: row['In Time']?.toString() || '',
+        checkOut: row['Out Time']?.toString() || '',
         lateBy: '', // Not available in this Excel format
         earlyBy: '', // Not available in this Excel format
-        totalHours: row['Total Hours']?.toString() || row['Hours']?.toString() || '',
+        totalHours: row['Duration']?.toString() || '',
         overtime: '', // Not available in this Excel format
         status: row['Status']?.toString() || 'present'
       };
@@ -197,11 +215,23 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
     if (!reviewData.length || !reviewMode) return;
     
     setImporting(true);
-    let success = 0, fail = 0;
+    let inserted = 0, updated = 0, fail = 0;
     const errors: string[] = [];
+    const results: ImportResult[] = [];
 
     console.log('Starting import with', reviewData.length, 'records');
     console.log('Company ID:', companyId);
+
+    // Validate company ID
+    if (!companyId) {
+      toast({
+        title: 'Import Error',
+        description: 'Company ID is missing. Please try again.',
+        variant: 'destructive'
+      });
+      setImporting(false);
+      return;
+    }
 
     // Helper function to parse various date formats
     const parseDate = (dateStr: string): Date | null => {
@@ -239,6 +269,15 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
         }
       }
       
+      // Try "Month DD, YYYY" format (e.g., "January 01, 2026")
+      if (dateStr.includes(',')) {
+        const date = new Date(dateStr);
+        if (!isNaN(date.getTime())) {
+          console.log(`Parsed date ${dateStr} as ${date.toISOString()}`);
+          return date;
+        }
+      }
+      
       // Try YYYY-MM-DD format (e.g., "2026-02-25")
       if (dateStr.includes('-')) {
         const parts = dateStr.split('-');
@@ -273,6 +312,15 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
         
         if (!record.employeeId) {
           const errorMsg = `Skipped ${record.employeeName} - employee not found in profiles table`;
+          console.error(errorMsg);
+          errors.push(errorMsg);
+          fail++;
+          continue;
+        }
+
+        // Additional validation for required fields
+        if (!record.date || record.date.trim() === '') {
+          const errorMsg = `Skipped ${record.employeeName} - date is required`;
           console.error(errorMsg);
           errors.push(errorMsg);
           fail++;
@@ -380,43 +428,114 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
         const parsedDate = parseDate(record.date);
         const formattedDate = parsedDate ? parsedDate.toISOString().split('T')[0] : record.date;
 
+        // Validate status against schema constraints
+        let validStatus = record.status?.toLowerCase() || 'present';
+        const allowedStatuses = ['present', 'absent', 'late', 'holiday', 'half_day'];
+        
+        // Handle special status values from the CSV
+        if (validStatus === 'p' || validStatus === '½p') {
+          validStatus = 'present';
+        } else if (validStatus === 'a') {
+          validStatus = 'absent';
+        } else if (validStatus === 'late') {
+          validStatus = 'late';
+        } else if (validStatus === 'hd') {
+          validStatus = 'half_day';
+        } else if (validStatus === 'wo' || validStatus === 'wop') {
+          validStatus = 'holiday'; // Week off
+        }
+        
+        if (!allowedStatuses.includes(validStatus)) {
+          validStatus = 'present'; // Default to present if invalid
+        }
+
         const attendanceData = {
           employee_id: record.employeeId,
-          company_id: companyId,
+          company_id: companyId, // This is NOT NULL in schema
           date: formattedDate,
           check_in_time: checkInTime,
           check_out_time: checkOutTime,
-          status: record.status,
-          notes: `Bulk import - Total Hours: ${record.totalHours}`
+          status: validStatus,
+          notes: `Bulk import - Total Hours: ${record.totalHours}`,
+          pending_approval: false, // Set to false for bulk imports
+          requestor_role: null // Set to null for bulk imports
         };
 
         console.log('Inserting attendance data:', attendanceData);
 
-        const { error } = await supabase.from('attendance').upsert(attendanceData, {
-          onConflict: 'employee_id,date'
-        });
+        // Check if record exists to determine insert vs update
+        const { data: existingRecord, error: checkError } = await supabase
+          .from('attendance')
+          .select('id')
+          .eq('employee_id', record.employeeId)
+          .eq('date', formattedDate)
+          .single();
 
-        if (error) {
-          const errorMsg = `Import failed for ${record.employeeName} on ${record.date}: ${error.message}`;
-          console.error('Database error:', error);
+        let operationStatus: 'inserted' | 'updated' | 'failed';
+        let dbRecord = null;
+
+        if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows found
+          const errorMsg = `Check failed for ${record.employeeName} on ${record.date}: ${checkError.message}`;
+          console.error('Database check error:', checkError);
           errors.push(errorMsg);
           fail++;
+          operationStatus = 'failed';
         } else {
-          console.log('Successfully imported record for:', record.employeeName);
-          success++;
+          const { error: upsertError } = await supabase.from('attendance').upsert(attendanceData, {
+            onConflict: 'employee_id,date'
+          });
+
+          if (upsertError) {
+            const errorMsg = `Import failed for ${record.employeeName} on ${record.date}: ${upsertError.message}`;
+            console.error('Database error:', upsertError);
+            errors.push(errorMsg);
+            fail++;
+            operationStatus = 'failed';
+          } else {
+            // Get the inserted/updated record
+            const { data: resultRecord } = await supabase
+              .from('attendance')
+              .select('*')
+              .eq('employee_id', record.employeeId)
+              .eq('date', formattedDate)
+              .single();
+            
+            dbRecord = resultRecord;
+            
+            if (existingRecord) {
+              console.log('Successfully updated record for:', record.employeeName);
+              updated++;
+              operationStatus = 'updated';
+            } else {
+              console.log('Successfully inserted record for:', record.employeeName);
+              inserted++;
+              operationStatus = 'inserted';
+            }
+          }
         }
+
+        // Track result for detailed report
+        results.push({
+          record,
+          status: operationStatus,
+          error: operationStatus === 'failed' ? errors[errors.length - 1] : undefined,
+          databaseRecord: dbRecord
+        });
       }
 
       setImportStats({
         processed: reviewData.length,
-        imported: success,
+        imported: inserted,
+        updated: updated,
         failed: fail,
         unmatched: errors.filter(e => e.includes('not found')).length
       });
 
+      setImportResults(results);
+
       toast({
         title: 'Import Complete',
-        description: `${success} rows imported, ${fail} failed.`
+        description: `${inserted} inserted, ${updated} updated, ${fail} failed.`
       });
 
       setReviewDialogOpen(false);
@@ -424,6 +543,7 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
       setImportMode(null);
       setImportPreview([]);
       setReviewData([]);
+      setReportDialogOpen(true); // Show detailed report
       
       if (onImportComplete) {
         onImportComplete();
@@ -525,7 +645,8 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
               <div className="font-semibold mb-2">Import Statistics:</div>
               <ul className="ml-4 list-disc">
                 <li>Total records processed: {importStats.processed}</li>
-                <li>Imported successfully: {importStats.imported}</li>
+                <li>New records inserted: {importStats.imported}</li>
+                <li>Existing records updated: {importStats.updated}</li>
                 <li>Failed: {importStats.failed}</li>
                 <li>Unmatched employees: {importStats.unmatched}</li>
               </ul>
@@ -654,6 +775,307 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Mini Import Report Dashboard */}
+      {reportDialogOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Import Report Dashboard</h2>
+                <button
+                  onClick={() => setReportDialogOpen(false)}
+                  className="text-white hover:bg-white hover:bg-opacity-20 rounded p-1"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Summary Cards */}
+            <div className="p-4 bg-gray-50 border-b">
+              <div className="grid grid-cols-5 gap-3">
+                <div className="bg-green-100 p-3 rounded-lg text-center">
+                  <div className="text-2xl font-bold text-green-700">{importStats?.imported || 0}</div>
+                  <div className="text-xs text-green-600">New</div>
+                </div>
+                <div className="bg-blue-100 p-3 rounded-lg text-center">
+                  <div className="text-2xl font-bold text-blue-700">{importStats?.updated || 0}</div>
+                  <div className="text-xs text-blue-600">Updated</div>
+                </div>
+                <div className="bg-red-100 p-3 rounded-lg text-center">
+                  <div className="text-2xl font-bold text-red-700">{importStats?.failed || 0}</div>
+                  <div className="text-xs text-red-600">Failed</div>
+                </div>
+                <div className="bg-yellow-100 p-3 rounded-lg text-center">
+                  <div className="text-2xl font-bold text-yellow-700">{importStats?.unmatched || 0}</div>
+                  <div className="text-xs text-yellow-600">Unmatched</div>
+                </div>
+                <div className="bg-gray-100 p-3 rounded-lg text-center">
+                  <div className="text-2xl font-bold text-gray-700">{importStats?.processed || 0}</div>
+                  <div className="text-xs text-gray-600">Total</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter Buttons */}
+            <div className="p-4 border-b bg-white">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-sm">Results</h3>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const filteredResults = importResults.filter(r => r.status === 'inserted');
+                      console.log('Inserted records:', filteredResults);
+                    }}
+                    className="text-xs px-2 py-1"
+                  >
+                    New ({importResults.filter(r => r.status === 'inserted').length})
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const filteredResults = importResults.filter(r => r.status === 'updated');
+                      console.log('Updated records:', filteredResults);
+                    }}
+                    className="text-xs px-2 py-1"
+                  >
+                    Updated ({importResults.filter(r => r.status === 'updated').length})
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const filteredResults = importResults.filter(r => r.status === 'failed');
+                      console.log('Failed records:', filteredResults);
+                    }}
+                    className="text-xs px-2 py-1"
+                  >
+                    Failed ({importResults.filter(r => r.status === 'failed').length})
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Results Table */}
+            <div className="flex-1 overflow-auto" style={{maxHeight: '300px'}}>
+              <table className="w-full text-xs">
+                <thead className="bg-gray-100 sticky top-0">
+                  <tr>
+                    <th className="px-2 py-1 text-left">Status</th>
+                    <th className="px-2 py-1 text-left">Employee</th>
+                    <th className="px-2 py-1 text-left">Date</th>
+                    <th className="px-2 py-1 text-left">Check In</th>
+                    <th className="px-2 py-1 text-left">Check Out</th>
+                    <th className="px-2 py-1 text-left">Hours</th>
+                    <th className="px-2 py-1 text-left">DB ID</th>
+                    <th className="px-2 py-1 text-left">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {importResults.map((result, idx) => (
+                    <tr key={idx} className={`border-b ${
+                      result.status === 'inserted' ? 'bg-green-50' :
+                      result.status === 'updated' ? 'bg-blue-50' :
+                      'bg-red-50'
+                    } hover:bg-opacity-80`}>
+                      <td className="px-2 py-1">
+                        <span className={`px-1 py-0.5 rounded text-xs font-semibold ${
+                          result.status === 'inserted' ? 'bg-green-200 text-green-800' :
+                          result.status === 'updated' ? 'bg-blue-200 text-blue-800' :
+                          'bg-red-200 text-red-800'
+                        }`}>
+                          {result.status.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="px-2 py-1 truncate max-w-[100px]">{result.record.employeeName}</td>
+                      <td className="px-2 py-1">{result.record.date}</td>
+                      <td className="px-2 py-1">{result.record.checkIn}</td>
+                      <td className="px-2 py-1">{result.record.checkOut}</td>
+                      <td className="px-2 py-1">{result.record.totalHours}</td>
+                      <td className="px-2 py-1 font-mono text-xs">
+                        {result.databaseRecord?.id ? result.databaseRecord.id.slice(0, 8) + '...' : 'N/A'}
+                      </td>
+                      <td className="px-2 py-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedRecord(result)}
+                          disabled={!result.databaseRecord}
+                          className="text-xs px-1 py-0.5"
+                        >
+                          View
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="p-4 bg-gray-50 border-t flex justify-between">
+              <div className="text-sm text-gray-600">
+                {importResults.length} records processed
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    // Export results to Excel
+                    const exportData = importResults.map(result => ({
+                      'Status': result.status,
+                      'Employee Name': result.record.employeeName,
+                      'Date': result.record.date,
+                      'Check In': result.record.checkIn,
+                      'Check Out': result.record.checkOut,
+                      'Total Hours': result.record.totalHours,
+                      'Database ID': result.databaseRecord?.id || 'N/A',
+                      'Error': result.error || 'None'
+                    }));
+                    
+                    const ws = XLSX.utils.json_to_sheet(exportData);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, 'ImportReport');
+                    XLSX.writeFile(wb, `import_report_${new Date().toISOString().split('T')[0]}.xlsx`);
+                  }}
+                  className="text-xs"
+                >
+                  Export Excel
+                </Button>
+                <Button 
+                  variant="gradient"
+                  size="sm"
+                  onClick={() => setReportDialogOpen(false)}
+                  className="text-xs"
+                >
+                  Done
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mini Record Details Dialog */}
+      {selectedRecord && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold">Record Details</h3>
+                <button
+                  onClick={() => setSelectedRecord(null)}
+                  className="text-white hover:bg-white hover:bg-opacity-20 rounded p-1"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-4 space-y-3">
+              {/* Status and DB ID */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-gray-600">Status</label>
+                  <div className={`px-2 py-1 rounded text-xs font-semibold ${
+                    selectedRecord.status === 'inserted' ? 'bg-green-200 text-green-800' :
+                    selectedRecord.status === 'updated' ? 'bg-blue-200 text-blue-800' :
+                    'bg-red-200 text-red-800'
+                  }`}>
+                    {selectedRecord.status.toUpperCase()}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-600">Database ID</label>
+                  <div className="font-mono text-xs">{selectedRecord.databaseRecord?.id ? selectedRecord.databaseRecord.id.slice(0, 8) + '...' : 'N/A'}</div>
+                </div>
+              </div>
+
+              {/* Employee Info */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-gray-600">Employee</label>
+                  <div className="text-xs">{selectedRecord.record.employeeName}</div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-600">Date</label>
+                  <div className="text-xs">{selectedRecord.record.date}</div>
+                </div>
+              </div>
+
+              {/* Time Info */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-gray-600">Check In</label>
+                  <div className="text-xs">{selectedRecord.record.checkIn || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-600">Check Out</label>
+                  <div className="text-xs">{selectedRecord.record.checkOut || 'N/A'}</div>
+                </div>
+              </div>
+
+              {/* Hours and Status */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-gray-600">Total Hours</label>
+                  <div className="text-xs">{selectedRecord.record.totalHours || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-600">Attendance Status</label>
+                  <div className="text-xs">{selectedRecord.record.status}</div>
+                </div>
+              </div>
+
+              {/* Error Message */}
+              {selectedRecord.error && (
+                <div>
+                  <label className="text-xs font-semibold text-gray-600">Error</label>
+                  <div className="bg-red-50 p-2 rounded text-xs text-red-700">
+                    {selectedRecord.error}
+                  </div>
+                </div>
+              )}
+
+              {/* Database Record (collapsed) */}
+              {selectedRecord.databaseRecord && (
+                <details className="text-xs">
+                  <summary className="cursor-pointer font-semibold text-gray-600 hover:text-gray-800">
+                    View Full Database Record
+                  </summary>
+                  <div className="bg-gray-50 p-2 rounded mt-1 font-mono text-xs max-h-32 overflow-auto">
+                    <pre>{JSON.stringify(selectedRecord.databaseRecord, null, 2)}</pre>
+                  </div>
+                </details>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-3 bg-gray-50 border-t">
+              <Button 
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedRecord(null)}
+                className="w-full text-xs"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

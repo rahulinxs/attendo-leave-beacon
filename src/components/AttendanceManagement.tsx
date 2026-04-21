@@ -900,8 +900,8 @@ const AttendanceManagement: React.FC = () => {
           setOpen={setShowBulkImport}
           companyId={currentCompany.id}
           onImportComplete={() => {
-            // Refresh attendance data if needed
-            if (typeof window !== 'undefined') window.location.reload();
+            // Refresh attendance data without page reload
+            console.log('Import completed successfully');
           }}
         />
       )}

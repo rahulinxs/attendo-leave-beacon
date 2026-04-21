@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEmployees } from '@/hooks/useEmployees';
+import { useProfileCompletion } from '@/hooks/useProfileCompletion';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +16,7 @@ import { Employee } from '@/types/employee';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { calculateProfileCompletion, getCompletionColor, getCompletionBgColor, getCompletionProgressColor } from '@/utils/profileCompletion';
 
 const PROFILE_ROLES = ['admin', 'super_admin'];
 
@@ -28,6 +30,7 @@ interface EmployeeStats {
 const ProfileManagement: React.FC = () => {
   const { user } = useAuth();
   const { employees = [], fetchEmployees, isLoading: employeesLoading, error: employeesError } = useEmployees();
+  const { completionData, loading: completionLoading, error: completionError } = useProfileCompletion(employees.map(emp => emp.id));
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
@@ -254,7 +257,7 @@ const ProfileManagement: React.FC = () => {
       </Card>
 
       {/* Stats Overview */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium">Total Employees</CardTitle>
@@ -309,6 +312,37 @@ const ProfileManagement: React.FC = () => {
                 .map(([dept, count]) => `${dept} (${count})`)
                 .join(', ')}
               {Object.keys(stats.departments).length > 2 ? '...' : ''}
+            </p>
+          </CardContent>
+        </Card>
+        
+        {/* Profile Completion Summary */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Profile Completion</CardTitle>
+            <BarChart2 className="w-5 h-5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {Object.keys(completionData).length > 0 
+                ? Math.round(Object.values(completionData).reduce((acc, curr) => acc + curr.percentage, 0) / Object.keys(completionData).length)
+                : 0}%
+            </div>
+            <div className="flex items-center gap-2">
+              <Progress 
+                value={Object.keys(completionData).length > 0 
+                  ? Math.round(Object.values(completionData).reduce((acc, curr) => acc + curr.percentage, 0) / Object.keys(completionData).length)
+                  : 0} 
+                className="h-2 w-full" 
+              />
+              <span className="text-xs text-muted-foreground">
+                {Object.keys(completionData).length > 0 
+                  ? Math.round(Object.values(completionData).reduce((acc, curr) => acc + curr.percentage, 0) / Object.keys(completionData).length)
+                  : 0}%
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {Object.values(completionData).filter(c => c.percentage >= 80).length} profiles complete
             </p>
           </CardContent>
         </Card>
@@ -465,6 +499,35 @@ const ProfileManagement: React.FC = () => {
                   <p className="text-muted-foreground">{emp.email}</p>
                   <p className="font-medium">{emp.department || 'No department'}</p>
                 </div>
+                
+                {/* Profile Completion */}
+                {completionData[emp.id] && (
+                  <div className={`${getCompletionBgColor(completionData[emp.id].percentage)} p-2 rounded-lg border`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium">Profile Completion</span>
+                      <span className={`text-xs font-bold ${getCompletionColor(completionData[emp.id].percentage)}`}>
+                        {completionData[emp.id].percentage}%
+                      </span>
+                    </div>
+                    <Progress 
+                      value={completionData[emp.id].percentage} 
+                      className={`h-1.5 ${getCompletionProgressColor(completionData[emp.id].percentage)}`}
+                    />
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {completionData[emp.id].completedSections.slice(0, 2).map(section => (
+                        <span key={section} className="bg-green-100 text-green-800 px-1 py-0.5 rounded text-xs">
+                          {section}
+                        </span>
+                      ))}
+                      {completionData[emp.id].missingSections.length > 0 && (
+                        <span className="bg-red-100 text-red-800 px-1 py-0.5 rounded text-xs">
+                          +{completionData[emp.id].missingSections.length} missing
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
                 <div className="flex justify-end gap-2 pt-2">
                   <TooltipProvider>
                     <Tooltip>
