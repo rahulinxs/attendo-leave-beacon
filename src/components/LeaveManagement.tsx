@@ -49,6 +49,7 @@ import {
   Smartphone
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { parseDateLocal } from '@/utils/dateUtils';
 import * as XLSX from 'xlsx';
 import LeaveCalendar from './LeaveCalendar';
 import { useCompany } from '@/contexts/CompanyContext';
@@ -693,7 +694,7 @@ const LeaveManagement: React.FC = () => {
                       <div>
                         <p className="font-medium">{request.employees.name}</p>
                         <p className="text-sm text-gray-600">
-                          {request.leave_types.name} • {format(new Date(request.start_date), 'MMM dd')} - {format(new Date(request.end_date), 'MMM dd')}
+                          {request.leave_types.name} • {format(parseDateLocal(request.start_date), 'MMM dd')} - {format(parseDateLocal(request.end_date), 'MMM dd')}
                         </p>
                       </div>
                       <div className="flex gap-2">
@@ -881,7 +882,7 @@ const LeaveManagement: React.FC = () => {
                         <td className="p-2 font-medium">{request.employees.name}</td>
                         <td className="p-2">{request.leave_types.name}</td>
                         <td className="p-2">
-                          {format(new Date(request.start_date), 'MMM dd')} - {format(new Date(request.end_date), 'MMM dd')}
+                          {format(parseDateLocal(request.start_date), 'MMM dd')} - {format(parseDateLocal(request.end_date), 'MMM dd')}
                         </td>
                         <td className="p-2">{request.total_days}</td>
                         <td className="p-2">
@@ -1232,7 +1233,7 @@ const EmployeeLeaveView: React.FC = () => {
                       <div>
                         <p className="font-medium">{request.leave_types?.name}</p>
                         <p className="text-sm text-gray-600">
-                          {format(new Date(request.start_date), 'MMM dd')} - {format(new Date(request.end_date), 'MMM dd')} ({request.total_days} days)
+                          {format(parseDateLocal(request.start_date), 'MMM dd')} - {format(parseDateLocal(request.end_date), 'MMM dd')} ({request.total_days} days)
                         </p>
                         <p className="text-xs text-gray-500">{request.reason}</p>
                         </div>

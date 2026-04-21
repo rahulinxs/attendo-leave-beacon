@@ -26,6 +26,7 @@ import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
+import { parseDateLocal } from '@/utils/dateUtils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 
@@ -934,8 +935,8 @@ const ReportsAnalytics = () => {
       if (leaveTypeFilter !== 'all' && leave.leave_type_id !== leaveTypeFilter) return false;
       
       // Filter by date range
-      if (leaveDateRange.start && new Date(leave.start_date) < new Date(leaveDateRange.start)) return false;
-      if (leaveDateRange.end && new Date(leave.end_date) > new Date(leaveDateRange.end)) return false;
+      if (leaveDateRange.start && parseDateLocal(leave.start_date) < new Date(leaveDateRange.start)) return false;
+      if (leaveDateRange.end && parseDateLocal(leave.end_date) > new Date(leaveDateRange.end)) return false;
       
       // Filter by search term
       if (leaveSearch && !leave.profiles?.name?.toLowerCase().includes(leaveSearch.toLowerCase())) return false;

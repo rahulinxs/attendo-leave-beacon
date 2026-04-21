@@ -5,7 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { CalendarIcon } from 'lucide-react';
-import { format, parseISO, isWithinInterval } from 'date-fns';
+import { format, isWithinInterval } from 'date-fns';
+import { parseDateLocal, isDateInIntervalLocal } from '@/utils/dateUtils';
 
 interface LeaveRequest {
   id: string;
@@ -60,9 +61,7 @@ const LeaveCalendar: React.FC = () => {
 
   const getLeaveForDate = (date: Date) => {
     return leaveRequests.filter(request => {
-      const startDate = parseISO(request.start_date);
-      const endDate = parseISO(request.end_date);
-      return isWithinInterval(date, { start: startDate, end: endDate });
+      return isDateInIntervalLocal(date, request.start_date, request.end_date);
     });
   };
 
@@ -133,7 +132,7 @@ const LeaveCalendar: React.FC = () => {
                     </Badge>
                   </div>
                   <p className="text-sm text-gray-600">
-                    {format(parseISO(leave.start_date), 'MMM dd')} - {format(parseISO(leave.end_date), 'MMM dd, yyyy')}
+                    {format(parseDateLocal(leave.start_date), 'MMM dd')} - {format(parseDateLocal(leave.end_date), 'MMM dd, yyyy')}
                   </p>
                 </div>
               ))}

@@ -46,6 +46,7 @@ import {
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
+import { parseDateLocal } from '@/utils/dateUtils';
 import * as XLSX from 'xlsx';
 
 interface TeamMember {
@@ -610,7 +611,7 @@ const LeaveRequestManagement: React.FC = () => {
                         <div>
                           <p className="font-medium">{request.employees?.name}</p>
                           <p className="text-sm text-gray-600">
-                            {request.leave_types?.name} • {format(new Date(request.start_date), 'MMM dd')} - {format(new Date(request.end_date), 'MMM dd')}
+                            {request.leave_types?.name} • {format(parseDateLocal(request.start_date), 'MMM dd')} - {format(parseDateLocal(request.end_date), 'MMM dd')}
                           </p>
                           <p className="text-xs text-gray-500">{request.reason}</p>
                         </div>
@@ -894,7 +895,7 @@ const LeaveRequestManagement: React.FC = () => {
                         <td className="p-3 text-gray-600">{request.employees?.department || 'N/A'}</td>
                         <td className="p-3">{request.leave_types?.name}</td>
                         <td className="p-3">
-                          {format(new Date(request.start_date), 'MMM dd')} - {format(new Date(request.end_date), 'MMM dd')}
+                          {format(parseDateLocal(request.start_date), 'MMM dd')} - {format(parseDateLocal(request.end_date), 'MMM dd')}
                         </td>
                         <td className="p-3">{request.total_days}</td>
                         <td className="p-3">

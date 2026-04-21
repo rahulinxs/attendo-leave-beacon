@@ -8,6 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { format } from 'date-fns';
+import { parseDateLocal } from '@/utils/dateUtils';
+
 import { 
   Clock, 
   Calendar, 
@@ -403,7 +406,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 <div key={request.id} className="flex items-center justify-between p-2 rounded-lg">
                   <div>
                     <p className="font-medium">
-                      {new Date(request.start_date).toLocaleDateString()} - {new Date(request.end_date).toLocaleDateString()}
+                      {format(parseDateLocal(request.start_date), 'MMM dd')} - {format(parseDateLocal(request.end_date), 'MMM dd')}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       {request.leave_types.name} • {request.total_days} day(s)
@@ -436,7 +439,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                   <div>
                     <p className="font-medium">{request.employees.name}</p>
                     <p className="text-sm text-muted-foreground">
-                      {request.leave_types.name} • {new Date(request.start_date).toLocaleDateString()} - {new Date(request.end_date).toLocaleDateString()} • {request.total_days} day(s)
+                      {request.leave_types.name} • {format(parseDateLocal(request.start_date), 'MMM dd')} - {format(parseDateLocal(request.end_date), 'MMM dd')} • {request.total_days} day(s)
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">{request.reason}</p>
                   </div>
