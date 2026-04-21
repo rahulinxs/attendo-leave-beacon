@@ -11,6 +11,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { parseDateLocal } from '@/utils/dateUtils';
 
+import GlassTimeCard from '@/components/GlassTimeCard';
+
 import { 
   Clock, 
   Calendar, 
@@ -206,20 +208,34 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
           <CardContent className="p-0">
             {/* Welcome Header content START */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-              <div>
-                <div className="text-lg font-bold mb-1 text-blue-800">Welcome back, {user?.name}</div>
-                {currentCompany && (
-                  <div className="text-md font-medium mb-1 text-blue-600">{currentCompany.name}</div>
-                )}
-                <div className="text-4xl font-extrabold text-blue-700 mb-1 flex items-center gap-2">
-                  <Clock className="w-7 h-7 text-blue-400 bg-white rounded-full p-1 shadow mr-2" />
-                  {currentTime}
+              <div className="space-y-1">
+                <div className="text-xl md:text-2xl font-extrabold leading-tight tracking-tight text-blue-800">
+                  Welcome back, <span className="text-blue-800">{user?.name}</span>
                 </div>
-                <div className="text-gray-500 mb-1 text-lg">{currentDate}</div>
-                <div className="text-purple-700 font-semibold text-md">{user?.position}</div>
+                {user?.position ? (
+                  <div className="text-base md:text-lg font-semibold text-purple-700">
+                    {user.position}
+                  </div>
+                ) : null}
+                {currentCompany?.name ? (
+                  <div className="text-sm md:text-base font-medium text-blue-600">
+                    {currentCompany.name}
+                  </div>
+                ) : null}
               </div>
-              <div className="flex flex-col md:flex-row gap-3 md:items-center">
+              
+            <div className="flex flex-col gap-3">
+
+              {/* Line 1 */}
+              <div className="w-full flex justify-center lg:justify-end">
+                <GlassTimeCard checkInTime={todayAttendance?.check_in_time} />
+              </div> 
+
+              {/* Line 2 */}
+              <div className="flex flex-wrap items-center gap-3 justify-center lg:justify-end">
+
                 <SessionStatusIndicator />
+
                 <Button 
                   variant="outline" 
                   size="sm" 
@@ -230,21 +246,37 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                   <TrendingUp className="w-4 h-4" />
                   Refresh
                 </Button>
-                <Button variant="gradient" className="transition-transform hover:scale-105 shadow-lg" onClick={handleCheckInOut}>
-                  {todayAttendance?.check_in_time && !todayAttendance?.check_out_time ? 'Check Out' : 'Check In'}
+
+                <Button
+                  variant="gradient"
+                  className="transition-transform hover:scale-105 shadow-lg"
+                  onClick={handleCheckInOut}
+                >
+                  {todayAttendance?.check_in_time && !todayAttendance?.check_out_time
+                    ? 'Check Out'
+                    : 'Check In'}
                 </Button>
-                <Button variant="gradient" className="transition-transform hover:scale-105 shadow-lg" onClick={() => onNavigate?.('leave')}>
+
+                <Button
+                  variant="gradient"
+                  className="transition-transform hover:scale-105 shadow-lg"
+                  onClick={() => onNavigate?.('leave')}
+                >
                   Request Leave
                 </Button>
-                <Button 
-                  variant="gradient" 
+
+                <Button
+                  variant="gradient"
                   className="transition-transform hover:scale-105 shadow-lg flex items-center gap-1"
                   onClick={handleResetPasswordClick}
                 >
                   <Key className="w-4 h-4" />
                   Reset Password
                 </Button>
+
               </div>
+
+            </div>
             </div>
             {/* Welcome Header content END */}
           </CardContent>
@@ -516,4 +548,4 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   );
 };
 
-export default Dashboard;
+export default Dashboard;   
