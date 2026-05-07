@@ -12,6 +12,7 @@ import LeaveRequestManagement from '@/components/LeaveRequestManagement';
 import TeamManagement from '@/components/TeamManagement';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import ReportsAnalytics from '@/components/ReportsAnalytics';
+import ReportsAnalytics2 from '@/components/ReportsAnalytics2';
 import HolidayManagement from '@/components/HolidayManagement';
 import SystemSettings from '@/components/SystemSettings';
 import EmployeeAttendance from '@/components/EmployeeAttendance';
@@ -130,6 +131,22 @@ const Index = () => {
           return (
             <ErrorBoundary>
               <ReportsAnalytics />
+            </ErrorBoundary>
+          );
+        }
+        return (
+          <div className="glass-effect rounded-2xl p-8 border text-center">
+            <h2 className="text-2xl font-bold mb-4">Access Denied</h2>
+            <p className="text-gray-600">You don't have permission to access this section</p>
+          </div>
+        );
+      
+      case 'reports-2':
+        // Admins, super admins, and reporting managers can access reports 2
+        if (['admin', 'super_admin', 'reporting_manager'].includes(user.role)) {
+          return (
+            <ErrorBoundary>
+              <ReportsAnalytics2 />
             </ErrorBoundary>
           );
         }

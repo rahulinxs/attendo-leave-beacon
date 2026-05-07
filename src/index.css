@@ -334,6 +334,40 @@
     @apply px-2 py-1.5;
   }
 
+  /* Touch Optimizations */
+  .touch-optimized {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Remove hover effects on touch devices */
+  @media (hover: none) {
+    .hover\:touch-hidden {
+      display: none;
+    }
+    
+    .card-hover:hover {
+      transform: none;
+      box-shadow: 0 4px 24px 0 rgba(0,0,0,0.10), 0 1.5px 6px 0 rgba(0,0,0,0.08);
+    }
+    
+    .gradient-primary:hover:not(:disabled) {
+      transform: none;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    }
+  }
+
   /* Card/Palette Theme Classes */
   .theme-vibrant-blue {
     --card-bg: #e3f0ff;

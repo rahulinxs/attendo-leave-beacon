@@ -91,6 +91,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('Fetching profile for user:', userId);
       
+      const { data: employeeData } = await supabase
+        .from('employees')
+        .select('role_id, role')
+        .eq('id', userId)
+        .single();
+
+      console.log('Employee data from DB:', employeeData);
+
+      let userRole = 'employee' as 'employee' | 'reporting_manager' | 'admin' | 'super_admin';
+
+      if (employeeData?.role_id) {
+        const { data: roleData, error: roleError } = await supabase
+          .from('roles')
+          .select('name')
+          .eq('id', employeeData.role_id)
+          .single();
+
+        console.log('Role data from DB:', roleData);
+        console.log('Role error:', roleError);
+
+        if (roleData) {
+          userRole = roleData.name as 'employee' | 'reporting_manager' | 'admin' | 'super_admin';
+        } else if (employeeData.role) {
+          // Fallback to legacy role column if roles table query fails
+          console.log('Using fallback role column:', employeeData.role);
+          userRole = employeeData.role as 'employee' | 'reporting_manager' | 'admin' | 'super_admin';
+        }
+      } else if (employeeData?.role) {
+        // Fallback to legacy role column if role_id is null
+        console.log('Using fallback role column (no role_id):', employeeData.role);
+        userRole = employeeData.role as 'employee' | 'reporting_manager' | 'admin' | 'super_admin';
+      }
+
+      // Get full employee data
       const { data: profile, error } = await supabase
         .from('employees')
         .select('*')
@@ -109,7 +143,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: profile.id,
           email: profile.email,
           name: profile.name,
-          role: profile.role as 'employee' | 'reporting_manager' | 'admin' | 'super_admin',
+          role: userRole,
           department: profile.department,
           position: profile.position,
           platform_super_admin: profile.platform_super_admin || false,
