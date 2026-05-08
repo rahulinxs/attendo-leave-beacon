@@ -404,7 +404,7 @@ const Auth = () => {
             Get the AttendEdge mobile app for on-the-go attendance tracking and leave management.
           </p>
           <Button
-            onClick={() => window.open('https://expo.dev/artifacts/eas/fc3oAZHUmYcFv9JeToTfiY.apk', '_blank')}
+            onClick={() => window.open('https://expo.dev/artifacts/eas/o2aKxHVk16arCdbL4fox7m.apk', '_blank')}
             className="w-full bg-white text-blue-600 hover:bg-white/90 font-medium touch-optimized touch-target"
             size="lg"
           >
