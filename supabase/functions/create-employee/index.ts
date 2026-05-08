@@ -52,26 +52,26 @@ serve(async (req) => {
     console.log('Authenticated user:', user.id)
 
     // Use admin client to check user role (bypasses RLS)
-    const { data: profiles, error: profileError } = await supabaseAdmin
-      .from('profiles')
+    const { data: employees, error: employeeError } = await supabaseAdmin
+      .from('employees')
       .select('role')
       .eq('id', user.id)
 
-    if (profileError) {
-      console.error('Profile query error:', profileError)
-      throw new Error('Unable to query user profile')
+    if (employeeError) {
+      console.error('Error querying user employee data:', employeeError)
+      throw new Error('Unable to query user employee data')
     }
 
-    if (!profiles || profiles.length === 0) {
-      console.error('No profile found for user:', user.id)
-      throw new Error('User profile not found')
+    if (!employees || employees.length === 0) {
+      console.error('No employee record found for user:', user.id)
+      throw new Error('User employee record not found')
     }
 
-    const profile = profiles[0]
-    console.log('User profile:', profile)
+    const employee = employees[0]
+    console.log('User employee data:', employee)
 
-    if (!profile.role || !['admin', 'super_admin'].includes(profile.role)) {
-      console.error('User role insufficient:', profile.role)
+    if (!employee.role || !['admin', 'super_admin'].includes(employee.role)) {
+      console.error('User role insufficient:', employee.role)
       throw new Error('Only admins can create employees')
     }
 
@@ -118,68 +118,11 @@ serve(async (req) => {
     }
 
     if (authData.user) {
-      // Update the profile with additional information using UPSERT (profile may not exist)
-      const { error: profileError } = await supabaseAdmin
-        .from('profiles')
-        .upsert({
-          id: authData.user.id,
-          email,
-          name,
-          role_id: roleId,  // Use UUID from roles table, not role text
-          department: department || null,
-          position: position || null,
-          company_id: company_id || null,
-          team_id: team_id || null,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'id' })
+      // Employee record is already created above, no need for profile sync
+      // The employees table is now the primary source of truth
 
-      if (profileError) {
-        console.error('Profile upsert error:', profileError);
-        console.error('Profile data attempted:', {
-          id: authData.user.id,
-          email,
-          name,
-          role,
-          department: department || null,
-          position: position || null,
-          company_id: company_id || null,
-          team_id: team_id || null
-        });
-        // Don't throw error here - profile creation is secondary to employee creation
-      }
-
-      // Also insert into employees table with all fields
-      const employeeData = {
-        id: authData.user.id,   // VERY IMPORTANT - link to auth.users.id
-        name,
-        email,
-        role_id: roleId,  // Use the UUID from roles table
-        department: department || null,
-        position: position || null,
-        company_id: company_id || null,  // Safe handling of undefined
-        team_id: team_id || null,
-        reporting_manager_id: reporting_manager_id || null,
-        hire_date: hire_date || null,
-        is_active: is_active !== undefined ? is_active : true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-
-      console.log('Employee data to insert:', employeeData);
-
-      // Use upsert to ensure we override any defaults
-      const { data: insertedEmployee, error: employeeError } = await supabaseAdmin
-        .from('employees')
-        .upsert(employeeData, { onConflict: 'id' })
-        .select()
-        .single();
-
-      console.log('Insert result:', { insertedEmployee, employeeError });
-
-      if (employeeError) {
-        console.error('Employee insert error:', employeeError)
-        throw new Error(`Employee insert failed: ${employeeError.message}`)
-      }
+      // Employee record was already created earlier in the function
+      // No need to insert again - the employee record already exists
 
       return new Response(
         JSON.stringify({ 

@@ -264,26 +264,26 @@ const CustomAttendanceImport: React.FC<CustomAttendanceImportProps> = ({
           emp.name?.trim().toLowerCase() === record.employeeName.toLowerCase()
         );
 
-        // If no match found, try to match with profiles table as fallback
+        // If no match found, try to match with employees table as fallback
         if (!matchedEmployee) {
-          console.log(`No employee found in employees table for: ${record.employeeName}, checking profiles table...`);
+          console.log(`No employee found in employees table for: ${record.employeeName}, checking employees table again...`);
           
-          // Try to fetch from profiles table as fallback
-          const { data: profiles, error: profileError } = await supabase
-            .from('profiles')
+          // Try to fetch from employees table as fallback
+          const { data: fallbackEmployees, error: employeeError } = await supabase
+            .from('employees')
             .select('id, name')
             .eq('company_id', companyId)
             .ilike('name', `%${record.employeeName}%`)
             .limit(5);
 
-          if (!profileError && profiles && profiles.length > 0) {
-            // Try to match with profile names
-            matchedEmployee = profiles.find(profile => 
-              profile.name?.trim().toLowerCase() === record.employeeName.toLowerCase()
+          if (!employeeError && fallbackEmployees && fallbackEmployees.length > 0) {
+            // Try to match with employee names
+            matchedEmployee = fallbackEmployees.find(employee => 
+              employee.name?.trim().toLowerCase() === record.employeeName.toLowerCase()
             );
             
             if (matchedEmployee) {
-              console.log(`Found match in profiles table: ${matchedEmployee.name}`);
+              console.log(`Found match in employees table: ${matchedEmployee.name}`);
             }
           }
         }

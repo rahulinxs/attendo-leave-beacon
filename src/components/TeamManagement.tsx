@@ -162,12 +162,12 @@ const TeamManagement: React.FC = () => {
     let managerProfiles = [];
     if (managerIds.length > 0) {
       const { data: managerData, error: managerError } = await supabase
-        .from('profiles')
+        .from('employees')
         .select('id, name, email')
         .in('id', managerIds);
 
       if (managerError) {
-        console.error('Error fetching manager profiles:', managerError);
+        console.error('Error fetching manager employees:', managerError);
       } else {
         managerProfiles = managerData || [];
       }

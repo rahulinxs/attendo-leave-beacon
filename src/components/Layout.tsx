@@ -78,8 +78,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
   const { user, logout } = useAuth();
   const { currentCompany, companies, setCurrentCompany } = useCompany();
   const { sidebarPosition, theme } = useTheme();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [sidebarVisible, setSidebarVisible] = useState(false);
   const [showHandbook, setShowHandbook] = useState(false);
   // Track which section is currently open (null if none)
   const [openSection, setOpenSection] = useState<string | null>(null);
@@ -160,6 +159,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
     {
       id: 'reports',
       label: 'Reports & Analytics',
+      icon: BarChart3,
+      roles: ['admin', 'super_admin'],
+      requiresPermission: true
+    },
+    {
+      id: 'reports-2',
+      label: 'Reports & Analytics 2',
       icon: BarChart3,
       roles: ['admin', 'super_admin'],
       requiresPermission: true
@@ -308,7 +314,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
             variant="ghost"
             size="sm"
             onClick={() => setSidebarVisible(!sidebarVisible)}
-            className="order-first mr-2"
+            className="order-first mr-2 touch-optimized touch-target"
             aria-label="Toggle sidebar"
           >
             <Menu className="w-5 h-5" />
@@ -349,10 +355,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
 
       <div className="flex">
         {/* Sidebar */}
-        {sidebarVisible && (
         <div
-            className={`fixed inset-y-0 z-50 transition-all duration-300 ease-in-out transform lg:translate-x-0 lg:static lg:inset-0 ${themeClass} sidebar flex flex-col shadow-lg left-0`}
-          style={{ background: 'hsl(var(--background))', color: 'hsl(var(--foreground))', height: '100vh', width: '16rem', minWidth: '16rem', maxWidth: '16rem', position: 'fixed', top: 0, left: 0 }}
+            className={`fixed inset-y-0 z-50 transition-all duration-300 ease-in-out transform ${sidebarVisible ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:inset-0 ${themeClass} sidebar flex flex-col shadow-lg left-0 w-64 lg:w-80 max-w-[80vw]`}
+          style={{ background: 'hsl(var(--background))', color: 'hsl(var(--foreground))', height: '100vh', position: 'fixed', top: 0, left: 0 }}
         >
           <div className="flex flex-col h-full">
             {/* Sidebar Header */}
@@ -398,7 +403,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                   <button
                     key={item.id}
                     onClick={() => onTabChange(item.id)}
-                    className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${isActive 
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-md text-left transition-colors sidebar-nav-btn touch-optimized ${isActive 
                       ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold'
                       : 'hover:bg-[rgba(0,0,0,0.02)]'
                     }`}
@@ -567,7 +572,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
               )}
 
               {/* Reports retractable menu */}
-              {['admin', 'super_admin', 'reporting_manager'].includes(user?.role) && (
+              {['admin', 'super_admin', 'reporting_manager'].includes(user?.role ?? '') && (
                 <>
                   <button
                     className="w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left font-semibold transition-colors sidebar-nav-btn bg-[rgba(0,0,0,0.03)] hover:bg-[rgba(0,0,0,0.06)] mt-2"
@@ -593,6 +598,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                       <BarChart3 className="w-5 h-5" />
                       <span className="sidebar-label text-sm">Reports & Analytics</span>
                     </button>
+
+                    <button
+                      onClick={() => onTabChange('reports-2')}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'reports-2' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                    >
+                      <BarChart3 className="w-5 h-5" />
+                      <span className="sidebar-label text-sm">Reports & Analytics 2</span>
+                    </button>
                     {currentCompany?.moduleSettings?.performance_report_enabled && (
                       <button
                         onClick={() => onTabChange('performance-report')}
@@ -616,7 +629,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
               )}
 
               {/* Commission Calculator retractable menu - only available to admin and super admin */}
-              {['super_admin'].includes(user?.role) && (
+              {['super_admin'].includes(user?.role || '') && (
                 <>
                   <button
                     className="w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left font-semibold transition-colors sidebar-nav-btn bg-[rgba(0,0,0,0.03)] hover:bg-[rgba(0,0,0,0.06)] mt-2"
@@ -657,6 +670,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
               {navItems.filter(item => ![
                 'dashboard', 
                 'reports', 
+                'reports-2',
                 'performance-report', 
                 'recruitment-report',
                 'profile-management',  // Exclude from main navigation as it's in the Management section
@@ -739,10 +753,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
             </div>
           </div>
         </div>
-        )}
-
         {/* Main Content */}
-        <div className="flex-1 relative" style={{ marginLeft: sidebarVisible ? '16rem' : 0, minHeight: '100vh', transition: 'margin-left 0.3s' }}>
+        <div className="flex-1 relative lg:ml-80" style={{ minHeight: '100vh' }}>
           <div className="p-3 lg:p-4">
             {children}
           </div>
@@ -750,10 +762,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       </div>
 
       {/* Mobile Overlay */}
-      {sidebarOpen && (
+      {sidebarVisible && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
+          onClick={() => setSidebarVisible(false)}
         />
       )}
 
@@ -767,3 +779,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
 };
 
 export default Layout;
+
+
+
+
+
+
+
+
+

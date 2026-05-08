@@ -268,33 +268,52 @@ const ReportsAnalytics = () => {
     try {
       const dateRange = getDateRange(timeRange);
       
-      // Fetch attendance with proper join
+      // Fetch attendance data
       const { data: attendanceData, error: attendanceError } = await supabase
         .from('attendance')
-        .select(`
-          *,
-          profiles!employee_id(name, team_id, role)
-        `)
+        .select('*')
         .eq('company_id', currentCompany.id)
         .gte('date', dateRange.start)
         .lte('date', dateRange.end);
+
+      // Fetch employee data separately for manual join
+      const { data: employeeData, error: employeeError } = await supabase
+        .from('employees')
+        .select('id, name, team_id, role')
+        .eq('company_id', currentCompany.id)
+        .eq('is_active', true);
+
+      // Manual join: attach employee info to attendance records
+      const attendanceWithEmployees = attendanceData?.map(record => ({
+        ...record,
+        employees: employeeData?.find(emp => emp.id === record.employee_id) || null
+      })) || [];
 
       if (attendanceError) {
         console.error('Error fetching attendance:', attendanceError);
         throw attendanceError;
       }
 
-      // Fetch leaves with proper join
+      // Fetch leave requests data
       const { data: leavesData, error: leavesError } = await supabase
         .from('leave_requests')
-        .select(`
-          *,
-          leave_types!leave_type_id(id, name),
-          profiles!employee_id(name, team_id, role)
-        `)
+        .select('*')
         .eq('company_id', currentCompany.id)
         .gte('start_date', dateRange.start)
         .lte('end_date', dateRange.end);
+
+      // Fetch leave types
+      const { data: leaveTypesData, error: leaveTypesError } = await supabase
+        .from('leave_types')
+        .select('id, name')
+        .eq('company_id', currentCompany.id);
+
+      // Manual join: attach employee and leave type info to leave records
+      const leavesWithEmployees = leavesData?.map(record => ({
+        ...record,
+        employees: employeeData?.find(emp => emp.id === record.employee_id) || null,
+        leave_types: leaveTypesData?.find(type => type.id === record.leave_type_id) || null
+      })) || [];
 
       if (leavesError) {
         console.error('Error fetching leaves:', leavesError);
@@ -318,11 +337,11 @@ const ReportsAnalytics = () => {
 
       // Filter by team if needed
       const filteredData: RawData = {
-        attendance: (attendanceData || []).filter(record => 
-          team === 'all' || record.profiles?.team_id === team
+        attendance: (attendanceWithEmployees || []).filter(record => 
+          team === 'all' || record.employees?.team_id === team
         ),
-        leaves: (leavesData || []).filter(record =>
-          team === 'all' || record.profiles?.team_id === team
+        leaves: (leavesWithEmployees || []).filter(record =>
+          team === 'all' || record.employees?.team_id === team
         ),
         employees: (employeesData || []).filter(employee =>
           team === 'all' || employee.team_id === team
@@ -345,23 +364,34 @@ const ReportsAnalytics = () => {
     if (!currentCompany) return;
     
     try {
-      const { data, error } = await supabase
+      // Fetch attendance data for selected date
+      const { data: attendanceData, error: attendanceError } = await supabase
         .from('attendance')
-        .select(`
-          *,
-          profiles!employee_id(team_id, role)
-        `)
+        .select('*')
         .eq('company_id', currentCompany.id)
         .eq('date', selectedDate.toISOString().split('T')[0]);
 
-      if (error) {
-        console.error('Error fetching attendance stats:', error);
-        throw error;
+      // Fetch employee data for manual join
+      const { data: employeeData, error: employeeError } = await supabase
+        .from('employees')
+        .select('id, team_id, role')
+        .eq('company_id', currentCompany.id)
+        .eq('is_active', true);
+
+      // Manual join: attach employee info to attendance records
+      const data = attendanceData?.map(record => ({
+        ...record,
+        employees: employeeData?.find(emp => emp.id === record.employee_id) || null
+      })) || [];
+
+      if (attendanceError) {
+        console.error('Error fetching attendance stats:', attendanceError);
+        throw attendanceError;
       }
 
       // Filter by team first
       const filteredData = (data || []).filter(record => 
-        team === 'all' || record.profiles?.team_id === team
+        team === 'all' || record.employees?.team_id === team
       );
 
       const stats = {
@@ -386,24 +416,40 @@ const ReportsAnalytics = () => {
     if (!currentCompany) return;
     
     try {
-      const { data, error } = await supabase
+      // Fetch leave requests data for selected date
+      const { data: leavesData, error: leavesError } = await supabase
         .from('leave_requests')
-        .select(`
-          *,
-          leave_types!leave_type_id(id, name),
-          profiles!employee_id(team_id, role)
-        `)
+        .select('*')
         .eq('company_id', currentCompany.id)
         .eq('start_date', selectedDate.toISOString().split('T')[0]);
 
-      if (error) {
-        console.error('Error fetching leave stats:', error);
-        throw error;
+      // Fetch leave types and employee data for manual join
+      const { data: leaveTypesData, error: leaveTypesError } = await supabase
+        .from('leave_types')
+        .select('id, name')
+        .eq('company_id', currentCompany.id);
+
+      const { data: employeeData, error: employeeError } = await supabase
+        .from('employees')
+        .select('id, team_id, role')
+        .eq('company_id', currentCompany.id)
+        .eq('is_active', true);
+
+      // Manual join: attach employee and leave type info to leave records
+      const data = leavesData?.map(record => ({
+        ...record,
+        employees: employeeData?.find(emp => emp.id === record.employee_id) || null,
+        leave_types: leaveTypesData?.find(type => type.id === record.leave_type_id) || null
+      })) || [];
+
+      if (leavesError) {
+        console.error('Error fetching leave stats:', leavesError);
+        throw leavesError;
       }
 
       // Filter by team first
       const filteredData = (data || []).filter(record => 
-        team === 'all' || record.profiles?.team_id === team
+        team === 'all' || record.employees?.team_id === team
       );
 
       const stats = processLeaveData(filteredData);
@@ -463,8 +509,8 @@ const ReportsAnalytics = () => {
       const type = leave.leave_types.name.toLowerCase();
       const status = leave.status?.toLowerCase() || 'pending';
       const month = leave.start_date ? new Date(leave.start_date).toLocaleString('default', { month: 'short' }) : '';
-      const employeeName = leave.profiles?.name || 'Unknown';
-      const teamName = teams.find(t => t.id === (leave.profiles?.team_id || ''))?.name || 'Unassigned';
+      const employeeName = leave.employees?.name || 'Unknown';
+      const teamName = teams.find(t => t.id === (leave.employees?.team_id || ''))?.name || 'Unassigned';
       
       // Count by type
       if (type.includes('annual')) {
@@ -776,8 +822,8 @@ const ReportsAnalytics = () => {
 
         case 'leave':
           data = filteredLeaves.map(record => ({
-            'Employee Name': record.profiles?.name,
-            Team: record.profiles?.team_id,
+            'Employee Name': record.employees?.name,
+            Team: record.employees?.team_id,
             'Leave Type': record.leave_types?.name,
             'Start Date': record.start_date,
             'End Date': record.end_date,
@@ -939,7 +985,7 @@ const ReportsAnalytics = () => {
       if (leaveDateRange.end && parseDateLocal(leave.end_date) > new Date(leaveDateRange.end)) return false;
       
       // Filter by search term
-      if (leaveSearch && !leave.profiles?.name?.toLowerCase().includes(leaveSearch.toLowerCase())) return false;
+      if (leaveSearch && !leave.employees?.name?.toLowerCase().includes(leaveSearch.toLowerCase())) return false;
       
       return true;
     });
@@ -1704,10 +1750,10 @@ const ReportsAnalytics = () => {
                                   <tr key={leave.id} className="hover:bg-gray-50">
                                     <td className="px-6 py-4 whitespace-nowrap">
                                       <div className="text-sm font-medium text-gray-900">
-                                        {leave.profiles?.name || 'Unknown'}
+                                        {leave.employees?.name || 'Unknown'}
                                       </div>
                                       <div className="text-xs text-gray-500">
-                                        {teams.find(t => t.id === leave.profiles?.team_id)?.name || 'Unassigned'}
+                                        {teams.find(t => t.id === leave.employees?.team_id)?.name || 'Unassigned'}
                                       </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
@@ -1866,10 +1912,10 @@ const ReportsAnalytics = () => {
                           {filteredLeaves.map((record, index) => (
                             <tr key={record.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                {record.profiles?.name || 'Unknown'}
+                                {record.employees?.name || 'Unknown'}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {teams.find(t => t.id === record.profiles?.team_id)?.name || 'Unassigned'}
+                                {teams.find(t => t.id === record.employees?.team_id)?.name || 'Unassigned'}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                 {record.leave_types?.name || 'Unknown'}

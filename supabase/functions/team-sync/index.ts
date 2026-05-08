@@ -54,9 +54,10 @@ serve(async (req) => {
       case 'teams':
         await handleTeamSync(supabase, record, oldRecord)
         break
-      case 'profiles':
-        await handleProfileSync(supabase, record, oldRecord)
-        break
+      // Profile sync is no longer needed - employees table is primary source
+      // case 'profiles':
+      //   await handleProfileSync(supabase, record, oldRecord)
+      //   break
       default:
         console.log(`Unhandled table: ${payload.table}`)
     }
@@ -103,21 +104,10 @@ async function handleEmployeeSync(
     }
   }
 
-  // Employee manager change - update profile
+  // Employee manager change - no need to update profile as employees table is primary source
   if (record.reporting_manager_id !== oldRecord?.reporting_manager_id) {
-    console.log(`Updating profile for employee ${record.id} to manager ${record.reporting_manager_id}`)
-    
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        reporting_manager_id: record.reporting_manager_id
-      })
-      .eq("id", record.id)
-      .eq("company_id", record.company_id)
-
-    if (error) {
-      throw new Error(`Failed to update profile: ${error.message}`)
-    }
+    console.log(`Employee ${record.id} manager updated to ${record.reporting_manager_id}`)
+    // Profile sync is no longer needed - employees table is the primary source
   }
 }
 
@@ -141,18 +131,18 @@ async function handleTeamSync(
       throw new Error(`Failed to update employees: ${empError.message}`)
     }
 
-    // Then update profiles
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .update({
-        reporting_manager_id: record.manager_id
-      })
-      .eq("team_id", record.id)
-      .eq("company_id", record.company_id)
+    // Profiles table sync is no longer needed - employees table is primary source
+    // const { error: profileError } = await supabase
+    //   .from("profiles")
+    //   .update({
+    //     reporting_manager_id: record.manager_id
+    //   })
+    //   .eq("team_id", record.id)
+    //   .eq("company_id", record.company_id)
 
-    if (profileError) {
-      throw new Error(`Failed to update profiles: ${profileError.message}`)
-    }
+    // if (profileError) {
+    //   throw new Error(`Failed to update profiles: ${profileError.message}`)
+    // }
   }
 }
 

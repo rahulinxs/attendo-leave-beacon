@@ -59,39 +59,37 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<ImportResult | null>(null);
 
-  // Fetch profiles for name matching (attendance table references profiles.id)
+  // Fetch employees for name matching (attendance table references employees.id)
   React.useEffect(() => {
-    const fetchProfiles = async () => {
+    const fetchEmployees = async () => {
       if (!companyId) return;
       
-      console.log('Fetching profiles for company:', companyId);
+      console.log('Fetching employees for company:', companyId);
       
-      const { data: profiles, error } = await supabase
-        .from('profiles')
+      const { data: employees, error } = await supabase
+        .from('employees')
         .select('id, name, is_active')
         .eq('company_id', companyId);
-        // Remove is_active filter to include both active and inactive employees
 
-      console.log('Profiles query result:', { profiles, error });
+      if (error) {
+        console.error('Error fetching employees:', error);
+        return;
+      }
 
-      if (!error && profiles) {
+      if (!error && employees) {
         const nameToIdMap: Record<string, string> = {};
-        profiles.forEach(profile => {
-          const profileName = profile.name?.trim().toLowerCase() || '';
-          nameToIdMap[profileName] = profile.id;
-          console.log(`Mapping profile: "${profile.name}" (${profile.is_active ? 'active' : 'inactive'}) -> ${profile.id}`);
+        employees.forEach(employee => {
+          const employeeName = employee.name?.trim().toLowerCase() || '';
+          nameToIdMap[employeeName] = employee.id;
+          console.log(`Mapping employee: "${employee.name}" (${employee.is_active ? 'active' : 'inactive'}) -> ${employee.id}`);
         });
         setEmployeeNameToId(nameToIdMap);
         console.log('Final name-to-id map:', nameToIdMap);
-      } else {
-        console.error('Error fetching profiles:', error);
       }
     };
 
-    if (open) {
-      fetchProfiles();
-    }
-  }, [open, companyId]);
+    fetchEmployees();
+  }, [companyId]);
 
   // Excel/CSV import handler
   const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -1,12 +1,12 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Calendar as CalendarIcon, Plus, Trash2, CalendarDays } from 'lucide-react';
+import { Calendar as CalendarIcon, Plus, Trash2, CalendarDays, Pencil } from 'lucide-react';
 import { CustomCalendar } from '@/components/CustomCalendar';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -47,30 +47,81 @@ const HolidayManagement: React.FC = () => {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [editingHolidayId, setEditingHolidayId] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [shouldFocusForm, setShouldFocusForm] = useState(false);
+
+  const formContainerRef = useRef<HTMLDivElement | null>(null);
+  const holidayNameInputRef = useRef<HTMLInputElement | null>(null);
+
+  const scrollToForm = () => {
+    formContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => {
+      holidayNameInputRef.current?.focus();
+    }, 0);
+  };
+
+  useEffect(() => {
+    if (!showAddForm || !shouldFocusForm) return;
+    scrollToForm();
+    setShouldFocusForm(false);
+  }, [showAddForm, shouldFocusForm]);
 
   // Generate year options (current year ± 5 years)
   const yearOptions = Array.from({ length: 11 }, (_, i) => new Date().getFullYear() - 5 + i);
 
+  const holidaysForSelectedYear = useMemo(() => {
+    return holidays
+      .map((h) => {
+        const date = parseISO(h.date);
+        if (!h.is_recurring) {
+          return date.getFullYear() === selectedYear ? h : null;
+        }
+
+        const recurringDate = new Date(selectedYear, date.getMonth(), date.getDate());
+        return {
+          ...h,
+          date: format(recurringDate, 'yyyy-MM-dd'),
+        };
+      })
+      .filter((h): h is Holiday => Boolean(h))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [holidays, selectedYear]);
+
   // Helper to get holidays for current visible month and year
-  const holidaysInMonth = holidays.filter(h => {
+  const holidaysInMonth = holidaysForSelectedYear.filter(h => {
     const date = parseISO(h.date);
-    return date.getFullYear() === selectedYear && 
-           date.getMonth() === selectedMonth.getMonth();
+    return date.getMonth() === selectedMonth.getMonth();
   });
 
   // Helper to get holidays for selected year
-  const holidaysInYear = holidays.filter(h => {
-    const date = parseISO(h.date);
-    return date.getFullYear() === selectedYear;
-  });
+  const holidaysInYear = holidaysForSelectedYear;
   const { user } = useAuth();
-  const [showAddForm, setShowAddForm] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     date: '',
     description: '',
     is_recurring: false
   });
+
+  const resetForm = () => {
+    setFormData({ name: '', date: '', description: '', is_recurring: false });
+    setEditingHolidayId(null);
+    setShowAddForm(false);
+  };
+
+  const startEditHoliday = (holiday: Holiday) => {
+    const originalHoliday = holidays.find(h => h.id === holiday.id) || holiday;
+    setEditingHolidayId(holiday.id);
+    setFormData({
+      name: originalHoliday.name || '',
+      date: originalHoliday.date || '',
+      description: originalHoliday.description || '',
+      is_recurring: Boolean(originalHoliday.is_recurring),
+    });
+    setShowAddForm(true);
+    setShouldFocusForm(true);
+  };
 
   const fetchHolidays = async () => {
     try {
@@ -93,7 +144,7 @@ const HolidayManagement: React.FC = () => {
     }
   };
 
-  const handleAddHoliday = async (e: React.FormEvent) => {
+  const handleSubmitHoliday = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!user || !['admin', 'super_admin'].includes(user.role)) {
@@ -107,20 +158,22 @@ const HolidayManagement: React.FC = () => {
 
     try {
       setIsLoading(true);
-      const { error } = await supabase
-        .from('holidays')
-        .insert([{
-          name: formData.name,
-          date: formData.date,
-          description: formData.description,
-          is_recurring: formData.is_recurring
-        }]);
+      const payload = {
+        name: formData.name,
+        date: formData.date,
+        description: formData.description,
+        is_recurring: formData.is_recurring,
+      };
+
+      const { error } = editingHolidayId
+        ? await supabase.from('holidays').update(payload).eq('id', editingHolidayId)
+        : await supabase.from('holidays').insert([payload]);
 
       if (error) {
-        console.error('Error adding holiday:', error);
+        console.error('Error saving holiday:', error);
         toast({
           title: "Error",
-          description: "Failed to add holiday",
+          description: editingHolidayId ? "Failed to update holiday" : "Failed to add holiday",
           variant: "destructive"
         });
         return;
@@ -128,14 +181,15 @@ const HolidayManagement: React.FC = () => {
 
       toast({
         title: "Success",
-        description: "Holiday added successfully"
+        description: editingHolidayId ? "Holiday updated successfully" : "Holiday added successfully"
       });
 
       setFormData({ name: '', date: '', description: '', is_recurring: false });
+      setEditingHolidayId(null);
       setShowAddForm(false);
       fetchHolidays();
     } catch (error) {
-      console.error('Error adding holiday:', error);
+      console.error('Error saving holiday:', error);
       toast({
         title: "Error",
         description: "An unexpected error occurred",
@@ -241,7 +295,7 @@ const HolidayManagement: React.FC = () => {
             <CalendarDays className="w-4 h-4 mr-1" /> List View
           </Button>
           {canManageHolidays && (
-            <Button onClick={() => setShowAddForm(true)} variant="gradient">
+            <Button onClick={() => { setShowAddForm(true); setEditingHolidayId(null); setShouldFocusForm(true); }} variant="gradient">
               <Plus className="w-4 h-4 mr-2" /> Add Holiday
           </Button>
         )}
@@ -254,12 +308,71 @@ const HolidayManagement: React.FC = () => {
       {viewMode === 'calendar' && (
         <>
       {showAddForm && canManageHolidays && (
-            <Card className="border-2 border-blue-200 mb-4">
+            <Card className="border-2 border-blue-200 mb-4" ref={formContainerRef}>
           <CardHeader>
             <CardTitle>Add New Holiday</CardTitle>
           </CardHeader>
           <CardContent>
                 {/* ...form unchanged... */}
+                <form onSubmit={handleSubmitHoliday} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="holiday-name">Holiday Name</Label>
+                    <Input
+                      id="holiday-name"
+                      ref={holidayNameInputRef}
+                      value={formData.name}
+                      onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="e.g., Independence Day"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="holiday-date">Date</Label>
+                    <Input
+                      id="holiday-date"
+                      type="date"
+                      value={formData.date}
+                      onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="holiday-description">Description</Label>
+                    <Textarea
+                      id="holiday-description"
+                      value={formData.description}
+                      onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                      placeholder="Optional notes"
+                      rows={3}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={formData.is_recurring}
+                        onChange={(e) => setFormData(prev => ({ ...prev, is_recurring: e.target.checked }))}
+                      />
+                      Recurring yearly
+                    </label>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={resetForm}
+                      >
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={isLoading} variant="gradient">
+                        {isLoading ? 'Saving...' : editingHolidayId ? 'Save Changes' : 'Save Holiday'}
+                      </Button>
+                    </div>
+                  </div>
+                </form>
               </CardContent>
             </Card>
           )}
@@ -274,7 +387,7 @@ const HolidayManagement: React.FC = () => {
               <div className="flex flex-col items-center">
                 <CustomCalendar
                   month={selectedMonth}
-                  holidays={holidays}
+                  holidays={holidaysForSelectedYear}
                   onMonthChange={setSelectedMonth}
                 />
                 {/* Legend */}
@@ -292,12 +405,71 @@ const HolidayManagement: React.FC = () => {
       {viewMode === 'list' && (
         <>
           {showAddForm && canManageHolidays && (
-            <Card className="border-2 border-blue-200 mb-4">
+            <Card className="border-2 border-blue-200 mb-4" ref={formContainerRef}>
               <CardHeader>
                 <CardTitle>Add New Holiday</CardTitle>
               </CardHeader>
               <CardContent>
                 {/* ...form unchanged... */}
+                <form onSubmit={handleSubmitHoliday} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="holiday-name-list">Holiday Name</Label>
+                    <Input
+                      id="holiday-name-list"
+                      ref={holidayNameInputRef}
+                      value={formData.name}
+                      onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="e.g., Independence Day"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="holiday-date-list">Date</Label>
+                    <Input
+                      id="holiday-date-list"
+                      type="date"
+                      value={formData.date}
+                      onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="holiday-description-list">Description</Label>
+                    <Textarea
+                      id="holiday-description-list"
+                      value={formData.description}
+                      onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                      placeholder="Optional notes"
+                      rows={3}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={formData.is_recurring}
+                        onChange={(e) => setFormData(prev => ({ ...prev, is_recurring: e.target.checked }))}
+                      />
+                      Recurring yearly
+                    </label>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={resetForm}
+                      >
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={isLoading} variant="gradient">
+                        {isLoading ? 'Saving...' : editingHolidayId ? 'Save Changes' : 'Save Holiday'}
+                      </Button>
+                    </div>
+                  </div>
+                </form>
               </CardContent>
             </Card>
           )}
@@ -313,7 +485,7 @@ const HolidayManagement: React.FC = () => {
             <div className="flex items-center justify-center p-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
-          ) : holidays.length === 0 ? (
+          ) : holidaysInYear.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <CalendarDays className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No holidays found</h3>
@@ -330,7 +502,7 @@ const HolidayManagement: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {holidays.map((holiday) => (
+              {holidaysInYear.map((holiday) => (
                 <div key={holiday.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                   <div className="flex items-center space-x-4">
                     <div className="w-4 h-4 rounded-full bg-blue-500" />
@@ -352,12 +524,21 @@ const HolidayManagement: React.FC = () => {
                       <Badge variant="outline">Recurring</Badge>
                     )}
                     {canManageHolidays && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => startEditHoliday(holiday)}
+                        className="h-10 w-10 p-0 touch-optimized touch-target"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {canManageHolidays && (
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <Button
-                            variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            className="h-10 w-10 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 touch-optimized touch-target"
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>

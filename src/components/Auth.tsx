@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Building2, Users, Clock, UserPlus, LogIn } from 'lucide-react';
+import { Loader2, Building2, Users, Clock, UserPlus, LogIn, Download, Smartphone } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { supabase } from '@/lib/supabase';
 import { APP_NAME, APP_TAGLINE } from "../branding";
@@ -376,7 +376,7 @@ const Auth = () => {
         </Card>
 
         {/* Features */}
-        <div className="grid grid-cols-3 gap-4 text-center">
+        <div className="grid grid-cols-3 gap-4 text-center mb-6">
           <div className="space-y-2">
             <Clock className="w-6 h-6 mx-auto text-white drop-shadow-lg" />
             <p className="text-xs text-white drop-shadow">Track Time</p>
@@ -389,6 +389,31 @@ const Auth = () => {
             <Building2 className="w-6 h-6 mx-auto text-white drop-shadow-lg" />
             <p className="text-xs text-white drop-shadow">Enterprise Ready</p>
           </div>
+        </div>
+
+        {/* Mobile App Download */}
+        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center space-x-2">
+              <Smartphone className="w-5 h-5 text-white" />
+              <h3 className="text-white font-semibold">Mobile App</h3>
+            </div>
+            <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-full">Android</span>
+          </div>
+          <p className="text-white/90 text-sm mb-4">
+            Get the AttendEdge mobile app for on-the-go attendance tracking and leave management.
+          </p>
+          <Button
+            onClick={() => window.open('https://expo.dev/artifacts/eas/fc3oAZHUmYcFv9JeToTfiY.apk', '_blank')}
+            className="w-full bg-white text-blue-600 hover:bg-white/90 font-medium touch-optimized touch-target"
+            size="lg"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Download Android App
+          </Button>
+          <p className="text-white/70 text-xs mt-2 text-center">
+            Version 1.0.0 • Requires Android 8.0+
+          </p>
         </div>
 
         {/* Post-signup onboarding modal */}
