@@ -126,7 +126,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       roles: ['admin', 'super_admin'],
       requiresPermission: true
     },
-    
+    {
+      id: 'attendance-simplifier',
+      label: 'Attendance Simplifier',
+      icon: FileSpreadsheet,
+      roles: ['admin', 'super_admin'],
+      requiresPermission: true
+    },
+
     // Management features - for managers and above
     {
       id: 'leave-management',
@@ -252,14 +259,35 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
     result = [...result, ...restTabs];
     // Remove HR/Management tools from main nav for admin/super_admin, but keep Attendance/Leave as top-level for employee/reporting_manager
     if (['admin', 'super_admin'].includes(user.role)) {
-      return result.filter(item => !['attendance', 'leave', 'manage-attendance', 'leave-management', 'employees', 'teams', 'leave-type-management'].includes(item.id));
+      return result.filter(item => ![
+        'attendance',
+        'leave',
+        'manage-attendance',
+        'leave-management',
+        'employees',
+        'teams',
+        'leave-type-management',
+        'settings',
+        'session-settings',
+        'bulk-password-reset'
+      ].includes(item.id));
     } else {
       // For employee/reporting_manager, only remove admin-only tools
-      return result.filter(item => !['employees', 'leave-type-management'].includes(item.id));
+      return result.filter(item => ![
+        'employees',
+        'leave-type-management',
+        'settings',
+        'session-settings',
+        'bulk-password-reset'
+      ].includes(item.id));
     }
   };
 
   const navItems = getFilteredNavigationItems();
+  const systemItems = navigationItems.filter(item =>
+    ['settings', 'session-settings', 'bulk-password-reset'].includes(item.id) &&
+    item.roles.includes(user?.role || 'employee')
+  );
 
   const getRoleDisplayName = (role: string) => {
     switch (role) {
@@ -624,6 +652,42 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                         <span className="sidebar-label text-sm">Recruitment Report</span>
                       </button>
                     )}
+                  </div>
+                </>
+              )}
+
+              {/* System retractable menu */}
+              {systemItems.length > 0 && (
+                <>
+                  <button
+                    className="w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left font-semibold transition-colors sidebar-nav-btn bg-[rgba(0,0,0,0.03)] hover:bg-[rgba(0,0,0,0.06)] mt-2"
+                    onClick={() => toggleSection('system')}
+                    aria-expanded={isSectionOpen('system')}
+                    aria-controls="system-menu"
+                  >
+                    <Settings className="w-5 h-5" />
+                    <span>System</span>
+                    {isSectionOpen('system') ? <ChevronDown className="w-4 h-4 ml-auto" /> : <ChevronRight className="w-4 h-4 ml-auto" />}
+                  </button>
+                  <div
+                    id="system-menu"
+                    className={`pl-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${isSectionOpen('system') ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-2'}`}
+                    style={{ willChange: 'max-height, opacity, transform' }}
+                  >
+                    {systemItems.map(item => {
+                      const Icon = item.icon;
+                      const isActive = activeTab === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => onTabChange(item.id)}
+                          className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${isActive ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
+                        >
+                          <Icon className="w-5 h-5" />
+                          <span className="sidebar-label text-sm">{item.label}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </>
               )}

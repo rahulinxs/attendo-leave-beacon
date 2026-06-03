@@ -20,6 +20,7 @@ import Profile from '@/components/Profile';
 import ProfileManagement from '@/components/ProfileManagement';
 import CompanyProfile from '@/components/CompanyProfile';
 import PerformanceReport from '@/components/PerformanceReport';
+import AttendanceSimplifierPage from '@/pages/AttendanceSimplifierPage';
 import RecruitmentReport from '@/components/RecruitmentReport';
 import { SessionSettings } from '@/components/SessionSettings';
 import CommissionDashboard from '@/components/commission/CommissionDashboard';
@@ -67,6 +68,9 @@ const Index = () => {
         return <EmployeeAttendance />;
       case 'manage-attendance':
         return <AttendanceManagement />;
+
+      case 'attendance-simplifier':
+        return <AttendanceSimplifierPage />;
       
       case 'leave':
         return <EmployeeLeaveView />;

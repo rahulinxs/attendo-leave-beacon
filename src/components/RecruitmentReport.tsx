@@ -32,6 +32,12 @@ const getYearOptions = () => {
   return [currentYear - 1, currentYear, currentYear + 1];
 };
 
+/** Last calendar day of month (month is 1–12), as YYYY-MM-DD */
+const getMonthEndDate = (y: number, m: number): string => {
+  const lastDay = new Date(y, m, 0).getDate();
+  return `${y}-${m.toString().padStart(2, '0')}-${lastDay.toString().padStart(2, '0')}`;
+};
+
 type PeriodType = 'monthly' | 'quarterly' | 'half-yearly' | 'yearly';
 
 // Layout helpers for better fit and readability
@@ -69,6 +75,11 @@ const getCellClassForField = (field: string) => {
 
 const isEditableField = ['monster', 'dice', 'linkedin_profiles_viewed', 'linkedin_inmails_sent',
   'total_calls', 'total_submissions', 'total_interviews', 'offers', 'starts', 'offered', 'placed'];
+
+const numericSortKeys = new Set([
+  'monster', 'dice', 'linkedin_profiles_viewed', 'linkedin_inmails_sent',
+  'total_calls', 'total_submissions', 'total_interviews', 'offers', 'starts'
+]);
 
 // Define column configuration type
 type ColumnConfig = {
@@ -109,7 +120,7 @@ const RecruitmentReport: React.FC = () => {
   const [reviewData, setReviewData] = useState<any[]>([]);
   const [reviewMode, setReviewMode] = useState<'replace' | 'upsert' | null>(null);
   const [saving, setSaving] = useState(false);
-  const [editingCell, setEditingCell] = useState<{rowIndex: number, field: string} | null>(null);
+  const [editingCell, setEditingCell] = useState<{rowId: string | number, field: string} | null>(null);
   const [editValue, setEditValue] = useState<string>('');
   
   // Pagination state
@@ -184,7 +195,7 @@ const RecruitmentReport: React.FC = () => {
       let startDate, endDate;
       if (periodType === 'monthly') {
         startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
-        endDate = `${year}-${month.toString().padStart(2, '0')}-28`;
+        endDate = getMonthEndDate(year, month);
       } else if (periodType === 'quarterly') {
         if (quarter === 1) {
           startDate = `${year}-01-01`;
@@ -335,6 +346,7 @@ const RecruitmentReport: React.FC = () => {
 
     setImportFile(file);
     setImportDialogOpen(true);
+    e.target.value = '';
   };
 
   const parseNumber = (val: any) => {
@@ -385,7 +397,7 @@ const RecruitmentReport: React.FC = () => {
           starts: parseNumber(row['Starts']),
           offered: parseTextAvoidZero(row['Offered']),
           placed: parseTextAvoidZero(row['Placed']),
-          report_date: `${year}-${month.toString().padStart(2, '0')}-28`,
+          report_date: getMonthEndDate(year, month),
           company_id: currentCompany?.id,
         };
       });
@@ -405,16 +417,20 @@ const RecruitmentReport: React.FC = () => {
     }
   };
 
-  const handleCellEdit = (rowIndex: number, field: string, value: any) => {
-    const updatedData = [...reportData];
-    updatedData[rowIndex] = { ...updatedData[rowIndex], [field]: value };
+  const handleCellEdit = (rowId: string | number, field: string, value: any) => {
+    const updatedData = reportData.map((row) =>
+      row.id === rowId ? { ...row, [field]: value } : row
+    );
     setReportData(updatedData);
   };
 
-  const saveCellEdit = async (rowIndex: number, field: string) => {
-    if (!editingCell) return;
+  const saveCellEdit = async (rowId: string | number, field: string) => {
+    if (!editingCell || editingCell.rowId !== rowId || editingCell.field !== field) return;
 
     try {
+      const rowIndex = reportData.findIndex((row) => row.id === rowId);
+      if (rowIndex === -1) return;
+
       const numericFields = new Set(['monster','dice','linkedin_profiles_viewed','linkedin_inmails_sent','total_calls','total_submissions','total_interviews','offers','starts']);
       let valueToSave: any;
       if (numericFields.has(field)) {
@@ -441,7 +457,7 @@ const RecruitmentReport: React.FC = () => {
         return;
       }
 
-      handleCellEdit(rowIndex, field, valueToSave);
+      handleCellEdit(rowId, field, valueToSave);
       setEditingCell(null);
       setEditValue('');
       toast({
@@ -458,8 +474,8 @@ const RecruitmentReport: React.FC = () => {
     }
   };
 
-  const startEditing = (rowIndex: number, field: string, value: any) => {
-    setEditingCell({ rowIndex, field });
+  const startEditing = (rowId: string | number, field: string, value: any) => {
+    setEditingCell({ rowId, field });
     setEditValue(value?.toString() || '');
   };
 
@@ -471,7 +487,7 @@ const RecruitmentReport: React.FC = () => {
       if (reviewMode === 'replace') {
                  // Delete existing data for the period
          const startDate = new Date(year, month - 1, 1);
-         const endDate = new Date(year, month - 1, 28);
+         const endDate = new Date(year, month, 0);
         
         await supabase
           .from('performance_reports')
@@ -555,6 +571,15 @@ const RecruitmentReport: React.FC = () => {
       if (valueA === valueB) return 0;
       if (valueA == null) return sortConfig.direction === 'asc' ? -1 : 1;
       if (valueB == null) return sortConfig.direction === 'asc' ? 1 : -1;
+
+      if (numericSortKeys.has(sortConfig.key)) {
+        const numA = Number(valueA);
+        const numB = Number(valueB);
+        if (isNaN(numA) && isNaN(numB)) return 0;
+        if (isNaN(numA)) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (isNaN(numB)) return sortConfig.direction === 'asc' ? 1 : -1;
+        return sortConfig.direction === 'asc' ? numA - numB : numB - numA;
+      }
       
       return sortConfig.direction === 'asc'
         ? valueA > valueB ? 1 : -1
@@ -569,12 +594,16 @@ const RecruitmentReport: React.FC = () => {
     return sortedData.slice(startIndex, startIndex + rowsPerPage);
   }, [sortedData, currentPage, rowsPerPage]);
 
+  useEffect(() => {
+    setCurrentPage((prev) => Math.min(prev, Math.max(1, totalPages)));
+  }, [totalPages]);
+
   const goToPage = (page: number) => {
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));
   };
 
-  const renderEditableCell = (rowIndex: number, field: string, value: any, row: any) => {
-    const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.field === field;
+  const renderEditableCell = (rowId: string | number, field: string, value: any, row: any) => {
+    const isEditing = editingCell?.rowId === rowId && editingCell?.field === field;
     
     if (isEditing) {
       return (
@@ -584,7 +613,7 @@ const RecruitmentReport: React.FC = () => {
             onChange={(e) => setEditValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
-                saveCellEdit(rowIndex, field);
+                saveCellEdit(rowId, field);
               } else if (e.key === 'Escape') {
                 setEditingCell(null);
                 setEditValue('');
@@ -595,7 +624,7 @@ const RecruitmentReport: React.FC = () => {
           />
           <Button
             size="sm"
-            onClick={() => saveCellEdit(rowIndex, field)}
+            onClick={() => saveCellEdit(rowId, field)}
             className="h-6 px-2"
             variant="ghost"
           >
@@ -624,7 +653,7 @@ const RecruitmentReport: React.FC = () => {
     return (
       <div
         className="cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[2rem] flex items-center"
-        onClick={() => startEditing(rowIndex, field, value)}
+        onClick={() => startEditing(rowId, field, value)}
       >
         {displayValue(value, field)}
       </div>
@@ -933,7 +962,7 @@ const RecruitmentReport: React.FC = () => {
                     <TableBody>
                       {paginatedData.length > 0 ? (
                         paginatedData.map((row, rowIndex) => (
-                          <TableRow key={rowIndex} className="hover:bg-gray-50">
+                          <TableRow key={row.id ?? rowIndex} className="hover:bg-gray-50">
                             {visibleColumns.map((column) => {
                               let value = row[column.id];
                               
@@ -952,7 +981,7 @@ const RecruitmentReport: React.FC = () => {
                                 <TableCell key={column.id} className={getCellClassForField(column.id)}>
                                   {periodType === 'monthly' && isEditable
                                     ? renderEditableCell(
-                                        rowIndex + ((currentPage - 1) * rowsPerPage),
+                                        row.id ?? rowIndex + ((currentPage - 1) * rowsPerPage),
                                         column.id,
                                         value,
                                         row

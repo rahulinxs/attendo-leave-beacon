@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attendance Simplifier</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap');
+
+  :root {
+    --bg: #0e0f13;
+    --surface: #16181f;
+    --card: #1c1f28;
+    --border: #2a2d3a;
+    --accent: #4fffb0;
+    --accent2: #7c6aff;
+    --text: #e8eaf0;
+    --muted: #6b7080;
+    --danger: #ff5c5c;
+    --warn: #ffb84d;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 20px 32px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--surface);
+  }
+  .logo-dot { width: 10px; height: 10px; background: var(--accent); border-radius: 50%; box-shadow: 0 0 12px var(--accent); }
+  header h1 { font-size: 1.1rem; font-weight: 800; letter-spacing: -0.02em; }
+  header span { font-size: 0.7rem; color: var(--muted); background: var(--card); border: 1px solid var(--border); padding: 3px 10px; border-radius: 20px; font-family: 'DM Mono', monospace; }
+
+  main { flex: 1; padding: 26px 32px; max-width: 1150px; width: 100%; margin: 0 auto; }
+
+  .upload-area {
+    border: 2px dashed var(--border);
+    border-radius: 14px;
+    padding: 38px 24px;
+    text-align: center;
+    background: var(--surface);
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .upload-area.drag-over { border-color: var(--accent); background: rgba(79,255,176,0.04); }
+  .upload-area .icon { font-size: 2rem; margin-bottom: 10px; }
+  .upload-area h2 { font-size: 0.98rem; font-weight: 700; margin-bottom: 6px; }
+  .upload-area p { font-size: 0.76rem; color: var(--muted); font-family: 'DM Mono', monospace; margin-bottom: 18px; }
+
+  #fileInput { display: none; }
+
+  .pick-btn {
+    display: inline-block;
+    padding: 10px 28px;
+    background: var(--accent);
+    color: #0e0f13;
+    border-radius: 8px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.86rem;
+    cursor: pointer;
+    transition: background 0.18s, transform 0.18s;
+    user-select: none;
+  }
+  .pick-btn:hover { background: #6fffc4; transform: translateY(-1px); }
+
+  .file-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  .file-chip { display: flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 0.76rem; font-family: 'DM Mono', monospace; }
+  .file-chip .dot { width: 7px; height: 7px; background: var(--accent); border-radius: 50%; flex-shrink: 0; }
+  .file-chip .fmt { font-size: 0.65rem; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; color: var(--accent2); }
+  .file-chip .rm { cursor: pointer; color: var(--muted); margin-left: 2px; font-size: 1rem; line-height: 1; }
+  .file-chip .rm:hover { color: var(--danger); }
+
+  .controls { margin-top: 20px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .btn { padding: 10px 24px; border-radius: 9px; border: none; cursor: pointer; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.86rem; transition: all 0.18s; }
+  .btn-primary { background: var(--accent2); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: #9b8bff; transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-ghost { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+  .btn-ghost:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .btn-ghost:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .status-bar { margin-top: 16px; padding: 10px 15px; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; font-family: 'DM Mono', monospace; font-size: 0.76rem; color: var(--muted); display: none; align-items: center; gap: 10px; }
+  .status-bar.on { display: flex; }
+  .spinner { width: 14px; height: 14px; flex-shrink: 0; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .err-box { margin-top: 12px; padding: 11px 15px; background: rgba(255,92,92,0.08); border: 1px solid rgba(255,92,92,0.3); border-radius: 9px; font-size: 0.78rem; color: var(--danger); font-family: 'DM Mono', monospace; display: none; }
+  .err-box.on { display: block; }
+
+  .results { margin-top: 32px; }
+
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 11px; margin-bottom: 22px; }
+  .sc { background: var(--card); border: 1px solid var(--border); border-radius: 11px; padding: 14px 16px; }
+  .sc .lbl { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 4px; font-family: 'DM Mono', monospace; }
+  .sc .val { font-size: 1.4rem; font-weight: 800; }
+  .sc.g .val { color: var(--accent); }
+  .sc.p .val { color: var(--accent2); }
+  .sc.r .val { color: var(--danger); }
+
+  .res-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px; }
+  .res-hdr h2 { font-size: 0.98rem; font-weight: 700; }
+  .badge { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 3px 11px; font-size: 0.7rem; font-family: 'DM Mono', monospace; color: var(--accent); }
+
+  .filters { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .filters input, .filters select { background: var(--card); border: 1px solid var(--border); border-radius: 7px; padding: 7px 11px; font-family: 'DM Mono', monospace; font-size: 0.76rem; color: var(--text); outline: none; transition: border-color 0.2s; }
+  .filters input:focus, .filters select:focus { border-color: var(--accent2); }
+  .filters input::placeholder { color: var(--muted); }
+  .filters select option { background: var(--card); }
+
+  .tbl-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 11px; background: var(--surface); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.79rem; }
+  thead tr { background: var(--card); border-bottom: 2px solid var(--border); }
+  th { padding: 10px 14px; text-align: left; font-weight: 700; font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+  th:nth-child(2) { color: var(--accent2); }
+  td { padding: 8px 14px; border-bottom: 1px solid var(--border); font-family: 'DM Mono', monospace; font-size: 0.75rem; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.015); }
+
+  .sp { color: var(--accent); font-weight: 500; }
+  .sa { color: var(--danger); }
+  .swo { color: var(--muted); }
+  .swop { color: var(--warn); }
+  .sl   { color: var(--accent2); }
+  .slat { color: #ff9f43; font-weight: 500; }
+  .shd  { color: #fd79a8; font-weight: 500; }
+  .ename { color: var(--text); font-family: 'Syne', sans-serif; font-weight: 600; font-size: 0.8rem; }
+  .eid { color: var(--accent2); }
+  .rnum { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-dot"></div>
+  <h1>Attendance Simplifier</h1>
+  <span>Multi-format XLS → Clean Report</span>
+</header>
+
+<main>
+
+  <div class="upload-area" id="uploadArea">
+    <div class="icon">📂</div>
+    <h2>Drop Monthly Attendance Files Here</h2>
+    <p>Supports both report formats &nbsp;·&nbsp; .xls and .xlsx &nbsp;·&nbsp; Multiple files at once</p>
+    <label class="pick-btn" for="fileInput">Browse Files</label>
+  </div>
+
+  <input type="file" id="fileInput" accept=".xls,.xlsx" multiple>
+
+  <div class="file-list" id="fileList"></div>
+  <div class="err-box" id="errBox"></div>
+
+  <div class="controls">
+    <button class="btn btn-primary" id="processBtn" disabled>⚡ Process</button>
+    <button class="btn btn-ghost"   id="exportBtn"  disabled>⬇ Export CSV</button>
+    <button class="btn btn-ghost"   id="clearBtn"   disabled>✕ Clear</button>
+  </div>
+
+  <div class="status-bar" id="statusBar">
+    <div class="spinner"></div>
+    <span id="statusTxt">Processing...</span>
+  </div>
+
+  <div class="results" id="results" style="display:none">
+    <div class="summary-grid" id="summaryGrid"></div>
+
+    <div class="res-hdr">
+      <h2>Attendance Records</h2>
+      <span class="badge" id="rowBadge">0 rows</span>
+    </div>
+
+    <div class="filters">
+      <input id="searchBox" placeholder="Search name or ID…" style="min-width:190px">
+      <select id="statusSel">
+        <option value="">All Statuses</option>
+        <option value="P">Present (P)</option>
+        <option value="A">Absent (A)</option>
+        <option value="WO">Weekly Off (WO)</option>
+        <option value="WOP">WO Present (WOP)</option>
+        <option value="L">Leave (L)</option>
+        <option value="LATE">Late (LATE)</option>
+        <option value="HD">Half Day (HD)</option>
+      </select>
+      <select id="monthSel"><option value="">All Months</option></select>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>Emp ID</th><th>Name</th>
+            <th>Date</th><th>Day</th><th>Status</th>
+            <th>In Time</th><th>Out Time</th><th>Duration</th>
+          </tr>
+        </thead>
+        <tbody id="tblBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+  let allData = [], filteredData = [], uploadedFiles = [];
+
+  const fileInput   = document.getElementById('fileInput');
+  const uploadArea  = document.getElementById('uploadArea');
+  const fileList    = document.getElementById('fileList');
+  const processBtn  = document.getElementById('processBtn');
+  const exportBtn   = document.getElementById('exportBtn');
+  const clearBtn    = document.getElementById('clearBtn');
+  const statusBar   = document.getElementById('statusBar');
+  const statusTxt   = document.getElementById('statusTxt');
+  const errBox      = document.getElementById('errBox');
+  const results     = document.getElementById('results');
+  const tblBody     = document.getElementById('tblBody');
+  const rowBadge    = document.getElementById('rowBadge');
+  const searchBox   = document.getElementById('searchBox');
+  const statusSel   = document.getElementById('statusSel');
+  const monthSel    = document.getElementById('monthSel');
+  const summaryGrid = document.getElementById('summaryGrid');
+
+  // ── File input ──
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files && fileInput.files.length) addFiles([...fileInput.files]);
+    fileInput.value = '';
+  });
+
+  uploadArea.addEventListener('dragover',  e => { e.preventDefault(); uploadArea.classList.add('drag-over'); });
+  uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('drag-over'));
+  uploadArea.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadArea.classList.remove('drag-over');
+    addFiles([...e.dataTransfer.files]);
+  });
+
+  function addFiles(files) {
+    files.forEach(f => {
+      if (!uploadedFiles.find(x => x.name === f.name)) uploadedFiles.push(f);
+    });
+    renderChips();
+    processBtn.disabled = uploadedFiles.length === 0;
+    clearBtn.disabled   = uploadedFiles.length === 0;
+  }
+
+  function renderChips() {
+    fileList.innerHTML = uploadedFiles.map((f, i) => `
+      <div class="file-chip">
+        <div class="dot"></div>
+        <span>${f.name}</span>
+        <span class="rm" onclick="removeFile(${i})">×</span>
+      </div>`).join('');
+  }
+
+  function removeFile(i) {
+    uploadedFiles.splice(i, 1);
+    renderChips();
+    processBtn.disabled = uploadedFiles.length === 0;
+    clearBtn.disabled   = uploadedFiles.length === 0;
+    if (!uploadedFiles.length) { results.style.display = 'none'; allData = []; exportBtn.disabled = true; }
+  }
+
+  const showStatus = m => { statusTxt.textContent = m; statusBar.classList.add('on'); };
+  const hideStatus = () => statusBar.classList.remove('on');
+  const showErr    = m => { errBox.textContent = m; errBox.classList.add('on'); };
+  const hideErr    = () => errBox.classList.remove('on');
+
+  // ── Process ──
+  processBtn.addEventListener('click', async () => {
+    hideErr(); allData = [];
+    showStatus('Reading files…');
+    processBtn.disabled = true;
+    try {
+      for (let i = 0; i < uploadedFiles.length; i++) {
+        showStatus(`Parsing ${uploadedFiles[i].name} (${i+1}/${uploadedFiles.length})…`);
+        const rows = await parseFile(uploadedFiles[i]);
+        allData = allData.concat(rows);
+      }
+      if (!allData.length) {
+        showErr('No attendance data found. Please check the file is a recognised attendance report format.');
+        hideStatus(); processBtn.disabled = false; return;
+      }
+      buildMonthFilter();
+      applyFilters();
+      renderSummary();
+      results.style.display = 'block';
+      exportBtn.disabled = false;
+      hideStatus();
+    } catch (err) {
+      hideStatus();
+      showErr('Error: ' + err.message);
+      console.error(err);
+    }
+    processBtn.disabled = false;
+  });
+
+  // ── File reader ──
+  function parseFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const wb   = XLSX.read(e.target.result, { type: 'array', cellDates: true, cellNF: true });
+          const ws   = wb.Sheets[wb.SheetNames[0]];
+          const grid = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false });
+          const fmt  = detectFormat(grid);
+          let records;
+          if (fmt === 'compact') {
+            records = parseCompact(grid, file.name);
+          } else if (fmt === 'detailed') {
+            records = parseDetailed(grid, file.name);
+          } else {
+            records = [];
+          }
+          resolve(records);
+        } catch (err) { reject(err); }
+      };
+      reader.onerror = () => reject(new Error('Could not read file'));
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  // ────────────────────────────────────────────────
+  // FORMAT DETECTION
+  // ────────────────────────────────────────────────
+  function detectFormat(grid) {
+    // Compact format: row 0 has 'Empcode', row 2 has day numbers '1','2','3'...
+    // Detailed format: has a 'Days' row with 'DD-Mon' date strings
+    for (let r = 0; r < Math.min(15, grid.length); r++) {
+      const row = grid[r]; if (!row) continue;
+      // Compact: Empcode label in col 0
+      if (row[0] !== null && String(row[0]).trim() === 'Empcode') return 'compact';
+      // Detailed: row has 'Days' label + DD-Mon values
+      if (row.some(v => v !== null && String(v).trim() === 'Days') &&
+          row.some(v => v !== null && /^\d{1,2}-[A-Za-z]{3}$/.test(String(v).trim())))
+        return 'detailed';
+    }
+    return 'unknown';
+  }
+
+  // ────────────────────────────────────────────────
+  // FORMAT A — COMPACT (Indore-style)
+  // Structure per employee (10 rows):
+  //   Row 0: Dept.Name / CompName / Report Month
+  //   Row 1: Empcode / EmpId / Name / EmpName / Present/WO/Absent counts
+  //   Row 2: day numbers 1..31 in cols 1..31
+  //   Row 3: day names Sun/Mon/... in cols 1..31
+  //   Row 4: IN times
+  //   Row 5: OUT times
+  //   Row 6: WORK duration
+  //   Row 7: Break
+  //   Row 8: OT
+  //   Row 9: Status P/A/WO/...
+  // ────────────────────────────────────────────────
+  function parseCompact(grid, fileName) {
+    const records = [];
+    let r = 0;
+
+    while (r < grid.length) {
+      const row = grid[r];
+      // Find the 'Empcode' row for this block
+      if (!row || row[0] === null || String(row[0]).trim() !== 'Empcode') { r++; continue; }
+
+      // Extract employee info from this row
+      const empCode = findAfterLabel(row, 'Empcode');
+      const empName = findAfterLabel(row, 'Name');
+
+      // Extract report month from the row ABOVE (Dept row)
+      const deptRow  = r > 0 ? grid[r - 1] : null;
+      const monthStr = deptRow ? findAfterLabel(deptRow, 'Report Month') : '';
+      // monthStr like "February-2026"
+      const { year, monthNum, monthName } = parseMonthStr(monthStr);
+
+      // Next row: day numbers (col index = day number)
+      const dayNumRow  = grid[r + 1] || [];
+      // Row after that: day names
+      const dayNameRow = grid[r + 2] || [];
+      // IN / OUT / WORK / Status rows
+      const inRow     = grid[r + 3] || [];
+      const outRow    = grid[r + 4] || [];
+      const workRow   = grid[r + 5] || [];
+      const statusRow = grid[r + 8] || []; // row 9 of block = Status
+
+      // Build col→dayNumber map from dayNumRow
+      // col 0 is label, col 1 = day 1, col 2 = day 2, ...
+      dayNumRow.forEach((v, col) => {
+        if (col === 0 || v === null) return;
+        const dayNum = parseInt(String(v).trim());
+        if (isNaN(dayNum) || dayNum < 1 || dayNum > 31) return;
+
+        const status   = statusRow[col] != null ? String(statusRow[col]).trim() : '';
+        if (!status || status === '--') return;
+
+        const dow      = dayNameRow[col] != null ? String(dayNameRow[col]).trim() : '';
+        const inTime   = cleanTime(inRow[col]   != null ? String(inRow[col])   : '');
+        const outTime  = cleanTime(outRow[col]  != null ? String(outRow[col])  : '');
+        const duration = cleanTime(workRow[col] != null ? String(workRow[col]) : '');
+
+        // Build a date string like "01-Feb"
+        const dateShort = String(dayNum).padStart(2, '0') + '-' + monthName.slice(0, 3);
+        const dateLong  = `${monthName} ${String(dayNum).padStart(2, '0')}, ${year}`;
+
+        const corrected = correctStatus(status, inTime, outTime, duration);
+        records.push({ empCode, empName, dateShort, dateLong, dow, status: corrected, inTime, outTime, duration, src: fileName });
+      });
+
+      r += 10; // move to next employee block
+    }
+
+    return records;
+  }
+
+  function findAfterLabel(row, label) {
+    const idx = row.findIndex(v => v !== null && String(v).trim() === label);
+    if (idx === -1) return '';
+    for (let c = idx + 1; c < Math.min(idx + 10, row.length); c++) {
+      if (row[c] != null && String(row[c]).trim() !== '') return String(row[c]).trim();
+    }
+    return '';
+  }
+
+  function parseMonthStr(str) {
+    // e.g. "February-2026" or "Feb-2026" or "February 2026"
+    if (!str) return { year: new Date().getFullYear(), monthNum: 1, monthName: 'January' };
+    const MONTHS = { january:1,february:2,march:3,april:4,may:5,june:6,
+                     july:7,august:8,september:9,october:10,november:11,december:12,
+                     jan:1,feb:2,mar:3,apr:4,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
+    const MNAMES = ['','January','February','March','April','May','June',
+                    'July','August','September','October','November','December'];
+    const yearM = str.match(/20\d{2}/);
+    const year  = yearM ? +yearM[0] : new Date().getFullYear();
+    const wordM = str.match(/[A-Za-z]+/);
+    const word  = wordM ? wordM[0].toLowerCase() : '';
+    const monthNum = MONTHS[word] || 1;
+    return { year, monthNum, monthName: MNAMES[monthNum] };
+  }
+
+  // ────────────────────────────────────────────────
+  // FORMAT B — DETAILED (NY-style Monthly Detailed Report)
+  // Has a 'Days' row with "DD-Mon" date strings
+  // Employee blocks start with "Employee Code:-" in col 1
+  // ────────────────────────────────────────────────
+  function parseDetailed(grid, fileName) {
+    const records = [];
+
+    // Find date-header row
+    let dateRowIdx = -1;
+    const dateColMap = {};
+
+    for (let r = 0; r < Math.min(30, grid.length); r++) {
+      const row = grid[r]; if (!row) continue;
+      const hasDaysLabel = row.some(v => v !== null && String(v).trim() === 'Days');
+      const dateCols = row.reduce((acc, v, c) => {
+        if (v !== null && /^\d{1,2}-[A-Za-z]{3}$/.test(String(v).trim())) acc.push(c);
+        return acc;
+      }, []);
+      if (hasDaysLabel && dateCols.length >= 1) {
+        dateRowIdx = r;
+        dateCols.forEach(c => { dateColMap[c] = String(grid[r][c]).trim(); });
+        break;
+      }
+    }
+
+    // Fallback: any row with 5+ DD-Mon values
+    if (dateRowIdx === -1) {
+      for (let r = 0; r < Math.min(30, grid.length); r++) {
+        const row = grid[r]; if (!row) continue;
+        const hits = [];
+        row.forEach((v, c) => {
+          if (v !== null && /^\d{1,2}-[A-Za-z]{3}$/.test(String(v).trim())) hits.push(c);
+        });
+        if (hits.length >= 5) {
+          dateRowIdx = r;
+          hits.forEach(c => { dateColMap[c] = String(grid[r][c]).trim(); });
+          break;
+        }
+      }
+    }
+
+    if (dateRowIdx === -1) return records;
+
+    const dayRow   = grid[dateRowIdx + 1] || [];
+    const repYear  = extractYear(grid);
+
+    for (let r = 0; r < grid.length; r++) {
+      const row = grid[r]; if (!row) continue;
+      const ecIdx = row.findIndex(v => v !== null && String(v).trim() === 'Employee Code:-');
+      if (ecIdx === -1) continue;
+
+      let empCode = '';
+      for (let c = ecIdx + 1; c < Math.min(ecIdx + 12, row.length); c++) {
+        if (row[c] != null && String(row[c]).trim() !== '') { empCode = String(row[c]).trim(); break; }
+      }
+      let empName = '';
+      const enIdx = row.findIndex(v => v !== null && String(v).trim() === 'Employee Name:-');
+      if (enIdx !== -1) {
+        for (let c = enIdx + 1; c < Math.min(enIdx + 12, row.length); c++) {
+          if (row[c] != null && String(row[c]).trim() !== '') { empName = String(row[c]).trim(); break; }
+        }
+      }
+
+      let statusRow = null, inRow = null, outRow = null, durRow = null;
+      for (let rr = r + 1; rr < r + 22 && rr < grid.length; rr++) {
+        const rd = grid[rr]; if (!rd) continue;
+        // Stop immediately if we hit the next employee's block
+        if (rd.some(v => v !== null && String(v).trim() === 'Employee Code:-')) break;
+        const lbl = rd[1] != null ? String(rd[1]).trim() : '';
+        if (lbl === 'Status')   statusRow = rd;
+        if (lbl === 'In Time')  inRow     = rd;
+        if (lbl === 'Out Time') outRow    = rd;
+        if (lbl === 'Duration') durRow    = rd;
+      }
+
+      if (!statusRow) continue;
+
+      Object.entries(dateColMap).forEach(([ci, dateStr]) => {
+        const col    = +ci;
+        const status = statusRow[col] != null ? String(statusRow[col]).trim() : '';
+        if (!status) return;
+
+        const inT  = cleanTime(inRow  && inRow[col]  != null ? String(inRow[col])  : '');
+        const outT = cleanTime(outRow && outRow[col] != null ? String(outRow[col]) : '');
+        const durT = cleanTime(durRow && durRow[col] != null ? String(durRow[col]) : '');
+        records.push({
+          empCode, empName,
+          dateShort: dateStr,
+          dateLong:  toLongDate(dateStr, repYear),
+          dow:       dayRow[col] != null ? String(dayRow[col]).trim() : '',
+          status:    correctStatus(status, inT, outT, durT),
+          inTime:    inT,
+          outTime:   outT,
+          duration:  durT,
+          src: fileName
+        });
+      });
+    }
+
+    return records;
+  }
+
+  // ── Shared helpers ──
+  function extractYear(grid) {
+    for (let r = 0; r < Math.min(10, grid.length); r++) {
+      const row = grid[r]; if (!row) continue;
+      for (const v of row) {
+        if (v == null) continue;
+        const m = String(v).match(/20\d{2}/);
+        if (m) return +m[0];
+      }
+    }
+    return new Date().getFullYear();
+  }
+
+  function toLongDate(s, year) {
+    const M = { jan:'January',feb:'February',mar:'March',apr:'April',may:'May',jun:'June',
+                jul:'July',aug:'August',sep:'September',oct:'October',nov:'November',dec:'December' };
+    const m = s.match(/^(\d{1,2})-([A-Za-z]{3})$/);
+    if (!m) return s;
+    return `${M[m[2].toLowerCase()]||m[2]} ${String(+m[1]).padStart(2,'0')}, ${year}`;
+  }
+
+  function cleanTime(v) {
+    const s = String(v).trim();
+    return (!s || s === '00:00' || s === '00:00:00' || s === '--:--') ? '' : s;
+  }
+
+  // ── Smart status correction ──
+  // If a record is marked Absent (A) but has an in-time or out-time,
+  // override it: LATE if check-in after 09:00, HD if worked < 4 hrs, else P.
+  function correctStatus(status, inTime, outTime, duration) {
+    if (status !== 'A') return status;         // only fix wrongly-marked Absents
+    const hasIn  = inTime  && inTime  !== '';
+    const hasOut = outTime && outTime !== '';
+    if (!hasIn && !hasOut) return status;      // truly absent — no punch at all
+
+    // Parse duration (HH:MM or HH:MM:SS) into total minutes
+    function toMins(t) {
+      if (!t) return 0;
+      const parts = t.split(':').map(Number);
+      return (parts[0] || 0) * 60 + (parts[1] || 0);
+    }
+
+    // Parse HH:MM in-time into minutes since midnight (handles overnight shifts)
+    function inMins(t) {
+      if (!t) return 0;
+      const parts = t.split(':').map(Number);
+      return (parts[0] || 0) * 60 + (parts[1] || 0);
+    }
+
+    const workedMins = toMins(duration);
+
+    // Half Day: worked less than 4 hours (240 mins)
+    if (workedMins > 0 && workedMins < 240) return 'HD';
+
+    // Late: check-in after 09:00 AM (540 mins)
+    if (hasIn) {
+      const cin = inMins(inTime);
+      // Handle overnight/night shift: if cin > 720 (noon) treat as previous night — not late
+      if (cin <= 720 && cin > 557) return 'LATE'; // 557 mins = 9:17 AM
+    }
+
+    return 'P';  // has punch, worked >= 4 hrs, not late → Present
+  }
+
+  function statusCls(s) {
+    return { P:'sp', A:'sa', WO:'swo', WOP:'swop', L:'sl', LATE:'slat', HD:'shd' }[s] || '';
+  }
+
+  // ── Filters ──
+  function buildMonthFilter() {
+    const months = [...new Set(allData.map(d => {
+      const m = d.dateShort.match(/-([A-Za-z]+)$/);
+      return m ? m[1] : '';
+    }))].filter(Boolean);
+    monthSel.innerHTML = '<option value="">All Months</option>' +
+      months.map(m => `<option value="${m}">${m}</option>`).join('');
+  }
+
+  function applyFilters() {
+    const q  = searchBox.value.toLowerCase();
+    const st = statusSel.value;
+    const mo = monthSel.value;
+    filteredData = allData.filter(d =>
+      (!q  || d.empName.toLowerCase().includes(q) || d.empCode.toLowerCase().includes(q)) &&
+      (!st || d.status === st) &&
+      (!mo || d.dateShort.endsWith('-' + mo))
+    );
+    renderTable();
+    rowBadge.textContent = filteredData.length.toLocaleString() + ' rows';
+  }
+
+  searchBox.addEventListener('input', applyFilters);
+  statusSel.addEventListener('change', applyFilters);
+  monthSel.addEventListener('change', applyFilters);
+
+  function renderTable() {
+    const show = filteredData.slice(0, 2000);
+    tblBody.innerHTML = show.map((d, i) => `
+      <tr>
+        <td class="rnum">${i+1}</td>
+        <td class="eid">${d.empCode}</td>
+        <td class="ename">${toTitleCase(d.empName)}</td>
+        <td>${d.dateLong}</td>
+        <td style="color:var(--muted)">${d.dow}</td>
+        <td class="${statusCls(d.status)}">${d.status}</td>
+        <td>${d.inTime}</td>
+        <td>${d.outTime}</td>
+        <td>${d.duration}</td>
+      </tr>`).join('');
+    if (filteredData.length > 2000) {
+      tblBody.innerHTML += `<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:14px;font-family:'DM Mono',monospace;font-size:.74rem">
+        Showing 2,000 of ${filteredData.length.toLocaleString()} — export CSV for complete data</td></tr>`;
+    }
+  }
+
+  function renderSummary() {
+    const total     = allData.length;
+    const present   = allData.filter(d => d.status==='P'||d.status==='WOP').length;
+    const absent    = allData.filter(d => d.status==='A').length;
+    const late      = allData.filter(d => d.status==='LATE').length;
+    const halfday   = allData.filter(d => d.status==='HD').length;
+    const employees = new Set(allData.map(d => d.empCode)).size;
+    summaryGrid.innerHTML = `
+      <div class="sc">  <div class="lbl">Total Records</div><div class="val">${total.toLocaleString()}</div></div>
+      <div class="sc g"><div class="lbl">Present Days</div> <div class="val">${present.toLocaleString()}</div></div>
+      <div class="sc r"><div class="lbl">Absent Days</div>  <div class="val">${absent.toLocaleString()}</div></div>
+      <div class="sc" style="border-color:#ff9f43"><div class="lbl">Late</div><div class="val" style="color:#ff9f43">${late.toLocaleString()}</div></div>
+      <div class="sc" style="border-color:#fd79a8"><div class="lbl">Half Day</div><div class="val" style="color:#fd79a8">${halfday.toLocaleString()}</div></div>
+      <div class="sc p"><div class="lbl">Employees</div>    <div class="val">${employees}</div></div>`;
+  }
+
+  function toTitleCase(str) {
+    return str.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+  }
+
+  exportBtn.addEventListener('click', () => {
+    if (!filteredData.length) return;
+    const hdr  = ['Employee ID','Employee Name','Date','Day','Status','In Time','Out Time','Duration','Source File'];
+    const body = filteredData.map(d => [d.empCode,toTitleCase(d.empName),d.dateLong,d.dow,d.status,d.inTime,d.outTime,d.duration,d.src]);
+    const csv  = [hdr,...body].map(r => r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const a    = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(new Blob([csv],{type:'text/csv'})),
+      download: 'attendance_simplified.csv'
+    });
+    a.click();
+  });
+
+  clearBtn.addEventListener('click', () => {
+    uploadedFiles=[]; allData=[]; filteredData=[];
+    fileList.innerHTML=''; fileInput.value='';
+    [processBtn,exportBtn,clearBtn].forEach(b=>b.disabled=true);
+    results.style.display='none';
+    hideErr(); hideStatus();
+  });
+</script>
+</body>
+</html>

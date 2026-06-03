@@ -23,6 +23,7 @@ interface ImportStats {
 
 interface AttendanceRecord {
   employeeId: string;
+  employeeCode: string;
   employeeName: string;
   date: string;
   checkIn: string;
@@ -36,7 +37,7 @@ interface AttendanceRecord {
 
 interface ImportResult {
   record: AttendanceRecord;
-  status: 'inserted' | 'updated' | 'failed';
+  status: 'inserted' | 'updated' | 'preserved' | 'failed';
   error?: string;
   databaseRecord?: any;
 }
@@ -66,21 +67,25 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
       
       console.log('Fetching employees for company:', companyId);
       
-      const { data: employees, error } = await supabase
+      const { data: employees, error: empError } = await supabase
         .from('employees')
         .select('id, name, is_active')
         .eq('company_id', companyId);
 
-      if (error) {
-        console.error('Error fetching employees:', error);
+      if (empError) {
+        console.error('Error fetching employees:', empError);
         return;
       }
 
-      if (!error && employees) {
+      const employeesList = employees || [];
+
+      if (employeesList.length) {
         const nameToIdMap: Record<string, string> = {};
-        employees.forEach(employee => {
+        employeesList.forEach(employee => {
           const employeeName = employee.name?.trim().toLowerCase() || '';
-          nameToIdMap[employeeName] = employee.id;
+          if (employeeName) {
+            nameToIdMap[employeeName] = employee.id;
+          }
           console.log(`Mapping employee: "${employee.name}" (${employee.is_active ? 'active' : 'inactive'}) -> ${employee.id}`);
         });
         setEmployeeNameToId(nameToIdMap);
@@ -90,6 +95,123 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
 
     fetchEmployees();
   }, [companyId]);
+
+  const parseTimeString = (timeValue: string): { hours: number; minutes: number; seconds: number } | null => {
+    if (!timeValue) return null;
+    const normalized = timeValue.toString().trim();
+    const matches = normalized.match(/^(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?(?:\s*([AaPp][Mm]))?$/);
+    if (!matches) return null;
+
+    let hours = parseInt(matches[1], 10);
+    const minutes = matches[2] ? parseInt(matches[2], 10) : 0;
+    const seconds = matches[3] ? parseInt(matches[3], 10) : 0;
+    const period = matches[4]?.toUpperCase();
+
+    if (period) {
+      if (period === 'PM' && hours < 12) {
+        hours += 12;
+      }
+      if (period === 'AM' && hours === 12) {
+        hours = 0;
+      }
+    }
+
+    if (!period && hours >= 0 && hours <= 23) {
+      // keep as 24-hour time
+    }
+
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59 || seconds < 0 || seconds > 59) {
+      return null;
+    }
+
+    return { hours, minutes, seconds };
+  };
+
+  const toIsoDateTime = (baseDate: Date, timeValue: string): string | null => {
+    const parsed = parseTimeString(timeValue);
+    if (!parsed) return null;
+    const date = new Date(baseDate);
+    date.setHours(parsed.hours, parsed.minutes, parsed.seconds, 0);
+    return date.toISOString();
+  };
+
+  const normalizeStatus = (value: string): string => {
+    const normalized = (value || '').toString().trim().toLowerCase();
+
+    if (['p', 'present', '✓'].includes(normalized)) return 'present';
+    if (['a', 'absent', 'x'].includes(normalized)) return 'absent';
+    if (['late', 'l'].includes(normalized)) return 'late';
+    if (['hd', 'half_day', 'half day'].includes(normalized)) return 'half_day';
+    if (['wo', 'wop', 'holiday', 'off'].includes(normalized)) return 'holiday';
+
+    return normalized || 'present';
+  };
+
+  const getRecordCompletenessScore = (record: AttendanceRecord) => {
+    let score = 0;
+    if (record.checkIn?.trim()) score += 2;
+    if (record.checkOut?.trim()) score += 2;
+    if (record.status?.trim()) score += 1;
+    if (record.date?.trim()) score += 1;
+    return score;
+  };
+
+  const isRecordConsistent = (record: AttendanceRecord, baseDate: Date) => {
+    if (!record.checkIn?.trim() || !record.checkOut?.trim()) return true;
+
+    const checkIn = toIsoDateTime(baseDate, record.checkIn);
+    const checkOut = toIsoDateTime(baseDate, record.checkOut);
+
+    if (!checkIn || !checkOut) return false;
+
+    return new Date(checkOut).getTime() >= new Date(checkIn).getTime();
+  };
+
+  const mergeAttendanceTimes = (existingRecord: any, importedCheckIn: string | null, importedCheckOut: string | null) => {
+    const existingCheckIn = existingRecord?.check_in_time ? new Date(existingRecord.check_in_time).getTime() : null;
+    const existingCheckOut = existingRecord?.check_out_time ? new Date(existingRecord.check_out_time).getTime() : null;
+    const importedCheckInTime = importedCheckIn ? new Date(importedCheckIn).getTime() : null;
+    const importedCheckOutTime = importedCheckOut ? new Date(importedCheckOut).getTime() : null;
+
+    const mergedCheckIn = [existingCheckIn, importedCheckInTime].filter((value): value is number => value !== null && !Number.isNaN(value));
+    const mergedCheckOut = [existingCheckOut, importedCheckOutTime].filter((value): value is number => value !== null && !Number.isNaN(value));
+
+    return {
+      check_in_time: mergedCheckIn.length ? new Date(Math.min(...mergedCheckIn)).toISOString() : importedCheckIn || existingRecord?.check_in_time || null,
+      check_out_time: mergedCheckOut.length ? new Date(Math.max(...mergedCheckOut)).toISOString() : importedCheckOut || existingRecord?.check_out_time || null,
+    };
+  };
+
+  const shouldUseImportedRecord = (existingRecord: any, importedRecord: AttendanceRecord, baseDate: Date) => {
+    const hasExisting = Boolean(existingRecord?.id);
+
+    if (!hasExisting) {
+      return true;
+    }
+
+    const importedScore = getRecordCompletenessScore(importedRecord);
+    const existingScore = getRecordCompletenessScore({
+      ...importedRecord,
+      checkIn: existingRecord?.check_in_time ? new Date(existingRecord.check_in_time).toTimeString().slice(0, 5) : '',
+      checkOut: existingRecord?.check_out_time ? new Date(existingRecord.check_out_time).toTimeString().slice(0, 5) : '',
+      status: existingRecord?.status || '',
+      date: existingRecord?.date || ''
+    });
+
+    if (!isRecordConsistent(importedRecord, baseDate)) {
+      return false;
+    }
+
+    if (!importedRecord.checkIn?.trim() && existingRecord?.check_in_time) {
+      return false;
+    }
+
+    if (!importedRecord.checkOut?.trim() && existingRecord?.check_out_time) {
+      return false;
+    }
+
+    return importedScore >= existingScore;
+  };
 
   // Excel/CSV import handler
   const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -154,19 +276,27 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
       return dateStr;
     };
 
-    // Map Excel columns to DB fields using employee name for matching
+    // Map Excel columns to DB fields using employee name only for matching within the current company
     const mapped = (json as any[]).map((row: any, index: number) => {
       // Debug: Log raw row data and all available columns
       if (index === 0) {
         console.log('Available columns in Excel:', Object.keys(row));
       }
       console.log(`Row ${index + 1} raw data:`, row);
-      
-      const employeeName = row['Employee Name']?.toString().trim() || '';
-      const employeeId = employeeNameToId[employeeName.toLowerCase()] || '';
-      
+
+      const employeeCode = row['Emp ID']?.toString().trim()
+        || row['Employee Code']?.toString().trim()
+        || row['EmpId']?.toString().trim()
+        || '';
+      const employeeName = row['Employee Name']?.toString().trim()
+        || row['Name']?.toString().trim()
+        || '';
+      const normalizedName = employeeName.toLowerCase();
+      const employeeId = normalizedName ? employeeNameToId[normalizedName] || '' : '';
+
       // Debug: Log individual field values
       console.log(`Row ${index + 1} parsed values:`, {
+        employeeCode,
         employeeName,
         employeeId,
         date: row['Date'],
@@ -175,10 +305,11 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
         totalHours: row['Duration'],
         status: row['Status']
       });
-      
+
       return {
-        employeeId: employeeId,
-        employeeName: employeeName,
+        employeeId,
+        employeeCode,
+        employeeName,
         date: formatDateForDisplay(row['Date']),
         checkIn: row['In Time']?.toString() || '',
         checkOut: row['Out Time']?.toString() || '',
@@ -194,7 +325,8 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
     const errors: string[] = [];
     mapped.forEach((row, idx) => {
       if (!row.employeeId) {
-        errors.push(`Row ${idx + 1}: Employee '${row.employeeName}' not found.`);
+        const employeeReference = row.employeeName || row.employeeId || 'Unknown';
+        errors.push(`Row ${idx + 1}: Employee '${employeeReference}' not found. Verify Employee Name against the company roster.`);
       }
       if (!row.date) {
         errors.push(`Row ${idx + 1}: Date is required.`);
@@ -326,91 +458,23 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
         }
 
         // Convert times to ISO format
-        let checkInTime = null;
-        let checkOutTime = null;
+        let checkInTime: string | null = null;
+        let checkOutTime: string | null = null;
         
         try {
-          // Parse check-in time
-          if (record.checkIn && record.checkIn.trim()) {
-            const baseDate = parseDate(record.date);
-            if (baseDate) {
-              const checkInStr = record.checkIn.toString().trim();
-              
-              // Handle time formats: "19:41", "04:32", "15:39:31", "9:06:00 PM", etc.
-              let hours = 0, minutes = 0, seconds = 0;
-              
-              if (checkInStr.includes(':')) {
-                const parts = checkInStr.split(' ');
-                const timePart = parts[0];
-                const period = parts[1]; // Might be AM/PM or undefined
-                
-                const timeComponents = timePart.split(':');
-                hours = parseInt(timeComponents[0]);
-                minutes = parseInt(timeComponents[1]) || 0;
-                seconds = parseInt(timeComponents[2]) || 0;
-                
-                // Handle AM/PM if present
-                if (period) {
-                  if (period.toUpperCase() === 'PM' && hours !== 12) hours += 12;
-                  if (period.toUpperCase() === 'AM' && hours === 12) hours = 0;
-                }
-                // If no AM/PM and hours <= 12, assume it's 24-hour format (like "19:41")
-              } else {
-                // Handle simple time like "9" or "14"
-                hours = parseInt(checkInStr);
-                if (hours <= 12 && !checkInStr.includes('24')) {
-                  // Assume AM/PM format - if PM, add 12
-                  if (hours < 12) hours += 12; // Default to PM for single digit hours
-                }
-              }
-              
-              const checkInDate = new Date(baseDate);
-              checkInDate.setHours(hours, minutes, seconds, 0);
-              
-              if (!isNaN(checkInDate.getTime())) {
-                checkInTime = checkInDate.toISOString();
+          const baseDate = parseDate(record.date);
+          if (baseDate) {
+            if (record.checkIn && record.checkIn.trim()) {
+              const parsedCheckIn = toIsoDateTime(baseDate, record.checkIn.toString().trim());
+              if (parsedCheckIn) {
+                checkInTime = parsedCheckIn;
                 console.log(`Check-in time: ${record.checkIn} -> ${checkInTime}`);
               }
             }
-          }
-
-          // Parse check-out time
-          if (record.checkOut && record.checkOut.trim()) {
-            const baseDate = parseDate(record.date);
-            if (baseDate) {
-              const checkOutStr = record.checkOut.toString().trim();
-              
-              // Handle time formats: "04:32", "18:04:37", "15:39:31", "6:30:00 PM", etc.
-              let hours = 0, minutes = 0, seconds = 0;
-              
-              if (checkOutStr.includes(':')) {
-                const parts = checkOutStr.split(' ');
-                const timePart = parts[0];
-                const period = parts[1]; // Might be AM/PM or undefined
-                
-                const timeComponents = timePart.split(':');
-                hours = parseInt(timeComponents[0]);
-                minutes = parseInt(timeComponents[1]) || 0;
-                seconds = parseInt(timeComponents[2]) || 0;
-                
-                // Handle AM/PM if present
-                if (period) {
-                  if (period.toUpperCase() === 'PM' && hours !== 12) hours += 12;
-                  if (period.toUpperCase() === 'AM' && hours === 12) hours = 0;
-                }
-                // If no AM/PM and hours <= 12, assume it's 24-hour format (like "04:32")
-              } else {
-                hours = parseInt(checkOutStr);
-                if (hours <= 12 && !checkOutStr.includes('24')) {
-                  if (hours < 12) hours += 12; // Default to PM for single digit hours
-                }
-              }
-              
-              const checkOutDate = new Date(baseDate);
-              checkOutDate.setHours(hours, minutes, seconds, 0);
-              
-              if (!isNaN(checkOutDate.getTime())) {
-                checkOutTime = checkOutDate.toISOString();
+            if (record.checkOut && record.checkOut.trim()) {
+              const parsedCheckOut = toIsoDateTime(baseDate, record.checkOut.toString().trim());
+              if (parsedCheckOut) {
+                checkOutTime = parsedCheckOut;
                 console.log(`Check-out time: ${record.checkOut} -> ${checkOutTime}`);
               }
             }
@@ -427,24 +491,11 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
         const formattedDate = parsedDate ? parsedDate.toISOString().split('T')[0] : record.date;
 
         // Validate status against schema constraints
-        let validStatus = record.status?.toLowerCase() || 'present';
+        let validStatus = normalizeStatus(record.status);
         const allowedStatuses = ['present', 'absent', 'late', 'holiday', 'half_day'];
-        
-        // Handle special status values from the CSV
-        if (validStatus === 'p' || validStatus === '½p') {
-          validStatus = 'present';
-        } else if (validStatus === 'a') {
-          validStatus = 'absent';
-        } else if (validStatus === 'late') {
-          validStatus = 'late';
-        } else if (validStatus === 'hd') {
-          validStatus = 'half_day';
-        } else if (validStatus === 'wo' || validStatus === 'wop') {
-          validStatus = 'holiday'; // Week off
-        }
-        
+
         if (!allowedStatuses.includes(validStatus)) {
-          validStatus = 'present'; // Default to present if invalid
+          validStatus = 'present';
         }
 
         const attendanceData = {
@@ -464,13 +515,13 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
         // Check if record exists to determine insert vs update
         const { data: existingRecord, error: checkError } = await supabase
           .from('attendance')
-          .select('id')
+          .select('*')
           .eq('employee_id', record.employeeId)
           .eq('date', formattedDate)
           .single();
 
-        let operationStatus: 'inserted' | 'updated' | 'failed';
-        let dbRecord = null;
+        let operationStatus: 'inserted' | 'updated' | 'preserved' | 'failed';
+        let dbRecord = existingRecord;
 
         if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows found
           const errorMsg = `Check failed for ${record.employeeName} on ${record.date}: ${checkError.message}`;
@@ -479,7 +530,45 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
           fail++;
           operationStatus = 'failed';
         } else {
-          const { error: upsertError } = await supabase.from('attendance').upsert(attendanceData, {
+          const shouldReplace = shouldUseImportedRecord(existingRecord, record, parsedDate || new Date(record.date));
+
+          if (!shouldReplace) {
+            console.warn(`Preserving existing attendance for ${record.employeeName} on ${record.date} because the biometric import appears incomplete or unreliable.`);
+            errors.push(`Preserved existing attendance for ${record.employeeName} on ${record.date} because the biometric record was incomplete or inconsistent.`);
+            operationStatus = 'preserved';
+            fail = Math.max(0, fail);
+            results.push({
+              record,
+              status: 'preserved',
+              error: 'Biometric record was not trusted for overwrite.',
+              databaseRecord: existingRecord
+            });
+            continue;
+          }
+
+          if (reviewMode === 'replace') {
+            const { error: deleteError } = await supabase
+              .from('attendance')
+              .delete()
+              .match({
+                employee_id: record.employeeId,
+                date: formattedDate,
+                company_id: companyId
+              });
+
+            if (deleteError) {
+              console.warn(`Replace mode delete warning for ${record.employeeName} on ${record.date}:`, deleteError.message);
+            }
+          }
+
+          const mergedAttendanceData = existingRecord
+            ? {
+                ...attendanceData,
+                ...mergeAttendanceTimes(existingRecord, checkInTime, checkOutTime),
+              }
+            : attendanceData;
+
+          const { error: upsertError } = await supabase.from('attendance').upsert(mergedAttendanceData, {
             onConflict: 'employee_id,date'
           });
 
@@ -593,7 +682,8 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
             <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
               <p><strong>Required Columns:</strong></p>
               <ul className="ml-4 list-disc">
-                <li>Employee Name (used for matching with database)</li>
+                <li>Employee Name (required for matching within the current company)</li>
+                <li>Emp ID / Employee Code (optional; may not correspond to database IDs in biometric exports)</li>
                 <li>Date (YYYY-MM-DD format)</li>
                 <li>Check In (HH:MM format)</li>
                 <li>Check Out (HH:MM format)</li>
@@ -605,8 +695,8 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
               </ul>
               <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded">
                 <p className="text-sm">
-                  <strong>Important:</strong> Employee matching is done by <strong>Employee Name</strong> (not Employee ID). 
-                  Make sure employee names match exactly with the <strong>profiles</strong> table in the database.
+                  <strong>Important:</strong> Employee matching uses <strong>Employee Name only</strong> within the current company.
+                  Biometric file Emp IDs often do not match the app database ids, so name alignment is required.
                   Both <strong>active and inactive</strong> employees are included for historical data import.
                 </p>
               </div>
@@ -729,6 +819,7 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
               <table className="min-w-full border-collapse border border-gray-300">
                 <thead>
                   <tr className="bg-gray-50">
+                    <th className="border border-gray-300 px-2 py-1 text-xs">Emp ID</th>
                     <th className="border border-gray-300 px-2 py-1 text-xs">Employee Name</th>
                     <th className="border border-gray-300 px-2 py-1 text-xs">Date</th>
                     <th className="border border-gray-300 px-2 py-1 text-xs">Check In</th>
@@ -741,6 +832,7 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
                 <tbody>
                   {reviewData.slice(0, 10).map((row, idx) => (
                     <tr key={idx} className={row.employeeId ? '' : 'bg-red-50'}>
+                      <td className="border border-gray-300 px-2 py-1 text-xs">{row.employeeCode || '-'}</td>
                       <td className="border border-gray-300 px-2 py-1 text-xs">
                         {row.employeeName}
                         {!row.employeeId && <span className="text-red-500 ml-1"> (Not found)</span>}
