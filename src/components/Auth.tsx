@@ -10,7 +10,7 @@ import { toast } from '@/hooks/use-toast';
 import { Loader2, Building2, Users, Clock, UserPlus, LogIn, Download, Smartphone } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { supabase } from '@/lib/supabase';
-import { APP_NAME, APP_TAGLINE } from "../branding";
+import { APP_NAME, APP_TAGLINE, MOBILE_APP_DOWNLOAD_URL, MOBILE_APP_FILENAME } from "../branding";
 
 const Auth = () => {
   const [loginData, setLoginData] = useState({ email: '', password: '' });
@@ -404,12 +404,14 @@ const Auth = () => {
             Get the AttendEdge mobile app for on-the-go attendance tracking and leave management.
           </p>
           <Button
-            onClick={() => window.open('https://expo.dev/artifacts/eas/o2aKxHVk16arCdbL4fox7m.apk', '_blank')}
+            asChild
             className="w-full bg-white text-blue-600 hover:bg-white/90 font-medium touch-optimized touch-target"
             size="lg"
           >
-            <Download className="w-4 h-4 mr-2" />
-            Download Android App
+            <a href={MOBILE_APP_DOWNLOAD_URL} download={MOBILE_APP_FILENAME}>
+              <Download className="w-4 h-4 mr-2" />
+              Download Android App
+            </a>
           </Button>
           <p className="text-white/70 text-xs mt-2 text-center">
             Version 1.0.0 • Requires Android 8.0+

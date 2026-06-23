@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Expo build artifacts at repo root (canonical APK is in public/)
+application-*.apk
