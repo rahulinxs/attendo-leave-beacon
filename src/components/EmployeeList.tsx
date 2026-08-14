@@ -94,7 +94,6 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
         .from('employees')
         .select('*')
         .eq('company_id', currentCompany.id)
-        .eq('is_active', true)
         .order('name');
 
       if (error) {
@@ -545,6 +544,9 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
                     <Badge variant={employee.role === 'admin' || employee.role === 'super_admin' ? 'default' : 'secondary'}>
                       {employee.role.replace('_', ' ')}
                     </Badge>
+                    <Badge variant={employee.is_active ? 'default' : 'destructive'}>
+                      {employee.is_active ? 'Active' : 'Inactive'}
+                    </Badge>
                     <div className="flex space-x-1">
                       {canEditEmployee(employee) && (
                         <Button
@@ -556,7 +558,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
                           <Edit className="w-4 h-4" />
                         </Button>
                       )}
-                      {canRemoveEmployee(employee) && (
+                      {canRemoveEmployee(employee) && employee.is_active && (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button
