@@ -97,6 +97,8 @@ const CustomAttendanceImport: React.FC<CustomAttendanceImportProps> = ({
       'L': 'late',
       'H': 'half_day',
       'HD': 'half_day',
+      'WFH': 'work_from_home',
+      'WORK FROM HOME': 'work_from_home',
       'HOLIDAY': 'holiday',
       'LEAVE': 'absent',
       'WEEKEND': 'holiday'

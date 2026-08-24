@@ -4,6 +4,7 @@ import { useCompany } from '@/contexts/CompanyContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { THEME_OPTIONS } from '@/contexts/ThemeContext';
 import { toast } from '@/hooks/use-toast';
+import { formatLeaveDuration } from '@/utils/leaveDuration';
 
 import {
   Card,
@@ -114,6 +115,8 @@ interface LeaveRequest {
   start_date: string;
   end_date: string;
   total_days: number;
+  duration_type?: string | null;
+  session?: string | null;
   status: string | null;
   reason: string | null;
 }
@@ -551,7 +554,7 @@ const ReportsAnalytics2 = () => {
       attendanceRecords.length;
 
     const present = attendanceRecords.filter(
-      r => r.status === 'present'
+      r => r.status === 'present' || r.status === 'half_day' || r.status === 'work_from_home'
     ).length;
 
     const late = attendanceRecords.filter(
@@ -736,7 +739,9 @@ const ReportsAnalytics2 = () => {
       const present = teamAttendance.filter(
         a =>
           a.status === 'present' ||
-          a.status === 'late'
+          a.status === 'late' ||
+          a.status === 'half_day' ||
+          a.status === 'work_from_home'
       ).length;
 
       const absent = teamAttendance.filter(
@@ -1653,7 +1658,7 @@ const ReportsAnalytics2 = () => {
                           </td>
 
                           <td className="p-3">
-                            {leave.total_days}
+                            {formatLeaveDuration(leave)}
                           </td>
 
                           <td className="p-3">

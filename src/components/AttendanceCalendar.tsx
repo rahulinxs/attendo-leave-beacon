@@ -10,7 +10,7 @@ import { format } from 'date-fns';
 interface AttendanceRecord {
   id: string;
   date: string;
-  status: 'present' | 'absent' | 'holiday' | 'late';
+  status: 'present' | 'absent' | 'holiday' | 'late' | 'half_day' | 'work_from_home';
   check_in_time: string | null;
   check_out_time: string | null;
 }
@@ -40,7 +40,7 @@ const AttendanceCalendar: React.FC = () => {
       // Type cast the status field to the expected literal types
       const formattedData = data?.map(record => ({
         ...record,
-        status: record.status as 'present' | 'absent' | 'holiday' | 'late'
+        status: record.status as AttendanceRecord['status']
       })) || [];
 
       setAttendanceData(formattedData);
@@ -66,6 +66,8 @@ const AttendanceCalendar: React.FC = () => {
       case 'late': return 'bg-yellow-500';
       case 'absent': return 'bg-red-500';
       case 'holiday': return 'bg-blue-500';
+      case 'half_day': return 'bg-indigo-500';
+      case 'work_from_home': return 'bg-teal-600';
       default: return 'bg-gray-500';
     }
   };
@@ -103,13 +105,23 @@ const AttendanceCalendar: React.FC = () => {
               holiday: (date) => {
                 const attendance = getAttendanceForDate(date);
                 return attendance?.status === 'holiday';
+              },
+              half_day: (date) => {
+                const attendance = getAttendanceForDate(date);
+                return attendance?.status === 'half_day';
+              },
+              work_from_home: (date) => {
+                const attendance = getAttendanceForDate(date);
+                return attendance?.status === 'work_from_home';
               }
             }}
             modifiersStyles={{
               present: { backgroundColor: '#22c55e', color: 'white' },
               late: { backgroundColor: '#eab308', color: 'white' },
               absent: { backgroundColor: '#ef4444', color: 'white' },
-              holiday: { backgroundColor: '#3b82f6', color: 'white' }
+              holiday: { backgroundColor: '#3b82f6', color: 'white' },
+              half_day: { backgroundColor: '#6366f1', color: 'white' },
+              work_from_home: { backgroundColor: '#0d9488', color: 'white' }
             }}
           />
         </CardContent>

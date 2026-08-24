@@ -142,6 +142,7 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
     if (['a', 'absent', 'x'].includes(normalized)) return 'absent';
     if (['late', 'l'].includes(normalized)) return 'late';
     if (['hd', 'half_day', 'half day'].includes(normalized)) return 'half_day';
+    if (['wfh', 'work_from_home', 'work from home', 'remote'].includes(normalized)) return 'work_from_home';
     if (['wo', 'wop', 'holiday', 'off'].includes(normalized)) return 'holiday';
 
     return normalized || 'present';
@@ -492,7 +493,7 @@ const BulkAttendanceImport: React.FC<BulkAttendanceImportProps> = ({ open, setOp
 
         // Validate status against schema constraints
         let validStatus = normalizeStatus(record.status);
-        const allowedStatuses = ['present', 'absent', 'late', 'holiday', 'half_day'];
+        const allowedStatuses = ['present', 'absent', 'late', 'holiday', 'half_day', 'work_from_home'];
 
         if (!allowedStatuses.includes(validStatus)) {
           validStatus = 'present';

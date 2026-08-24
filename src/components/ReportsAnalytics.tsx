@@ -27,6 +27,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
 import { parseDateLocal } from '@/utils/dateUtils';
+import { formatLeaveDuration } from '@/utils/leaveDuration';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 
@@ -50,6 +51,8 @@ interface DatabaseLeaveRequest {
   start_date: string;
   end_date: string;
   total_days: number;
+  duration_type?: string | null;
+  session?: string | null;
   status: string | null;
   reason: string | null;
   admin_comments: string | null;
@@ -395,7 +398,7 @@ const ReportsAnalytics = () => {
       );
 
       const stats = {
-        present: filteredData.filter(r => r.status === 'present' || r.status === 'late').length,
+        present: filteredData.filter(r => r.status === 'present' || r.status === 'late' || r.status === 'half_day' || r.status === 'work_from_home').length,
         absent: filteredData.filter(r => r.status === 'absent').length,
         late: 0, // Late is now counted as present, so this is always 0
         total: filteredData.length
@@ -650,7 +653,7 @@ const ReportsAnalytics = () => {
         console.log('[DEBUG][Teams] teamAttendance:', teamAttendance);
         console.log('[DEBUG][Teams] teamLeaves:', teamLeaves);
         const totalDays = teamAttendance.length;
-        const presentDays = teamAttendance.filter(a => a.status === 'present' || a.status === 'late').length;
+        const presentDays = teamAttendance.filter(a => a.status === 'present' || a.status === 'late' || a.status === 'half_day' || a.status === 'work_from_home').length;
         const approvedLeaves = teamLeaves.filter(l => l.status === 'approved').length;
         const stat = {
           team_id: team,
@@ -724,9 +727,15 @@ const ReportsAnalytics = () => {
         const attendance = attendanceRecords?.find(record => record.employee_id === employee.id);
         const leave = leaveRequests?.find(request => request.employee_id === employee.id);
 
-        let status: 'present' | 'absent' | 'late' | 'leave' = 'absent';
+        let status: string = 'absent';
         if (leave) {
           status = 'leave';
+        } else if (attendance?.status === 'work_from_home') {
+          status = 'work_from_home';
+        } else if (attendance?.status === 'half_day') {
+          status = 'half_day';
+        } else if (attendance?.status === 'holiday') {
+          status = 'holiday';
         } else if (attendance && attendance.check_in_time) {
           const checkIn = new Date(attendance.check_in_time);
           if (
@@ -753,7 +762,7 @@ const ReportsAnalytics = () => {
 
       // Calculate stats
       const stats: AttendanceStats = {
-        present: records.filter(r => r.status === 'present' || r.status === 'late').length,
+        present: records.filter(r => r.status === 'present' || r.status === 'late' || r.status === 'half_day' || r.status === 'work_from_home').length,
         absent: records.filter(r => r.status === 'absent').length,
         late: records.filter(r => r.status === 'late').length,
         total: records.length,
@@ -889,7 +898,7 @@ const ReportsAnalytics = () => {
 
   const filteredAttendance = dailyAttendance.filter(record => {
     if (statusFilter === 'all') return true;
-    if (statusFilter === 'present') return record.status === 'present' || record.status === 'late';
+    if (statusFilter === 'present') return record.status === 'present' || record.status === 'late' || record.status === 'half_day' || record.status === 'work_from_home';
     if (statusFilter === 'late') return record.status === 'late';
     return record.status === statusFilter;
   });
@@ -1242,8 +1251,8 @@ const ReportsAnalytics = () => {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm">
                                 <Badge variant={
-                                  record.status === 'present' ? 'default' :
-                                  record.status === 'late' ? 'secondary' :
+                                  record.status === 'present' || record.status === 'work_from_home' ? 'default' :
+                                  record.status === 'late' || record.status === 'half_day' ? 'secondary' :
                                   record.status === 'leave' ? 'secondary' :
                                   'destructive'
                                 }>
@@ -1770,7 +1779,7 @@ const ReportsAnalytics = () => {
                                       </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                      {leave.total_days} day{leave.total_days !== 1 ? 's' : ''}
+                                      {formatLeaveDuration(leave)}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                       <Badge 
@@ -1927,7 +1936,7 @@ const ReportsAnalytics = () => {
                                 {format(new Date(record.end_date), 'MMM dd, yyyy')}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {record.total_days} day{record.total_days > 1 ? 's' : ''}
+                                {formatLeaveDuration(record)}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm">
                                 <Badge variant={

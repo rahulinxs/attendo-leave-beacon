@@ -3,6 +3,11 @@ import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCompany } from '@/contexts/CompanyContext';
+import {
+  getCurrentGeoLocation,
+  mergeAttendanceLocation,
+  type AttendanceLocation,
+} from '@/utils/geoLocation';
 
 interface AttendanceRecord {
   id: string;
@@ -10,8 +15,9 @@ interface AttendanceRecord {
   date: string;
   check_in_time: string | null;
   check_out_time: string | null;
-  status: 'present' | 'absent' | 'holiday' | 'late' | 'half_day';
+  status: 'present' | 'absent' | 'holiday' | 'late' | 'half_day' | 'work_from_home';
   notes?: string;
+  location?: AttendanceLocation | null;
 }
 
 export const useAttendance = () => {
@@ -43,7 +49,8 @@ export const useAttendance = () => {
       if (data) {
         setTodayAttendance({
           ...data,
-          status: data.status as 'present' | 'absent' | 'holiday' | 'late'
+          status: data.status as AttendanceRecord['status'],
+          location: (data.location as AttendanceLocation | null) ?? null,
         });
       } else {
         setTodayAttendance(null);
@@ -72,7 +79,8 @@ export const useAttendance = () => {
       
       const formattedData = data?.map(record => ({
         ...record,
-        status: record.status as 'present' | 'absent' | 'holiday' | 'late'
+        status: record.status as AttendanceRecord['status'],
+        location: (record.location as AttendanceLocation | null) ?? null,
       })) || [];
       
       setRecentAttendance(formattedData);
@@ -81,7 +89,10 @@ export const useAttendance = () => {
     }
   };
 
-  const checkIn = async (customTime?: Date) => {
+  const checkIn = async (
+    customTime?: Date,
+    status: 'present' | 'work_from_home' = 'present'
+  ) => {
     if (!user || !currentCompany) return false;
 
     setIsLoading(true);
@@ -91,9 +102,11 @@ export const useAttendance = () => {
       const timeString = timestamp.toISOString();
 
       // Try to update first
+      const geoPoint = await getCurrentGeoLocation();
+
       const { data: existing, error: fetchError } = await supabase
         .from('attendance')
-        .select('id')
+        .select('id, location')
         .eq('employee_id', user.id)
         .eq('company_id', currentCompany.id)
         .eq('date', today)
@@ -104,30 +117,31 @@ export const useAttendance = () => {
         return false;
       }
 
+      const location = mergeAttendanceLocation(existing?.location, 'check_in', geoPoint);
+
       if (existing) {
-        // Update existing record
         const { error } = await supabase
           .from('attendance')
-          .update({ check_in_time: timeString, status: 'present' })
+          .update({ check_in_time: timeString, status, location })
           .eq('id', existing.id);
         if (error) {
           console.error('Check-in update error:', error);
           return false;
         }
       } else {
-        // Insert new record
         const { error } = await supabase
           .from('attendance')
           .insert({
-          employee_id: user.id,
-          company_id: currentCompany.id,
-          date: today,
-          check_in_time: timeString,
-          status: 'present'
-        });
-      if (error) {
+            employee_id: user.id,
+            company_id: currentCompany.id,
+            date: today,
+            check_in_time: timeString,
+            status,
+            location,
+          });
+        if (error) {
           console.error('Check-in insert error:', error);
-        return false;
+          return false;
         }
       }
       await fetchTodayAttendance();
@@ -147,10 +161,16 @@ export const useAttendance = () => {
     try {
       const timestamp = customTime || new Date();
       const timeString = timestamp.toISOString();
+      const geoPoint = await getCurrentGeoLocation();
+      const location = mergeAttendanceLocation(
+        todayAttendance.location,
+        'check_out',
+        geoPoint
+      );
 
       const { error } = await supabase
         .from('attendance')
-        .update({ check_out_time: timeString })
+        .update({ check_out_time: timeString, location })
         .eq('id', todayAttendance.id);
 
       if (error) {
@@ -168,7 +188,7 @@ export const useAttendance = () => {
     }
   };
 
-  const markAttendanceForEmployee = async (employeeId: string, status: 'present' | 'absent' | 'late' | 'half_day', selectedDate?: Date) => {
+  const markAttendanceForEmployee = async (employeeId: string, status: 'present' | 'absent' | 'late' | 'half_day' | 'work_from_home', selectedDate?: Date) => {
     if (!currentCompany) return false;
 
     try {
@@ -187,7 +207,7 @@ export const useAttendance = () => {
         updated_at: now
       };
 
-      if (status === 'present' || status === 'late' || status === 'half_day') {
+      if (status === 'present' || status === 'late' || status === 'half_day' || status === 'work_from_home') {
         updateObj.check_in_time = now;
         // For half day, set check_out_time to the same as check_in_time
         updateObj.check_out_time = isHalfDay ? now : null;

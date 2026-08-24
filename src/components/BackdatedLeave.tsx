@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCompany } from '@/contexts/CompanyContext';
 import { supabase } from '@/integrations/supabase/client';
+import { resolveLeaveTotalDays, type DurationType, type LeaveSession } from '@/utils/leaveDuration';
+import { hasConflictingLeave } from '@/services/leaveOverlap';
 
 const BackdatedLeave: React.FC = () => {
   const { user } = useAuth();
@@ -10,6 +12,8 @@ const BackdatedLeave: React.FC = () => {
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
   const [leaveTypeId, setLeaveTypeId] = useState('');
+  const [durationType, setDurationType] = useState<DurationType>('full_day');
+  const [session, setSession] = useState<'' | LeaveSession>('');
   const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
@@ -34,8 +38,13 @@ const BackdatedLeave: React.FC = () => {
       setSubmitting(false);
       return;
     }
-    if (new Date(startDate) > new Date() || new Date(endDate) > new Date()) {
+    if (new Date(startDate) > new Date() || (durationType === 'full_day' && new Date(endDate) > new Date())) {
       setMessage('Backdated leave must be for past dates only.');
+      setSubmitting(false);
+      return;
+    }
+    if (durationType === 'half_day' && !session) {
+      setMessage('Please choose first half or second half.');
       setSubmitting(false);
       return;
     }
@@ -44,17 +53,39 @@ const BackdatedLeave: React.FC = () => {
       setSubmitting(false);
       return;
     }
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const resolvedEndDate = durationType === 'half_day' ? startDate : endDate;
+    const totalDays = resolveLeaveTotalDays(durationType, startDate, resolvedEndDate);
+    const resolvedSession = durationType === 'half_day' ? session : null;
+
+    try {
+      const conflict = await hasConflictingLeave({
+        employeeId: user.id,
+        companyId: currentCompany.id,
+        startDate,
+        endDate: resolvedEndDate,
+        durationType,
+        session: resolvedSession,
+      });
+      if (conflict) {
+        setMessage('This overlaps an existing pending or approved leave.');
+        setSubmitting(false);
+        return;
+      }
+    } catch (error) {
+      setMessage('Could not validate leave overlap.');
+      setSubmitting(false);
+      return;
+    }
 
     const { error } = await supabase.from('leave_requests').insert({
       employee_id: user.id,
       company_id: currentCompany.id,
       leave_type_id: leaveTypeId,
       start_date: startDate,
-      end_date: endDate,
+      end_date: resolvedEndDate,
       total_days: totalDays,
+      duration_type: durationType,
+      session: resolvedSession,
       reason,
       status: 'pending',
     });
@@ -67,6 +98,8 @@ const BackdatedLeave: React.FC = () => {
       setEndDate('');
       setReason('');
       setLeaveTypeId('');
+      setDurationType('full_day');
+      setSession('');
     }
     setSubmitting(false);
   };
@@ -90,16 +123,36 @@ const BackdatedLeave: React.FC = () => {
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1">Start Date</label>
+          <label className="block text-sm font-medium mb-1">Duration</label>
+          <select
+            className="w-full border rounded px-3 py-2"
+            value={durationType}
+            onChange={e => {
+              const value = e.target.value as DurationType;
+              setDurationType(value);
+              if (value === 'half_day') setEndDate(startDate);
+              else setSession('');
+            }}
+          >
+            <option value="full_day">Full day</option>
+            <option value="half_day">Half day</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">{durationType === 'half_day' ? 'Leave Date' : 'Start Date'}</label>
           <input
             type="date"
             className="w-full border rounded px-3 py-2"
             value={startDate}
             max={new Date().toISOString().split('T')[0]}
-            onChange={e => setStartDate(e.target.value)}
+            onChange={e => {
+              setStartDate(e.target.value);
+              if (durationType === 'half_day') setEndDate(e.target.value);
+            }}
             required
           />
         </div>
+        {durationType === 'full_day' ? (
         <div>
           <label className="block text-sm font-medium mb-1">End Date</label>
           <input
@@ -111,6 +164,21 @@ const BackdatedLeave: React.FC = () => {
             required
           />
         </div>
+        ) : (
+        <div>
+          <label className="block text-sm font-medium mb-1">Session</label>
+          <select
+            className="w-full border rounded px-3 py-2"
+            value={session}
+            onChange={e => setSession(e.target.value as LeaveSession)}
+            required
+          >
+            <option value="">First or second half</option>
+            <option value="first_half">First half</option>
+            <option value="second_half">Second half</option>
+          </select>
+        </div>
+        )}
         <div>
           <label className="block text-sm font-medium mb-1">Reason</label>
           <textarea

@@ -10,6 +10,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { Calendar, Send, X } from 'lucide-react';
 import { useCompany } from '@/contexts/CompanyContext';
+import {
+  formatLeaveDays,
+  resolveLeaveTotalDays,
+  type DurationType,
+  type LeaveSession,
+} from '@/utils/leaveDuration';
+import { hasConflictingLeave } from '@/services/leaveOverlap';
 
 interface LeaveType {
   id: string;
@@ -31,7 +38,9 @@ const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSuccess, onCancel
     leaveTypeId: '',
     startDate: '',
     endDate: '',
-    reason: ''
+    reason: '',
+    durationType: 'full_day' as DurationType,
+    session: '' as '' | LeaveSession,
   });
 
   useEffect(() => {
@@ -58,16 +67,13 @@ const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSuccess, onCancel
     }
   };
 
-  const calculateDays = (start: string, end: string) => {
-    if (!start || !end) return 0;
-    const startDate = new Date(start);
-    const endDate = new Date(end);
-    const diffTime = endDate.getTime() - startDate.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-    return diffDays > 0 ? diffDays : 0;
-  };
-
-  const totalDays = calculateDays(formData.startDate, formData.endDate);
+  const effectiveEndDate =
+    formData.durationType === 'half_day' ? formData.startDate : formData.endDate;
+  const totalDays = resolveLeaveTotalDays(
+    formData.durationType,
+    formData.startDate,
+    effectiveEndDate
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,7 +87,7 @@ const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSuccess, onCancel
       return;
     }
 
-    if (!formData.leaveTypeId || !formData.startDate || !formData.endDate || !formData.reason) {
+    if (!formData.leaveTypeId || !formData.startDate || !formData.reason) {
       toast({
         title: "Error",
         description: "Please fill in all required fields",
@@ -90,7 +96,25 @@ const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSuccess, onCancel
       return;
     }
 
-    if (new Date(formData.endDate) < new Date(formData.startDate)) {
+    if (formData.durationType === 'full_day' && !formData.endDate) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (formData.durationType === 'half_day' && !formData.session) {
+      toast({
+        title: "Error",
+        description: "Please choose first half or second half",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (formData.durationType === 'full_day' && new Date(formData.endDate) < new Date(formData.startDate)) {
       toast({
         title: "Error",
         description: "End date cannot be before start date",
@@ -101,15 +125,39 @@ const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSuccess, onCancel
 
     setIsLoading(true);
     try {
+      const startDate = formData.startDate;
+      const endDate = formData.durationType === 'half_day' ? formData.startDate : formData.endDate;
+      const session = formData.durationType === 'half_day' ? formData.session : null;
+
+      const conflict = await hasConflictingLeave({
+        employeeId: user.id,
+        companyId: currentCompany.id,
+        startDate,
+        endDate,
+        durationType: formData.durationType,
+        session: session || null,
+      });
+
+      if (conflict) {
+        toast({
+          title: "Error",
+          description: "This overlaps an existing pending or approved leave for the same period",
+          variant: "destructive"
+        });
+        return;
+      }
+
       const { error } = await supabase
         .from('leave_requests')
         .insert({
           employee_id: user.id,
           company_id: currentCompany.id,
           leave_type_id: formData.leaveTypeId,
-          start_date: formData.startDate,
-          end_date: formData.endDate,
+          start_date: startDate,
+          end_date: endDate,
           total_days: totalDays,
+          duration_type: formData.durationType,
+          session,
           reason: formData.reason,
           status: 'pending'
         });
@@ -134,7 +182,9 @@ const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSuccess, onCancel
         leaveTypeId: '',
         startDate: '',
         endDate: '',
-        reason: ''
+        reason: '',
+        durationType: 'full_day',
+        session: '',
       });
 
       if (onSuccess) onSuccess();
@@ -180,33 +230,83 @@ const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSuccess, onCancel
               </Select>
             </div>
 
+            <div className="md:col-span-2">
+              <Label>Duration *</Label>
+              <Select
+                value={formData.durationType}
+                onValueChange={(value: DurationType) =>
+                  setFormData({
+                    ...formData,
+                    durationType: value,
+                    endDate: value === 'half_day' ? formData.startDate : formData.endDate,
+                    session: value === 'half_day' ? formData.session : '',
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select duration" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="full_day">Full day</SelectItem>
+                  <SelectItem value="half_day">Half day</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <div>
-              <Label htmlFor="startDate">Start Date *</Label>
+              <Label htmlFor="startDate">{formData.durationType === 'half_day' ? 'Leave Date *' : 'Start Date *'}</Label>
               <Input
                 id="startDate"
                 type="date"
                 value={formData.startDate}
-                onChange={(e) => setFormData({...formData, startDate: e.target.value})}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    startDate: e.target.value,
+                    endDate: formData.durationType === 'half_day' ? e.target.value : formData.endDate,
+                  })
+                }
                 required
               />
             </div>
 
-            <div>
-              <Label htmlFor="endDate">End Date *</Label>
-              <Input
-                id="endDate"
-                type="date"
-                value={formData.endDate}
-                onChange={(e) => setFormData({...formData, endDate: e.target.value})}
-                required
-              />
-            </div>
+            {formData.durationType === 'full_day' ? (
+              <div>
+                <Label htmlFor="endDate">End Date *</Label>
+                <Input
+                  id="endDate"
+                  type="date"
+                  value={formData.endDate}
+                  onChange={(e) => setFormData({...formData, endDate: e.target.value})}
+                  required
+                />
+              </div>
+            ) : (
+              <div>
+                <Label>Session *</Label>
+                <Select
+                  value={formData.session}
+                  onValueChange={(value: LeaveSession) => setFormData({...formData, session: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="First or second half" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="first_half">First half</SelectItem>
+                    <SelectItem value="second_half">Second half</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {totalDays > 0 && (
               <div className="md:col-span-2">
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <p className="text-sm text-blue-800">
-                    <strong>Total Days:</strong> {totalDays} day{totalDays > 1 ? 's' : ''}
+                    <strong>Total Days:</strong> {formatLeaveDays(totalDays)}
+                    {formData.durationType === 'half_day' && formData.session
+                      ? ` (${formData.session === 'first_half' ? 'First half' : 'Second half'})`
+                      : ''}
                   </p>
                 </div>
               </div>

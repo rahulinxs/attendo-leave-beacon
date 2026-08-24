@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Clock, MapPin, User, TrendingUp, Download, CheckCircle, XCircle, CalendarIcon, Circle, HelpCircle, Edit, Crown, Users, Sparkles, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Clock, MapPin, User, TrendingUp, Download, CheckCircle, XCircle, CalendarIcon, Circle, HelpCircle, Edit, Crown, Users, Sparkles, Upload, ChevronLeft, ChevronRight, Home } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import AttendanceCalendar from './AttendanceCalendar';
@@ -22,6 +22,12 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { THEME_OPTIONS } from '@/contexts/ThemeContext';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import BulkAttendanceImport from './BulkAttendanceImport';
+import {
+  syncLeaveForAbsentAttendance,
+  syncLeaveForHalfDayAttendance,
+  cancelSyncedLeaveForAttendance,
+  type AttendanceLeaveSyncResult,
+} from '@/services/attendanceLeaveSync';
 
 const AttendanceManagement: React.FC = () => {
   const [showBulkImport, setShowBulkImport] = useState(false);
@@ -29,7 +35,6 @@ const AttendanceManagement: React.FC = () => {
   const { todayAttendance, recentAttendance, checkIn, checkOut, isLoading } = useAttendance();
   const { employees, isLoading: isEmployeesLoading, fetchEmployees } = useEmployees();
   const { currentCompany } = useCompany();
-  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [marking, setMarking] = useState<string | null>(null);
   const [todayAttendanceMap, setTodayAttendanceMap] = useState<Record<string, string>>({});
   const [showBackdateModal, setShowBackdateModal] = useState(false);
@@ -66,25 +71,7 @@ const AttendanceManagement: React.FC = () => {
   const { theme } = useTheme();
   const themeClass = THEME_OPTIONS.find(t => t.key === theme)?.className || '';
 
-  const getCurrentLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          });
-        },
-        (error) => {
-          console.log('Location error:', error);
-          setLocation(null);
-        }
-      );
-    }
-  };
-
   const handleCheckIn = async () => {
-    getCurrentLocation();
     const success = await checkIn();
     if (success) {
       toast({
@@ -101,7 +88,6 @@ const AttendanceManagement: React.FC = () => {
   };
 
   const handleCheckOut = async () => {
-    getCurrentLocation();
     const success = await checkOut();
     if (success) {
       toast({
@@ -186,6 +172,22 @@ const AttendanceManagement: React.FC = () => {
             </Tooltip>
           </TooltipProvider>
         );
+      case 'work_from_home':
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  className={`${badgeBase} bg-teal-600 hover:bg-teal-700 text-white border-teal-700`}
+                  aria-label="Work From Home: Employee is working from home"
+                >
+                  <Home className="w-4 h-4 mr-1" /> WFH
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>Work From Home: Employee is working remotely today</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
       case 'holiday':
         return (
           <TooltipProvider>
@@ -245,11 +247,121 @@ const AttendanceManagement: React.FC = () => {
   const isCheckedIn = todayAttendance?.check_in_time && !todayAttendance?.check_out_time;
   const isCheckedOut = todayAttendance?.check_in_time && todayAttendance?.check_out_time;
 
-  const markAttendanceForEmployee = async (employeeId: string, status: 'present' | 'absent' | 'late' | 'half_day') => {
+  const notifyLeaveSyncResult = (result: AttendanceLeaveSyncResult, attendanceSucceeded: boolean) => {
+    if (!attendanceSucceeded) return;
+
+    if (!result.ok) {
+      toast({
+        title: 'Attendance updated',
+        description: `Attendance saved, but leave record could not be synced: ${result.error}`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (result.action === 'created') {
+      toast({
+        title: 'Success',
+        description: result.message || 'Attendance updated and an approved leave record was created.',
+      });
+      return;
+    }
+
+    if (result.action === 'approved_existing') {
+      toast({
+        title: 'Success',
+        description: result.message || 'Attendance updated and the pending leave request was approved.',
+      });
+      return;
+    }
+
+    if (result.action === 'cancelled') {
+      toast({
+        title: 'Success',
+        description: 'Attendance updated and the synced leave record was cancelled.',
+      });
+      return;
+    }
+
+    if (result.action === 'skipped_existing' && result.message) {
+      toast({
+        title: 'Attendance updated',
+        description: result.message,
+      });
+      return;
+    }
+
+    toast({
+      title: 'Success',
+      description: 'Attendance marked successfully',
+    });
+  };
+
+  const syncLeaveWithAttendance = async (
+    employeeId: string,
+    dateStr: string,
+    previousStatus: string | undefined,
+    nextStatus: string
+  ) => {
+    if (!currentCompany?.id || !user?.id) return;
+
+    if (previousStatus && previousStatus !== nextStatus) {
+      if (previousStatus === 'absent') {
+        await cancelSyncedLeaveForAttendance({
+          employeeId,
+          companyId: currentCompany.id,
+          date: dateStr,
+          cancelledBy: user.id,
+          durationType: 'full_day',
+        });
+      }
+      if (previousStatus === 'half_day') {
+        await cancelSyncedLeaveForAttendance({
+          employeeId,
+          companyId: currentCompany.id,
+          date: dateStr,
+          cancelledBy: user.id,
+          durationType: 'half_day',
+        });
+      }
+    }
+
+    if (nextStatus === 'absent') {
+      const result = await syncLeaveForAbsentAttendance({
+        employeeId,
+        companyId: currentCompany.id,
+        date: dateStr,
+        approvedBy: user.id,
+      });
+      notifyLeaveSyncResult(result, true);
+      return;
+    }
+
+    if (nextStatus === 'half_day') {
+      const result = await syncLeaveForHalfDayAttendance({
+        employeeId,
+        companyId: currentCompany.id,
+        date: dateStr,
+        approvedBy: user.id,
+      });
+      notifyLeaveSyncResult(result, true);
+      return;
+    }
+
+    if (previousStatus === 'absent' || previousStatus === 'half_day') {
+      toast({
+        title: 'Success',
+        description: 'Attendance updated and the synced leave record was cancelled.',
+      });
+    }
+  };
+
+  const markAttendanceForEmployee = async (employeeId: string, status: 'present' | 'absent' | 'late' | 'half_day' | 'holiday' | 'work_from_home') => {
     if (!currentCompany) return;
     setMarking(employeeId + status);
     try {
       const dateStr = selectedDate.toISOString().split('T')[0];
+      const previousStatus = dateAttendanceMap[employeeId];
       const now = new Date().toISOString();
       let updateObj: any = { 
         status,
@@ -257,7 +369,7 @@ const AttendanceManagement: React.FC = () => {
       };
       
       // Handle check-in/check-out times based on status
-      if (status === 'present' || status === 'late' || status === 'half_day') {
+      if (status === 'present' || status === 'late' || status === 'half_day' || status === 'work_from_home') {
         updateObj.check_in_time = now;
         updateObj.check_out_time = null; // Will be set when they check out
       } else {
@@ -280,8 +392,18 @@ const AttendanceManagement: React.FC = () => {
         console.error('Attendance upsert error:', error);
         toast({ title: 'Error', description: 'Failed to mark attendance', variant: 'destructive' });
       } else {
-        toast({ title: 'Success', description: 'Attendance marked successfully' });
         setDateAttendanceMap((prev) => ({ ...prev, [employeeId]: status }));
+
+        if (
+          status === 'absent' ||
+          status === 'half_day' ||
+          previousStatus === 'absent' ||
+          previousStatus === 'half_day'
+        ) {
+          await syncLeaveWithAttendance(employeeId, dateStr, previousStatus, status);
+        } else {
+          toast({ title: 'Success', description: 'Attendance marked successfully' });
+        }
       }
     } catch (e) {
       console.error('Attendance marking error:', e);
@@ -442,7 +564,8 @@ const AttendanceManagement: React.FC = () => {
     setSubmittingStatusChange(true);
     try {
       const now = new Date().toISOString();
-      let updateObj: any = { 
+      const previousStatus = statusChangeForm.currentStatus;
+      let updateObj: any = {
         status: statusChangeForm.newStatus,
         updated_by: user?.id,
         updated_at: now,
@@ -450,9 +573,9 @@ const AttendanceManagement: React.FC = () => {
       };
 
       // Handle check-in/check-out times based on new status
-      if (statusChangeForm.newStatus === 'present' || statusChangeForm.newStatus === 'late' || statusChangeForm.newStatus === 'half_day') {
+      if (statusChangeForm.newStatus === 'present' || statusChangeForm.newStatus === 'late' || statusChangeForm.newStatus === 'half_day' || statusChangeForm.newStatus === 'work_from_home') {
         updateObj.check_in_time = now;
-        if (statusChangeForm.newStatus === 'present' || statusChangeForm.newStatus === 'late') {
+        if (statusChangeForm.newStatus === 'present' || statusChangeForm.newStatus === 'late' || statusChangeForm.newStatus === 'work_from_home') {
           updateObj.check_out_time = null; // Will be set when they check out
         }
       } else {
@@ -478,10 +601,24 @@ const AttendanceManagement: React.FC = () => {
           variant: "destructive",
         });
       } else {
-        toast({
-          title: "Success",
-          description: `Status changed from ${statusChangeForm.currentStatus} to ${statusChangeForm.newStatus}`,
-        });
+        if (
+          statusChangeForm.newStatus === 'absent' ||
+          statusChangeForm.newStatus === 'half_day' ||
+          previousStatus === 'absent' ||
+          previousStatus === 'half_day'
+        ) {
+          await syncLeaveWithAttendance(
+            statusChangeForm.employeeId,
+            statusChangeForm.date,
+            previousStatus,
+            statusChangeForm.newStatus
+          );
+        } else {
+          toast({
+            title: "Success",
+            description: `Status changed from ${statusChangeForm.currentStatus} to ${statusChangeForm.newStatus}`,
+          });
+        }
         setShowStatusChangeModal(false);
         setStatusChangeForm({
           employeeId: '',
@@ -833,6 +970,13 @@ const AttendanceManagement: React.FC = () => {
                         onClick={() => markAttendanceForEmployee(emp.id, 'half_day')}
                       >
                         Half Day
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="bg-teal-600 hover:bg-teal-700 text-white rounded shadow focus:ring-2 focus:ring-teal-400"
+                        onClick={() => markAttendanceForEmployee(emp.id, 'work_from_home')}
+                      >
+                        WFH
                       </Button>
                       <Button
                         size="sm"

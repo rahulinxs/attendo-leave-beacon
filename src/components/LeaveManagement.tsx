@@ -50,6 +50,8 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { parseDateLocal } from '@/utils/dateUtils';
+import { formatLeaveDays, formatLeaveDuration, resolveLeaveTotalDays, type DurationType, type LeaveSession } from '@/utils/leaveDuration';
+import { hasConflictingLeave } from '@/services/leaveOverlap';
 import * as XLSX from 'xlsx';
 import LeaveCalendar from './LeaveCalendar';
 import { useCompany } from '@/contexts/CompanyContext';
@@ -734,7 +736,7 @@ const LeaveManagement: React.FC = () => {
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-medium">{request.status === 'pending' ? 'Pending' : 'Approved'}</p>
-                        <p className="text-xs text-gray-500">{request.total_days} days</p>
+                        <p className="text-xs text-gray-500">{formatLeaveDuration(request)}</p>
                       </div>
                     </div>
                   ))}
@@ -884,7 +886,7 @@ const LeaveManagement: React.FC = () => {
                         <td className="p-2">
                           {format(parseDateLocal(request.start_date), 'MMM dd')} - {format(parseDateLocal(request.end_date), 'MMM dd')}
                         </td>
-                        <td className="p-2">{request.total_days}</td>
+                        <td className="p-2">{formatLeaveDuration(request)}</td>
                         <td className="p-2">
                           <Badge variant={getStatusColor(request.status)}>
                             {request.status}
@@ -1000,7 +1002,9 @@ const EmployeeLeaveView: React.FC = () => {
     leaveTypeId: '',
     startDate: '',
     endDate: '',
-    reason: ''
+    reason: '',
+    durationType: 'full_day' as DurationType,
+    session: '' as '' | LeaveSession,
   });
 
   useEffect(() => {
@@ -1021,7 +1025,7 @@ const EmployeeLeaveView: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.leaveTypeId || !formData.startDate || !formData.endDate || !formData.reason || !currentCompany) {
+    if (!formData.leaveTypeId || !formData.startDate || !formData.reason || !currentCompany) {
       toast({
         title: "Error",
         description: "Please fill in all fields",
@@ -1030,17 +1034,64 @@ const EmployeeLeaveView: React.FC = () => {
       return;
     }
 
-    const startDate = new Date(formData.startDate);
-    const endDate = new Date(formData.endDate);
-    const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    if (formData.durationType === 'full_day' && !formData.endDate) {
+      toast({
+        title: "Error",
+        description: "Please fill in all fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (formData.durationType === 'half_day' && !formData.session) {
+      toast({
+        title: "Error",
+        description: "Please choose first half or second half",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const startDate = formData.startDate;
+    const endDate = formData.durationType === 'half_day' ? formData.startDate : formData.endDate;
+    const totalDays = resolveLeaveTotalDays(formData.durationType, startDate, endDate);
+    const session = formData.durationType === 'half_day' ? formData.session : null;
+
+    try {
+      const conflict = await hasConflictingLeave({
+        employeeId: user?.id || '',
+        companyId: currentCompany.id,
+        startDate,
+        endDate,
+        durationType: formData.durationType,
+        session,
+      });
+      if (conflict) {
+        toast({
+          title: "Error",
+          description: "This overlaps an existing pending or approved leave",
+          variant: "destructive",
+        });
+        return;
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Could not validate leave overlap",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const { error } = await supabase.from('leave_requests').insert({
       employee_id: user?.id,
       company_id: currentCompany.id,
           leave_type_id: formData.leaveTypeId,
-          start_date: formData.startDate,
-          end_date: formData.endDate,
+          start_date: startDate,
+          end_date: endDate,
           total_days: totalDays,
+          duration_type: formData.durationType,
+          session,
           reason: formData.reason,
       status: user?.role === 'super_admin' ? 'approved' : 'pending'
         });
@@ -1056,7 +1107,7 @@ const EmployeeLeaveView: React.FC = () => {
         title: "Success",
         description: "Leave request submitted successfully",
       });
-      setFormData({ leaveTypeId: '', startDate: '', endDate: '', reason: '' });
+      setFormData({ leaveTypeId: '', startDate: '', endDate: '', reason: '', durationType: 'full_day', session: '' });
       setShowRequestForm(false);
       fetchLeaveRequests();
     }
@@ -1113,13 +1164,42 @@ const EmployeeLeaveView: React.FC = () => {
                       </Select>
                     </div>
                     <div>
-                  <Label htmlFor="startDate">Start Date</Label>
+                  <Label htmlFor="duration">Duration</Label>
+                  <Select
+                    value={formData.durationType}
+                    onValueChange={(value: DurationType) =>
+                      setFormData({
+                        ...formData,
+                        durationType: value,
+                        endDate: value === 'half_day' ? formData.startDate : formData.endDate,
+                        session: value === 'half_day' ? formData.session : '',
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="full_day">Full day</SelectItem>
+                      <SelectItem value="half_day">Half day</SelectItem>
+                    </SelectContent>
+                  </Select>
+                    </div>
+                    <div>
+                  <Label htmlFor="startDate">{formData.durationType === 'half_day' ? 'Leave Date' : 'Start Date'}</Label>
                       <Input
                         type="date"
                         value={formData.startDate}
-                        onChange={(e) => setFormData({...formData, startDate: e.target.value})}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            startDate: e.target.value,
+                            endDate: formData.durationType === 'half_day' ? e.target.value : formData.endDate,
+                          })
+                        }
                       />
                     </div>
+                    {formData.durationType === 'full_day' ? (
                     <div>
                   <Label htmlFor="endDate">End Date</Label>
                       <Input
@@ -1129,6 +1209,23 @@ const EmployeeLeaveView: React.FC = () => {
                     min={formData.startDate}
                       />
                     </div>
+                    ) : (
+                    <div>
+                  <Label htmlFor="session">Session</Label>
+                  <Select
+                    value={formData.session}
+                    onValueChange={(value: LeaveSession) => setFormData({...formData, session: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="First or second half" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="first_half">First half</SelectItem>
+                      <SelectItem value="second_half">Second half</SelectItem>
+                    </SelectContent>
+                  </Select>
+                    </div>
+                    )}
                 <div>
                   <Label htmlFor="reason">Reason</Label>
                   <Input
@@ -1233,7 +1330,7 @@ const EmployeeLeaveView: React.FC = () => {
                       <div>
                         <p className="font-medium">{request.leave_types?.name}</p>
                         <p className="text-sm text-gray-600">
-                          {format(parseDateLocal(request.start_date), 'MMM dd')} - {format(parseDateLocal(request.end_date), 'MMM dd')} ({request.total_days} days)
+                          {format(parseDateLocal(request.start_date), 'MMM dd')} - {format(parseDateLocal(request.end_date), 'MMM dd')} ({formatLeaveDuration(request)})
                         </p>
                         <p className="text-xs text-gray-500">{request.reason}</p>
                         </div>
@@ -1298,7 +1395,7 @@ const EmployeeLeaveView: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="p-4 bg-green-50 rounded-lg text-center">
                   <p className="text-2xl font-bold text-green-600">
-                    {recentAttendance.filter(a => a.status === 'present').length}
+                    {recentAttendance.filter(a => a.status === 'present' || a.status === 'work_from_home').length}
                   </p>
                   <p className="text-sm text-gray-600">Present Days</p>
                 </div>
@@ -1350,11 +1447,11 @@ const EmployeeLeaveView: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant={
-                          record.status === 'present' ? 'default' :
+                          record.status === 'present' || record.status === 'work_from_home' ? 'default' :
                           record.status === 'absent' ? 'destructive' :
                           record.status === 'late' ? 'secondary' : 'outline'
                         }>
-                          {record.status}
+                          {record.status === 'work_from_home' ? 'WFH' : record.status}
                         </Badge>
                         {record.notes && (
                           <p className="text-xs text-gray-500">{record.notes}</p>

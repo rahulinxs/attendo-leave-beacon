@@ -7,12 +7,16 @@ import { useAuth } from '@/contexts/AuthContext';
 import { CalendarIcon } from 'lucide-react';
 import { format, isWithinInterval } from 'date-fns';
 import { parseDateLocal, isDateInIntervalLocal } from '@/utils/dateUtils';
+import { formatLeaveDuration } from '@/utils/leaveDuration';
 
 interface LeaveRequest {
   id: string;
   start_date: string;
   end_date: string;
   status: 'pending' | 'approved' | 'rejected';
+  total_days?: number;
+  duration_type?: string | null;
+  session?: string | null;
   leave_types: {
     name: string;
   };
@@ -133,6 +137,8 @@ const LeaveCalendar: React.FC = () => {
                   </div>
                   <p className="text-sm text-gray-600">
                     {format(parseDateLocal(leave.start_date), 'MMM dd')} - {format(parseDateLocal(leave.end_date), 'MMM dd, yyyy')}
+                    {' • '}
+                    {formatLeaveDuration(leave)}
                   </p>
                 </div>
               ))}

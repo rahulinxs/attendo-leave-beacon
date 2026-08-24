@@ -47,6 +47,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
 import { parseDateLocal } from '@/utils/dateUtils';
+import { formatLeaveDuration } from '@/utils/leaveDuration';
 import * as XLSX from 'xlsx';
 
 interface TeamMember {
@@ -897,7 +898,7 @@ const LeaveRequestManagement: React.FC = () => {
                         <td className="p-3">
                           {format(parseDateLocal(request.start_date), 'MMM dd')} - {format(parseDateLocal(request.end_date), 'MMM dd')}
                         </td>
-                        <td className="p-3">{request.total_days}</td>
+                        <td className="p-3">{formatLeaveDuration(request)}</td>
                         <td className="p-3">
                           <Badge variant={getStatusColor(request.status)}>
                             {request.status}

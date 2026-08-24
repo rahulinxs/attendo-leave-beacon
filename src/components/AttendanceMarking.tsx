@@ -7,37 +7,17 @@ import { Switch } from '@/components/ui/switch';
 import { useAttendance } from '@/hooks/useAttendance';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
-import { Clock, MapPin, CheckCircle, XCircle, Calendar, Settings } from 'lucide-react';
+import { Clock, MapPin, CheckCircle, XCircle, Calendar, Settings, Home } from 'lucide-react';
 import { format } from 'date-fns';
 
 const AttendanceMarking: React.FC = () => {
   const { user } = useAuth();
   const { todayAttendance, checkIn, checkOut, isLoading } = useAttendance();
-  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [manualEntry, setManualEntry] = useState(false);
   const [manualDate, setManualDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [manualTime, setManualTime] = useState(format(new Date(), 'HH:mm'));
 
-  const getCurrentLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          });
-        },
-        (error) => {
-          console.log('Location error:', error);
-          setLocation(null);
-        }
-      );
-    }
-  };
-
-  const handleCheckIn = async () => {
-    getCurrentLocation();
-    
+  const handleCheckIn = async (status: 'present' | 'work_from_home' = 'present') => {
     let checkInTime;
     if (manualEntry) {
       checkInTime = new Date(`${manualDate}T${manualTime}`);
@@ -45,10 +25,10 @@ const AttendanceMarking: React.FC = () => {
       checkInTime = new Date();
     }
 
-    const success = await checkIn(checkInTime);
+    const success = await checkIn(checkInTime, status);
     if (success) {
       toast({
-        title: "Check-in Successful",
+        title: status === 'work_from_home' ? "Checked In (Work From Home)" : "Check-in Successful",
         description: `Checked in at ${format(checkInTime, 'HH:mm')}${manualEntry ? ' (Manual Entry)' : ''}`,
       });
     } else {
@@ -61,8 +41,6 @@ const AttendanceMarking: React.FC = () => {
   };
 
   const handleCheckOut = async () => {
-    getCurrentLocation();
-    
     let checkOutTime;
     if (manualEntry) {
       checkOutTime = new Date(`${manualDate}T${manualTime}`);
@@ -193,8 +171,9 @@ const AttendanceMarking: React.FC = () => {
         {/* Action Button */}
         <div className="text-center">
           {!todayAttendance?.check_in_time ? (
+            <div className="space-y-2">
             <Button
-              onClick={handleCheckIn}
+              onClick={() => handleCheckIn('present')}
               disabled={isLoading}
               variant="gradient"
               className="w-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
@@ -203,6 +182,17 @@ const AttendanceMarking: React.FC = () => {
               <CheckCircle className="w-5 h-5 mr-2" />
               {manualEntry ? 'Check In (Manual)' : 'Check In'}
             </Button>
+            <Button
+              onClick={() => handleCheckIn('work_from_home')}
+              disabled={isLoading}
+              variant="outline"
+              className="w-full border-teal-600 text-teal-700 hover:bg-teal-50"
+              size="lg"
+            >
+              <Home className="w-5 h-5 mr-2" />
+              {manualEntry ? 'Check In WFH (Manual)' : 'Check In (Work From Home)'}
+            </Button>
+            </div>
           ) : isCheckedIn ? (
             <Button
               onClick={handleCheckOut}
@@ -225,10 +215,12 @@ const AttendanceMarking: React.FC = () => {
         </div>
 
         {/* Location Info */}
-        {location && (
+        {todayAttendance?.location?.check_in && (
           <div className="flex items-center justify-center space-x-2 text-sm text-gray-500 bg-gray-50 p-2 rounded-lg">
             <MapPin className="w-4 h-4 text-green-600" />
-            <span>Location recorded successfully</span>
+            <span>
+              Location recorded ({todayAttendance.location.check_in.lat.toFixed(5)}, {todayAttendance.location.check_in.lng.toFixed(5)})
+            </span>
           </div>
         )}
       </CardContent>

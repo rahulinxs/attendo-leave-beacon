@@ -4,7 +4,7 @@ import { useAttendance } from '@/hooks/useAttendance';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Clock, CheckCircle, XCircle, MapPin, CalendarIcon, TrendingUp } from 'lucide-react';
+import { Calendar, Clock, CheckCircle, XCircle, MapPin, CalendarIcon, TrendingUp, Home } from 'lucide-react';
 import { format } from 'date-fns';
 import { utcToZonedTime } from 'date-fns-tz';
 import { toast } from '@/hooks/use-toast';
@@ -18,38 +18,22 @@ const EmployeeAttendance: React.FC = () => {
   const { currentCompany } = useCompany();
   const [employeeTab, setEmployeeTab] = useState('today');
   const [employeeAttendance, setEmployeeAttendance] = useState<any[]>([]);
-  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [backdateForm, setBackdateForm] = useState({ date: '', status: '', reason: '' });
   const [submittingBackdate, setSubmittingBackdate] = useState(false);
 
-  const getCurrentLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          });
-        },
-        (error) => {
-          setLocation(null);
-        }
-      );
-    }
-  };
-
-  const handleCheckIn = async () => {
-    getCurrentLocation();
-    const success = await checkIn();
+  const handleCheckIn = async (status: 'present' | 'work_from_home' = 'present') => {
+    const success = await checkIn(undefined, status);
     if (success) {
-      toast({ title: 'Check-in Successful', description: `Checked in at ${format(new Date(), 'HH:mm')}` });
+      toast({
+        title: status === 'work_from_home' ? 'Checked In (Work From Home)' : 'Check-in Successful',
+        description: `Checked in at ${format(new Date(), 'HH:mm')}`,
+      });
     } else {
       toast({ title: 'Check-in Failed', description: 'Unable to check in. Please try again.', variant: 'destructive' });
     }
   };
 
   const handleCheckOut = async () => {
-    getCurrentLocation();
     const success = await checkOut();
     if (success) {
       toast({ title: 'Check-out Successful', description: `Checked out at ${format(new Date(), 'HH:mm')}` });
@@ -68,6 +52,8 @@ const EmployeeAttendance: React.FC = () => {
         return <span className="bg-yellow-500 text-white px-2 py-1 rounded">Late</span>;
       case 'half_day':
         return <span className="bg-blue-500 text-white px-2 py-1 rounded">Half Day</span>;
+      case 'work_from_home':
+        return <span className="bg-teal-600 text-white px-2 py-1 rounded">WFH</span>;
       default:
         return <span className="bg-gray-400 text-white px-2 py-1 rounded">Not Marked</span>;
     }
@@ -175,7 +161,9 @@ const EmployeeAttendance: React.FC = () => {
                       <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
                         <CheckCircle className="w-8 h-8 text-green-600" />
                       </div>
-                      <p className="text-green-600 font-semibold">Checked In</p>
+                      <p className="text-green-600 font-semibold">
+                        {todayAttendance.status === 'work_from_home' ? 'Checked In (WFH)' : 'Checked In'}
+                      </p>
                       <p className="text-sm text-gray-600">
                         Since {format(new Date(todayAttendance.check_in_time), 'HH:mm')}
                       </p>
@@ -196,16 +184,28 @@ const EmployeeAttendance: React.FC = () => {
                 </div>
                 <div className="text-center">
                   {!todayAttendance?.check_in_time ? (
-                    <Button
-                      onClick={handleCheckIn}
-                      disabled={isLoading}
-                      variant="gradient"
-                      className="w-full"
-                      size="lg"
-                    >
-                      <CheckCircle className="w-5 h-5 mr-2" />
-                      Check In
-                    </Button>
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        onClick={() => handleCheckIn('present')}
+                        disabled={isLoading}
+                        variant="gradient"
+                        className="w-full"
+                        size="lg"
+                      >
+                        <CheckCircle className="w-5 h-5 mr-2" />
+                        Check In
+                      </Button>
+                      <Button
+                        onClick={() => handleCheckIn('work_from_home')}
+                        disabled={isLoading}
+                        variant="outline"
+                        className="w-full border-teal-600 text-teal-700 hover:bg-teal-50"
+                        size="lg"
+                      >
+                        <Home className="w-5 h-5 mr-2" />
+                        Check In (Work From Home)
+                      </Button>
+                    </div>
                   ) : isCheckedIn ? (
                     <Button
                       onClick={handleCheckOut}
@@ -223,10 +223,12 @@ const EmployeeAttendance: React.FC = () => {
                     </div>
                   )}
                 </div>
-                {location && (
+                {todayAttendance?.location?.check_in && (
                   <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
                     <MapPin className="w-4 h-4" />
-                    <span>Location recorded</span>
+                    <span>
+                      Location recorded ({todayAttendance.location.check_in.lat.toFixed(5)}, {todayAttendance.location.check_in.lng.toFixed(5)})
+                    </span>
                   </div>
                 )}
               </CardContent>
@@ -311,6 +313,7 @@ const EmployeeAttendance: React.FC = () => {
                   <option value="absent">Leave</option>
                   <option value="late">Late</option>
                   <option value="half_day">Half Day</option>
+                  <option value="work_from_home">Work From Home</option>
                 </select>
               </div>
               <div>

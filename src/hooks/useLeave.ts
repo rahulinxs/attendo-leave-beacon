@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCompany } from '@/contexts/CompanyContext';
+import { resolveLeaveTotalDays, type DurationType, type LeaveSession } from '@/utils/leaveDuration';
+import { hasConflictingLeave } from '@/services/leaveOverlap';
 
 interface LeaveRequest {
   id: string;
@@ -10,6 +12,8 @@ interface LeaveRequest {
   start_date: string;
   end_date: string;
   total_days: number;
+  duration_type?: string | null;
+  session?: string | null;
   reason: string;
   status: 'pending' | 'approved' | 'rejected';
   approved_by?: string;
@@ -67,6 +71,8 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
           start_date,
           end_date,
           total_days,
+          duration_type,
+          session,
           reason,
           status,
           approved_by,
@@ -265,18 +271,31 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
     leaveTypeId: string,
     startDate: string,
     endDate: string,
-    reason: string
+    reason: string,
+    durationType: DurationType = 'full_day',
+    session: LeaveSession | null = null
   ) => {
     if (!user || !currentCompany) return false;
 
     setIsLoading(true);
     try {
-      // Calculate total days
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      const resolvedEndDate = durationType === 'half_day' ? startDate : endDate;
+      const totalDays = resolveLeaveTotalDays(durationType, startDate, resolvedEndDate);
+      const resolvedSession = durationType === 'half_day' ? session : null;
 
-      // Auto-approve for super_admin
+      const conflict = await hasConflictingLeave({
+        employeeId: user.id,
+        companyId: currentCompany.id,
+        startDate,
+        endDate: resolvedEndDate,
+        durationType,
+        session: resolvedSession,
+      });
+      if (conflict) {
+        console.error('Leave request overlaps an existing request');
+        return false;
+      }
+
       const status = user.role === 'super_admin' ? 'approved' : 'pending';
       const approvedBy = user.role === 'super_admin' ? user.id : null;
       const approvedAt = user.role === 'super_admin' ? new Date().toISOString() : null;
@@ -288,8 +307,10 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
           company_id: currentCompany.id,
           leave_type_id: leaveTypeId,
           start_date: startDate,
-          end_date: endDate,
+          end_date: resolvedEndDate,
           total_days: totalDays,
+          duration_type: durationType,
+          session: resolvedSession,
           reason,
           status,
           approved_by: approvedBy,
