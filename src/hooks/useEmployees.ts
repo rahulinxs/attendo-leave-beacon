@@ -17,6 +17,7 @@ interface Employee {
   company_id?: string;
   team_id?: string;
   reporting_manager_id?: string;
+  avatar_url?: string | null;
 }
 
 export const useEmployees = () => {

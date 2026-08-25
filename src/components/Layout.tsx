@@ -775,8 +775,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="w-full justify-between">
                     <div className="flex items-center space-x-2">
-                    <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center">
+                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center overflow-hidden">
+                        {user?.avatar_url ? (
+                          <img src={user.avatar_url} alt="" className="w-full h-full object-cover" />
+                        ) : (
                         <User className="w-3 h-3 text-primary" />
+                        )}
                     </div>
                       <div className="text-left">
                         <div className="font-medium text-xs">{user?.name || 'User'}</div>

@@ -5,6 +5,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { THEME_OPTIONS } from '@/contexts/ThemeContext';
 import { toast } from '@/hooks/use-toast';
 import { formatLeaveDuration } from '@/utils/leaveDuration';
+import { format, startOfDay } from 'date-fns';
 
 import {
   Card,
@@ -71,13 +72,109 @@ import {
 
 import * as XLSX from 'xlsx';
 
-type DateFilter =
-  | 'day'
-  | 'week'
-  | 'month'
-  | 'quarter'
-  | 'halfyear'
-  | 'year';
+type PeriodType = 'daily' | 'weekly' | 'monthly' | 'quarter' | 'halfyear';
+
+const PERIOD_TYPE_OPTIONS: { value: PeriodType; label: string }[] = [
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'quarter', label: 'Quarter' },
+  { value: 'halfyear', label: 'Half-year' },
+];
+
+const MONTH_OPTIONS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+const toYmd = (date: Date) => format(date, 'yyyy-MM-dd');
+const THIS_YEAR = new Date().getFullYear();
+const YEAR_OPTIONS = Array.from({ length: 8 }, (_, i) => THIS_YEAR - i);
+
+const getWeeksOfMonth = (year: number, monthIndex: number) => {
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+  const weeks: { week: number; start: string; end: string; label: string }[] = [];
+  let day = 1;
+  let week = 1;
+  while (day <= lastDay) {
+    const endDay = Math.min(day + 6, lastDay);
+    const start = new Date(year, monthIndex, day);
+    const end = new Date(year, monthIndex, endDay);
+    weeks.push({
+      week,
+      start: toYmd(start),
+      end: toYmd(end),
+      label: `Week ${week} (${format(start, 'd')}–${format(end, 'd MMM')})`,
+    });
+    day = endDay + 1;
+    week += 1;
+  }
+  return weeks;
+};
+
+const resolveReportRange = (opts: {
+  year: number;
+  periodType: PeriodType;
+  selectedDate: string;
+  month: number;
+  week: number;
+  quarter: number;
+  half: 1 | 2;
+}) => {
+  const { year, periodType, selectedDate, month, week, quarter, half } = opts;
+  let start = new Date(year, 0, 1);
+  let end = new Date(year, 11, 31);
+
+  if (periodType === 'daily') {
+    const day = startOfDay(new Date(`${selectedDate}T00:00:00`));
+    start = day;
+    end = day;
+  } else if (periodType === 'weekly') {
+    const weeks = getWeeksOfMonth(year, month);
+    const selected = weeks.find(item => item.week === week) || weeks[0];
+    start = new Date(`${selected.start}T00:00:00`);
+    end = new Date(`${selected.end}T00:00:00`);
+  } else if (periodType === 'monthly') {
+    start = new Date(year, month, 1);
+    end = new Date(year, month + 1, 0);
+  } else if (periodType === 'quarter') {
+    const startMonth = (quarter - 1) * 3;
+    start = new Date(year, startMonth, 1);
+    end = new Date(year, startMonth + 3, 0);
+  } else {
+    start = new Date(year, half === 1 ? 0 : 6, 1);
+    end = new Date(year, half === 1 ? 6 : 12, 0);
+  }
+
+  const today = startOfDay(new Date());
+  const yearStart = new Date(year, 0, 1);
+  const yearEnd = new Date(year, 11, 31);
+  if (start < yearStart) start = yearStart;
+  if (end > yearEnd) end = yearEnd;
+  if (year === today.getFullYear() && end > today) end = today;
+  if (start > end) start = end;
+  return { start: toYmd(start), end: toYmd(end) };
+};
+
+const formatRangeLabel = (start: string, end: string) => {
+  const startDate = new Date(`${start}T00:00:00`);
+  const endDate = new Date(`${end}T00:00:00`);
+  if (start === end) return format(startDate, 'MMM d, yyyy');
+  return `${format(startDate, 'MMM d, yyyy')} – ${format(endDate, 'MMM d, yyyy')}`;
+};
+
+const FilterField = ({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) => (
+  <div className="space-y-1.5">
+    <span className="text-xs font-medium text-muted-foreground">{label}</span>
+    {children}
+  </div>
+);
 
 interface Employee {
   id: string;
@@ -152,15 +249,26 @@ const ReportsAnalytics2 = () => {
   const { theme } = useTheme();
   const themeClass = THEME_OPTIONS.find(t => t.key === theme)?.className || '';
 
+  const now = new Date();
+  const [reportYear, setReportYear] = useState(now.getFullYear());
+  const [periodType, setPeriodType] = useState<PeriodType>('monthly');
+  const [selectedDate, setSelectedDate] = useState(toYmd(now));
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
+  const [selectedWeek, setSelectedWeek] = useState(1);
+  const [selectedQuarter, setSelectedQuarter] = useState(
+    Math.floor(now.getMonth() / 3) + 1
+  );
+  const [selectedHalf, setSelectedHalf] = useState<1 | 2>(
+    now.getMonth() < 6 ? 1 : 2
+  );
+
   // Attendance Filters
-  const [attendanceRange, setAttendanceRange] = useState<DateFilter>('day');
   const [attendanceTeam, setAttendanceTeam] = useState<string>('all');
   const [attendanceSearch, setAttendanceSearch] = useState('');
   const [attendancePage, setAttendancePage] = useState(1);
   const [attendancePageSize, setAttendancePageSize] = useState(10);
 
   // Leave Filters
-  const [leaveRange, setLeaveRange] = useState<DateFilter>('month');
   const [leaveTeam, setLeaveTeam] = useState<string>('all');
   const [leaveStatus, setLeaveStatus] = useState<string>('all');
   const [leaveSearch, setLeaveSearch] = useState('');
@@ -168,44 +276,56 @@ const ReportsAnalytics2 = () => {
   const [leavePageSize, setLeavePageSize] = useState(10);
 
   // Team Filters
-  const [teamRange, setTeamRange] = useState<DateFilter>('month');
   const [teamPage, setTeamPage] = useState(1);
   const [teamPageSize, setTeamPageSize] = useState(10);
 
-  const getDateRange = (range: DateFilter) => {
-    const end = new Date();
-    const start = new Date();
+  const monthWeeks = useMemo(
+    () => getWeeksOfMonth(reportYear, selectedMonth),
+    [reportYear, selectedMonth]
+  );
 
-    switch (range) {
-      case 'day':
-        break;
+  const reportDates = useMemo(
+    () =>
+      resolveReportRange({
+        year: reportYear,
+        periodType,
+        selectedDate,
+        month: selectedMonth,
+        week: selectedWeek,
+        quarter: selectedQuarter,
+        half: selectedHalf,
+      }),
+    [reportYear, periodType, selectedDate, selectedMonth, selectedWeek, selectedQuarter, selectedHalf]
+  );
 
-      case 'week':
-        start.setDate(end.getDate() - 7);
-        break;
+  const yearStart = `${reportYear}-01-01`;
+  const yearEnd = `${reportYear}-12-31`;
+  const maxSelectableDate =
+    reportYear === THIS_YEAR ? toYmd(new Date()) : yearEnd;
 
-      case 'month':
-        start.setMonth(end.getMonth() - 1);
-        break;
-
-      case 'quarter':
-        start.setMonth(end.getMonth() - 3);
-        break;
-
-      case 'halfyear':
-        start.setMonth(end.getMonth() - 6);
-        break;
-
-      case 'year':
-        start.setFullYear(end.getFullYear() - 1);
-        break;
+  const applyYearDefaults = (year: number) => {
+    const today = new Date();
+    const isCurrentYear = year === today.getFullYear();
+    setReportYear(year);
+    if (isCurrentYear) {
+      setSelectedDate(toYmd(today));
+      setSelectedMonth(today.getMonth());
+      setSelectedQuarter(Math.floor(today.getMonth() / 3) + 1);
+      setSelectedHalf(today.getMonth() < 6 ? 1 : 2);
+    } else {
+      setSelectedDate(`${year}-01-01`);
+      setSelectedMonth(0);
+      setSelectedWeek(1);
+      setSelectedQuarter(1);
+      setSelectedHalf(1);
     }
-
-    return {
-      start: start.toISOString().split('T')[0],
-      end: end.toISOString().split('T')[0]
-    };
   };
+
+  useEffect(() => {
+    if (selectedWeek > monthWeeks.length) {
+      setSelectedWeek(1);
+    }
+  }, [monthWeeks.length, selectedWeek]);
 
   // Base data fetching (employees, teams, leave types - shared across tabs)
   const fetchBaseData = useCallback(async () => {
@@ -259,16 +379,15 @@ const ReportsAnalytics2 = () => {
       setAttendanceLoading(true);
       setError(null);
 
-      const attendanceDates = getDateRange(attendanceRange);
-      const today = new Date().toISOString().split('T')[0];
+      const dates = reportDates;
 
       const [attendanceRes] = await Promise.all([
         supabase
           .from('attendance')
           .select('*')
           .eq('company_id', currentCompany.id)
-          .gte('date', attendanceDates.start)
-          .lte('date', today)
+          .gte('date', dates.start)
+          .lte('date', dates.end)
       ]);
 
       if (attendanceRes.error) {
@@ -288,7 +407,7 @@ const ReportsAnalytics2 = () => {
     } finally {
       setAttendanceLoading(false);
     }
-  }, [currentCompany, attendanceRange]);
+  }, [currentCompany, reportDates]);
 
   const fetchLeaveData = useCallback(async () => {
     if (!currentCompany?.id) return;
@@ -297,15 +416,15 @@ const ReportsAnalytics2 = () => {
       setLeaveLoading(true);
       setError(null);
 
-      const leaveDates = getDateRange(leaveRange);
+      const dates = reportDates;
 
       const [leaveRes] = await Promise.all([
         supabase
           .from('leave_requests')
           .select('*')
           .eq('company_id', currentCompany.id)
-          .gte('start_date', leaveDates.start)
-          .lte('start_date', new Date().toISOString().split('T')[0])
+          .lte('start_date', dates.end)
+          .gte('end_date', dates.start)
       ]);
 
       if (leaveRes.error) {
@@ -325,7 +444,7 @@ const ReportsAnalytics2 = () => {
     } finally {
       setLeaveLoading(false);
     }
-  }, [currentCompany, leaveRange]);
+  }, [currentCompany, reportDates]);
 
   const fetchTeamData = useCallback(async () => {
     if (!currentCompany?.id) return;
@@ -334,23 +453,21 @@ const ReportsAnalytics2 = () => {
       setTeamLoading(true);
       setError(null);
 
-      const teamDates = getDateRange(teamRange);
-      const today = new Date().toISOString().split('T')[0];
-
+      const dates = reportDates;
       const [attendanceRes, leaveRes] = await Promise.all([
         supabase
           .from('attendance')
           .select('*')
           .eq('company_id', currentCompany.id)
-          .gte('date', teamDates.start)
-          .lte('date', today),
+          .gte('date', dates.start)
+          .lte('date', dates.end),
 
         supabase
           .from('leave_requests')
           .select('*')
           .eq('company_id', currentCompany.id)
-          .gte('start_date', teamDates.start)
-          .lte('start_date', today)
+          .lte('start_date', dates.end)
+          .gte('end_date', dates.start)
       ]);
 
       if (attendanceRes.error || leaveRes.error) {
@@ -371,7 +488,7 @@ const ReportsAnalytics2 = () => {
     } finally {
       setTeamLoading(false);
     }
-  }, [currentCompany, teamRange]);
+  }, [currentCompany, reportDates]);
 
   // Main data fetch function - calls appropriate tab-specific function
   const fetchData = useCallback(async () => {
@@ -402,19 +519,19 @@ const ReportsAnalytics2 = () => {
     if (activeTab === 'attendance' && employees.length > 0) {
       fetchAttendanceData();
     }
-  }, [attendanceRange, attendanceTeam, attendanceSearch, activeTab, fetchAttendanceData]);
+  }, [activeTab, fetchAttendanceData, employees.length]);
 
   useEffect(() => {
     if (activeTab === 'leave' && employees.length > 0) {
       fetchLeaveData();
     }
-  }, [leaveRange, leaveTeam, leaveStatus, leaveSearch, activeTab, fetchLeaveData]);
+  }, [activeTab, fetchLeaveData, employees.length]);
 
   useEffect(() => {
     if (activeTab === 'teams' && employees.length > 0) {
       fetchTeamData();
     }
-  }, [teamRange, activeTab, fetchTeamData]);
+  }, [activeTab, fetchTeamData, employees.length]);
 
   // Pagination handlers
   const handleAttendancePageChange = (newPage: number) => {
@@ -471,7 +588,7 @@ const ReportsAnalytics2 = () => {
   const attendanceEmployeeIds =
     attendanceFilteredEmployees.map(e => e.id);
 
-  const attendanceDates = getDateRange(attendanceRange);
+  const attendanceDates = reportDates;
 
   const attendanceRecords = useMemo(() => {
     // Get existing attendance records and determine late status
@@ -622,7 +739,7 @@ const ReportsAnalytics2 = () => {
 
   // Leave Analysis
 
-  const leaveDates = getDateRange(leaveRange);
+  const leaveDates = reportDates;
 
   const filteredLeaves = useMemo(() => {
     return leaveRequests.filter(leave => {
@@ -647,7 +764,7 @@ const ReportsAnalytics2 = () => {
       }
 
       if (
-        leave.start_date < leaveDates.start ||
+        leave.end_date < leaveDates.start ||
         leave.start_date > leaveDates.end
       ) {
         return false;
@@ -718,7 +835,7 @@ const ReportsAnalytics2 = () => {
 
   // Team Analytics
 
-  const teamDates = getDateRange(teamRange);
+  const teamDates = reportDates;
 
   const teamAnalytics = useMemo(() => {
     return teams.map(team => {
@@ -767,7 +884,7 @@ const ReportsAnalytics2 = () => {
       const leaveCount = leaveRequests.filter(
         l =>
           employeeIds.includes(l.employee_id) &&
-          l.start_date >= teamDates.start &&
+          l.end_date >= teamDates.start &&
           l.start_date <= teamDates.end
       ).length;
 
@@ -970,6 +1087,153 @@ const ReportsAnalytics2 = () => {
         </div>
       </div>
 
+      <Card className="border-0 shadow-lg">
+        <CardContent className="pt-6 space-y-3">
+          <div className="flex flex-wrap items-end gap-4">
+            <FilterField label="Year">
+              <Select
+                value={String(reportYear)}
+                onValueChange={(value) => applyYearDefaults(Number(value))}
+              >
+                <SelectTrigger className="w-[130px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {YEAR_OPTIONS.map((year) => (
+                    <SelectItem key={year} value={String(year)}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterField>
+
+            <FilterField label="View">
+              <Select
+                value={periodType}
+                onValueChange={(value) => setPeriodType(value as PeriodType)}
+              >
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PERIOD_TYPE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterField>
+
+            {periodType === 'daily' && (
+              <FilterField label="Date">
+                <Input
+                  type="date"
+                  className="w-[170px]"
+                  min={yearStart}
+                  max={maxSelectableDate}
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                />
+              </FilterField>
+            )}
+
+            {(periodType === 'weekly' || periodType === 'monthly') && (
+              <FilterField label="Month">
+                <Select
+                  value={String(selectedMonth)}
+                  onValueChange={(value) => {
+                    setSelectedMonth(Number(value));
+                    setSelectedWeek(1);
+                  }}
+                >
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MONTH_OPTIONS.map((name, index) => {
+                      const isFuture =
+                        reportYear === THIS_YEAR && index > now.getMonth();
+                      return (
+                        <SelectItem
+                          key={name}
+                          value={String(index)}
+                          disabled={isFuture}
+                        >
+                          {name}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </FilterField>
+            )}
+
+            {periodType === 'weekly' && (
+              <FilterField label="Week">
+                <Select
+                  value={String(selectedWeek)}
+                  onValueChange={(value) => setSelectedWeek(Number(value))}
+                >
+                  <SelectTrigger className="w-[220px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {monthWeeks.map((week) => (
+                      <SelectItem key={week.week} value={String(week.week)}>
+                        {week.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FilterField>
+            )}
+
+            {periodType === 'quarter' && (
+              <FilterField label="Quarter">
+                <Select
+                  value={String(selectedQuarter)}
+                  onValueChange={(value) => setSelectedQuarter(Number(value))}
+                >
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Q1 (Jan–Mar)</SelectItem>
+                    <SelectItem value="2">Q2 (Apr–Jun)</SelectItem>
+                    <SelectItem value="3">Q3 (Jul–Sep)</SelectItem>
+                    <SelectItem value="4">Q4 (Oct–Dec)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FilterField>
+            )}
+
+            {periodType === 'halfyear' && (
+              <FilterField label="Half-year">
+                <Select
+                  value={String(selectedHalf)}
+                  onValueChange={(value) =>
+                    setSelectedHalf(Number(value) as 1 | 2)
+                  }
+                >
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">First half (Jan–Jun)</SelectItem>
+                    <SelectItem value="2">Second half (Jul–Dec)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FilterField>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {reportYear} · {formatRangeLabel(reportDates.start, reportDates.end)}
+          </p>
+        </CardContent>
+      </Card>
+
       <Tabs
         value={activeTab}
         onValueChange={setActiveTab}
@@ -1004,43 +1268,6 @@ const ReportsAnalytics2 = () => {
 
             <CardContent className="pt-6">
               <div className="flex flex-wrap gap-4">
-                <Select
-                  value={attendanceRange}
-                  onValueChange={(v: DateFilter) =>
-                    setAttendanceRange(v)
-                  }
-                >
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    <SelectItem value="day">
-                      Today
-                    </SelectItem>
-
-                    <SelectItem value="week">
-                      This Week
-                    </SelectItem>
-
-                    <SelectItem value="month">
-                      This Month
-                    </SelectItem>
-
-                    <SelectItem value="quarter">
-                      Quarter
-                    </SelectItem>
-
-                    <SelectItem value="halfyear">
-                      Half Year
-                    </SelectItem>
-
-                    <SelectItem value="year">
-                      Year
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-
                 {teams.length > 0 && (
                   <Select
                     value={attendanceTeam}
@@ -1269,7 +1496,7 @@ const ReportsAnalytics2 = () => {
                   Attendance Records
                 </CardTitle>
                 <Button
-                  onClick={() => exportAttendance('xlsx')}
+                  onClick={() => exportAttendance()}
                   className="mt-4"
                   variant="outline"
                 >
@@ -1421,38 +1648,6 @@ const ReportsAnalytics2 = () => {
           <Card className="border-0 shadow-lg">
             <CardContent className="pt-6">
               <div className="flex flex-wrap gap-4">
-                <Select
-                  value={leaveRange}
-                  onValueChange={(v: DateFilter) =>
-                    setLeaveRange(v)
-                  }
-                >
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    <SelectItem value="day">
-                      Today
-                    </SelectItem>
-                    <SelectItem value="week">
-                      Weekly
-                    </SelectItem>
-                    <SelectItem value="month">
-                      Monthly
-                    </SelectItem>
-                    <SelectItem value="quarter">
-                      Quarterly
-                    </SelectItem>
-                    <SelectItem value="halfyear">
-                      Half Yearly
-                    </SelectItem>
-                    <SelectItem value="year">
-                      Yearly
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-
                 <Select
                   value={leaveTeam}
                   onValueChange={setLeaveTeam}
@@ -1742,43 +1937,6 @@ const ReportsAnalytics2 = () => {
           <Card className="border-0 shadow-lg">
             <CardContent className="pt-6">
               <div className="flex flex-wrap gap-4">
-                <Select
-                  value={teamRange}
-                  onValueChange={(v: DateFilter) =>
-                    setTeamRange(v)
-                  }
-                >
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    <SelectItem value="day">
-                      Today
-                    </SelectItem>
-
-                    <SelectItem value="week">
-                      Weekly
-                    </SelectItem>
-
-                    <SelectItem value="month">
-                      Monthly
-                    </SelectItem>
-
-                    <SelectItem value="quarter">
-                      Quarterly
-                    </SelectItem>
-
-                    <SelectItem value="halfyear">
-                      Half Yearly
-                    </SelectItem>
-
-                    <SelectItem value="year">
-                      Yearly
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-
                 <Button
                   className="ml-auto"
                   onClick={exportTeams}

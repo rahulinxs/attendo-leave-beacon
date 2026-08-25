@@ -6,17 +6,28 @@ import { THEME_OPTIONS } from '@/contexts/ThemeContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from './ui/dialog';
 import { calculateProfileCompletion, getCompletionColor, getCompletionBgColor, getCompletionProgressColor } from '@/utils/profileCompletion';
 import { Progress } from './ui/progress';
+import { Camera } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ProfileProps {
   employeeId: string;
+  readOnly?: boolean;
 }
 
 const genderOptions = ["Male", "Female", "Other"];
 const bloodGroupOptions = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 const maritalStatusOptions = ["Single", "Married", "Divorced", "Widowed"];
 
-const Profile: React.FC<ProfileProps> = ({ employeeId }) => {
-  const { profileData, fetchUserProfile, loading, updateUserProfile, uploadDocument } = useUserProfile(employeeId);
+const initialsFromName = (name: string) => {
+  const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly = false }) => {
+  const { user, refreshUser } = useAuth();
+  const { profileData, fetchUserProfile, loading, updateUserProfile, uploadDocument, uploadAvatar } = useUserProfile(employeeId);
   const [personalForm, setPersonalForm] = useState({
     name: '',
     date_of_birth: '',
@@ -65,6 +76,9 @@ const Profile: React.FC<ProfileProps> = ({ employeeId }) => {
   const [editTab, setEditTab] = useState<string | null>(null);
   const [acceptAllLoading, setAcceptAllLoading] = useState(false);
   const [acceptAllSuccess, setAcceptAllSuccess] = useState(false);
+  const [photoError, setPhotoError] = useState('');
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const photoInputRef = React.useRef<HTMLInputElement>(null);
   const { theme } = useTheme();
   const themeClass = THEME_OPTIONS.find(t => t.key === theme)?.className || '';
 
@@ -246,6 +260,21 @@ const Profile: React.FC<ProfileProps> = ({ employeeId }) => {
     setDocUploading(false);
   };
 
+  const handlePhotoUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    if (readOnly || !e.target.files?.[0]) return;
+    const file = e.target.files[0];
+    e.target.value = '';
+    setPhotoLoading(true);
+    setPhotoError('');
+    const result = await uploadAvatar(file);
+    if (result.error) {
+      setPhotoError(result.error);
+    } else if (user?.id === employeeId) {
+      await refreshUser();
+    }
+    setPhotoLoading(false);
+  };
+
   // Accept All handler
   const handleAcceptAll = async () => {
     setAcceptAllLoading(true);
@@ -292,10 +321,69 @@ const Profile: React.FC<ProfileProps> = ({ employeeId }) => {
     setAcceptAllLoading(false);
   };
 
+  const avatarUrl = profileData?.employee?.avatar_url as string | undefined;
+  const displayName = personalForm.name || profileData?.employee?.name || '';
+
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="font-bold text-foreground">Employee Profile</h2>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            disabled={readOnly || photoLoading}
+            className={`relative w-24 h-24 rounded-full bg-gradient-to-br from-blue-200 to-purple-200 p-1 shadow-md flex items-center justify-center overflow-hidden ${!readOnly ? 'cursor-pointer group' : 'cursor-default'}`}
+            onClick={() => !readOnly && photoInputRef.current?.click()}
+            aria-label={avatarUrl ? 'Change profile picture' : 'Upload profile picture'}
+          >
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={displayName || 'Profile'}
+                className="h-full w-full rounded-full object-cover bg-white pointer-events-none"
+              />
+            ) : (
+              <div className="h-full w-full rounded-full bg-white flex items-center justify-center text-xl font-bold text-blue-700 pointer-events-none">
+                {initialsFromName(displayName)}
+              </div>
+            )}
+            {!readOnly && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                <Camera className="w-8 h-8 text-white drop-shadow" />
+              </div>
+            )}
+          </button>
+          {!readOnly && (
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handlePhotoUpload}
+              className="hidden"
+              aria-label="Upload profile picture"
+            />
+          )}
+          <div>
+            <h2 className="font-bold text-foreground">Employee Profile</h2>
+            <p className="text-sm text-muted-foreground">
+              {readOnly
+                ? 'Profile photo'
+                : avatarUrl
+                  ? 'Hover the photo or use Change photo to replace it'
+                  : 'Click the photo to upload a profile picture'}
+            </p>
+            {!readOnly && (
+              <button
+                type="button"
+                className="mt-1 text-sm font-medium text-blue-700 hover:underline disabled:opacity-50"
+                onClick={() => photoInputRef.current?.click()}
+                disabled={photoLoading}
+              >
+                {photoLoading ? 'Uploading…' : avatarUrl ? 'Change photo' : 'Add photo'}
+              </button>
+            )}
+            {photoError && <p className="text-xs text-red-600 mt-1">{photoError}</p>}
+          </div>
+        </div>
         <div className={`${getCompletionBgColor(profileCompletion.percentage)} px-4 py-2 rounded-lg border`}>
           <div className="flex items-center gap-3">
             <div className="text-center">
@@ -1081,6 +1169,7 @@ const Profile: React.FC<ProfileProps> = ({ employeeId }) => {
           </DialogContent>
         </Dialog>
       )}
+      {!readOnly && (
       <div className="mb-4 flex items-center gap-4">
         <button
           className="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 disabled:opacity-50"
@@ -1091,6 +1180,7 @@ const Profile: React.FC<ProfileProps> = ({ employeeId }) => {
         </button>
         {acceptAllSuccess && <span className="text-green-700 font-semibold">All changes saved!</span>}
       </div>
+      )}
       {loading && <div className="mt-4 text-blue-600">Loading profile...</div>}
     </div>
   );

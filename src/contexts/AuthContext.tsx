@@ -10,6 +10,7 @@ interface User {
   department?: string;
   position?: string;
   platform_super_admin?: boolean;
+  avatar_url?: string | null;
 }
 
 interface AuthContextType {
@@ -18,6 +19,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signup: (email: string, password: string, name: string, role?: 'employee' | 'reporting_manager' | 'admin') => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
   isLoading: boolean;
   signupWithCompany: (
     email: string,
@@ -147,6 +149,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           department: profile.department,
           position: profile.position,
           platform_super_admin: profile.platform_super_admin || false,
+          avatar_url: profile.avatar_url || null,
         });
       } else {
         console.log('No profile found for user:', userId);
@@ -238,6 +241,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const refreshUser = async () => {
+    const { data: { session: current } } = await supabase.auth.getSession();
+    if (current?.user) {
+      await fetchUserProfile(current.user.id);
+    }
+  };
+
   const logout = async () => {
     console.log('Logging out user');
     await supabase.auth.signOut();
@@ -309,7 +319,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, login, signup, logout, isLoading, signupWithCompany, platform_super_admin: user?.platform_super_admin || false }}>
+    <AuthContext.Provider value={{ user, session, login, signup, logout, refreshUser, isLoading, signupWithCompany, platform_super_admin: user?.platform_super_admin || false }}>
       {children}
     </AuthContext.Provider>
   );

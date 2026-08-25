@@ -180,11 +180,60 @@ export const useUserProfile = (employeeId: string) => {
     setLoading(false);
   };
 
+  const uploadAvatar = async (file: File): Promise<{ error?: string }> => {
+    if (!employeeId) return { error: 'Missing employee' };
+    if (!file.type.startsWith('image/')) {
+      return { error: 'Please choose an image file (JPG, PNG, or WebP).' };
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      return { error: 'Image must be 5 MB or smaller.' };
+    }
+
+    const previousUrl = profileData?.employee?.avatar_url as string | undefined;
+
+    // New object every time so replace does not depend on storage upsert/update rights.
+    const fileExt = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+    const filePath = `employee-avatars/${employeeId}/${Date.now()}.${fileExt}`;
+    const { error: uploadError } = await supabase.storage
+      .from('company-document')
+      .upload(filePath, file, { upsert: false, contentType: file.type, cacheControl: '0' });
+    if (uploadError) {
+      return { error: uploadError.message || 'Failed to upload photo' };
+    }
+    const { data: urlData } = supabase.storage.from('company-document').getPublicUrl(filePath);
+    const publicUrl = urlData?.publicUrl;
+    if (!publicUrl) {
+      return { error: 'Failed to get photo URL' };
+    }
+    const { error: updateError } = await supabase
+      .from('employees')
+      .update({ avatar_url: publicUrl })
+      .eq('id', employeeId);
+    if (updateError) {
+      return { error: updateError.message || 'Failed to save photo' };
+    }
+
+    if (previousUrl) {
+      const marker = '/company-document/';
+      const markerIndex = previousUrl.indexOf(marker);
+      if (markerIndex !== -1) {
+        const oldPath = decodeURIComponent(previousUrl.slice(markerIndex + marker.length).split('?')[0]);
+        if (oldPath.startsWith(`employee-avatars/${employeeId}`)) {
+          await supabase.storage.from('company-document').remove([oldPath]);
+        }
+      }
+    }
+
+    await fetchUserProfile();
+    return {};
+  };
+
   return {
     loading,
     profileData,
     fetchUserProfile,
     updateUserProfile,
     uploadDocument,
+    uploadAvatar,
   };
 }; 

@@ -485,9 +485,18 @@ const ProfileManagement: React.FC = () => {
             <Card key={emp.id} className="border-0 shadow-lg card-hover">
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-start">
-                  <div>
+                  <div className="flex items-start gap-3 min-w-0">
+                    {emp.avatar_url ? (
+                      <img src={emp.avatar_url} alt="" className="w-12 h-12 rounded-full object-cover border bg-white shrink-0" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-primary/10 text-primary font-semibold text-sm flex items-center justify-center shrink-0">
+                        {toTitleCase(emp.name || '?').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('')}
+                      </div>
+                    )}
+                    <div className="min-w-0">
                     <CardTitle className="text-lg font-semibold">{toTitleCase(emp.name)}</CardTitle>
                     <p className="text-sm text-muted-foreground">{emp.designation || 'No designation'}</p>
+                    </div>
                   </div>
                   <Badge variant={emp.is_active ? 'default' : 'destructive'} className="ml-2">
                     {emp.is_active ? 'Active' : 'Inactive'}

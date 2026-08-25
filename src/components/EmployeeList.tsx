@@ -37,6 +37,7 @@ interface Employee {
   team_id?: string;
   reporting_manager_id?: string;
   company_id?: string;
+  avatar_url?: string | null;
 }
 
 interface EmployeeListProps {
@@ -539,7 +540,16 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
             <Card key={employee.id} className="border-0 shadow-lg card-hover">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg font-semibold">{toTitleCase(employee.name)}</CardTitle>
+                  <div className="flex items-center gap-3 min-w-0">
+                    {employee.avatar_url ? (
+                      <img src={employee.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover border bg-white shrink-0" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-primary/10 text-primary font-semibold text-xs flex items-center justify-center shrink-0">
+                        {toTitleCase(employee.name || '?').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('')}
+                      </div>
+                    )}
+                    <CardTitle className="text-lg font-semibold truncate">{toTitleCase(employee.name)}</CardTitle>
+                  </div>
                   <div className="flex items-center space-x-2">
                     <Badge variant={employee.role === 'admin' || employee.role === 'super_admin' ? 'default' : 'secondary'}>
                       {employee.role.replace('_', ' ')}
