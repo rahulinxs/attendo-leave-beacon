@@ -70,6 +70,45 @@ const initialsFromName = (name: string) => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
+const employmentTypeOptions = ['Full-time', 'Part-time', 'Contract', 'Internship', 'Freelance', 'Consultant'];
+
+const toMonthValue = (value?: string) => {
+  if (!value) return '';
+  const match = String(value).match(/^(\d{4}-\d{2})/);
+  return match ? match[1] : '';
+};
+
+const formatMonthLabel = (value?: string) => {
+  const month = toMonthValue(value);
+  if (!month) return '';
+  const [year, monthNum] = month.split('-');
+  const date = new Date(Number(year), Number(monthNum) - 1, 1);
+  if (Number.isNaN(date.getTime())) return month;
+  return date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+};
+
+const workHistoryCompany = (row: any) => row.company || row.employer || row.department || '';
+const workHistoryTitle = (row: any) => row.title || row.designation || '';
+const workHistoryFromMonth = (row: any) => toMonthValue(row.from_month || row.from);
+const workHistoryToMonth = (row: any) => toMonthValue(row.to_month || row.to);
+const workHistoryDuration = (row: any) => {
+  const fromLabel = formatMonthLabel(workHistoryFromMonth(row));
+  const toLabel = formatMonthLabel(workHistoryToMonth(row));
+  if (fromLabel && toLabel) return `${fromLabel} – ${toLabel}`;
+  if (fromLabel) return `${fromLabel} – Present`;
+  if (toLabel) return toLabel;
+  return row.duration || '';
+};
+
+const workHistoryRecencyKey = (row: any) => {
+  const to = workHistoryToMonth(row) || '9999-12';
+  const from = workHistoryFromMonth(row) || to;
+  return `${to}-${from}`;
+};
+
+const sortWorkHistoryRecentFirst = (list: any[]) =>
+  [...list].sort((a, b) => workHistoryRecencyKey(b).localeCompare(workHistoryRecencyKey(a)));
+
 const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = false }) => {
   const { user, refreshUser } = useAuth();
   const { activeNames: companyLocations } = useCompanyLocations();
@@ -245,7 +284,7 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
         account_number: profileData.profile.account_number || '',
       });
       setEducationList(parseJsonList(profileData.profile.education_history));
-      setWorkHistoryList(parseJsonList(profileData.profile.work_history));
+      setWorkHistoryList(sortWorkHistoryRecentFirst(parseJsonList(profileData.profile.work_history)));
       setFamilyForm(f => ({
         ...f,
         family_members: JSON.stringify(profileData.profile.family_members || [], null, 2),
@@ -442,7 +481,9 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
   const handleWorkHistorySave = async (e: FormEvent) => {
     e.preventDefault();
     setHistorySaving(true);
-    await updateUserProfile({ work_history: workHistoryList });
+    const orderedHistory = sortWorkHistoryRecentFirst(workHistoryList);
+    setWorkHistoryList(orderedHistory);
+    await updateUserProfile({ work_history: orderedHistory });
     setHistorySaving(false);
     setEditTab(null);
   };
@@ -516,7 +557,7 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
         family_members: familyForm.family_members ? JSON.parse(familyForm.family_members) : [],
         emergency_contacts: familyForm.emergency_contacts ? JSON.parse(familyForm.emergency_contacts) : [],
         education_history: educationList,
-        work_history: workHistoryList,
+        work_history: sortWorkHistoryRecentFirst(workHistoryList),
         ...(isHrAdmin
           ? {
               employment_status: workForm.employment_status,
@@ -837,9 +878,17 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
           </div>
           <ul className="text-sm mb-2" style={{ color: 'var(--card-text)' }}>
             {workHistoryList.length === 0 && <li className="text-muted-foreground">No work history added.</li>}
-            {workHistoryList.slice(0, 3).map((row, idx) => (
-              <li key={idx}>{row.designation || row.department || 'Role'}{row.from ? ` · ${row.from}` : ''}{row.to ? ` – ${row.to}` : ''}</li>
-            ))}
+            {workHistoryList.slice(0, 3).map((row, idx) => {
+              const title = workHistoryTitle(row) || 'Role';
+              const company = workHistoryCompany(row);
+              const type = row.employment_type || '';
+              const duration = workHistoryDuration(row);
+              return (
+                <li key={idx}>
+                  {title}{company ? ` · ${company}` : ''}{type ? ` · ${type}` : ''}{duration ? ` · ${duration}` : ''}
+                </li>
+              );
+            })}
           </ul>
           {!readOnly && <button className="mt-auto self-end bg-primary text-primary-foreground px-5 py-1.5 rounded hover:bg-primary/80" onClick={() => setEditTab('history')}>Edit</button>}
         </div>
@@ -1512,21 +1561,78 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
       )}
       {editTab === 'history' && (
         <Dialog open={editTab === 'history'} onOpenChange={open => !open && setEditTab(null)}>
-          <DialogContent>
+          <DialogContent className="max-h-[85vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Edit Work History</DialogTitle></DialogHeader>
             <form className="space-y-3" onSubmit={handleWorkHistorySave}>
               {workHistoryList.map((row, idx) => (
-                <div key={idx} className="grid grid-cols-2 gap-2 border rounded p-2">
-                  <input placeholder="Department" className="border rounded px-2 py-1" value={row.department || ''} onChange={e => { const arr = [...workHistoryList]; arr[idx] = { ...arr[idx], department: e.target.value }; setWorkHistoryList(arr); }} />
-                  <input placeholder="Designation" className="border rounded px-2 py-1" value={row.designation || ''} onChange={e => { const arr = [...workHistoryList]; arr[idx] = { ...arr[idx], designation: e.target.value }; setWorkHistoryList(arr); }} />
-                  <input placeholder="From" type="date" className="border rounded px-2 py-1" value={row.from || ''} onChange={e => { const arr = [...workHistoryList]; arr[idx] = { ...arr[idx], from: e.target.value }; setWorkHistoryList(arr); }} />
-                  <div className="flex gap-1">
-                    <input placeholder="To" type="date" className="border rounded px-2 py-1 w-full" value={row.to || ''} onChange={e => { const arr = [...workHistoryList]; arr[idx] = { ...arr[idx], to: e.target.value }; setWorkHistoryList(arr); }} />
-                    <button type="button" className="text-red-500" onClick={() => setWorkHistoryList(workHistoryList.filter((_, i) => i !== idx))}>✕</button>
+                <div key={idx} className="grid grid-cols-1 sm:grid-cols-2 gap-2 border rounded p-3">
+                  <input
+                    placeholder="Company / Employer"
+                    className="border rounded px-2 py-1"
+                    value={workHistoryCompany(row)}
+                    onChange={e => {
+                      const arr = [...workHistoryList];
+                      arr[idx] = { ...arr[idx], company: e.target.value };
+                      setWorkHistoryList(arr);
+                    }}
+                  />
+                  <input
+                    placeholder="Title / Designation"
+                    className="border rounded px-2 py-1"
+                    value={workHistoryTitle(row)}
+                    onChange={e => {
+                      const arr = [...workHistoryList];
+                      arr[idx] = { ...arr[idx], title: e.target.value, designation: e.target.value };
+                      setWorkHistoryList(arr);
+                    }}
+                  />
+                  <select
+                    className="border rounded px-2 py-1 sm:col-span-2"
+                    value={row.employment_type || ''}
+                    onChange={e => {
+                      const arr = [...workHistoryList];
+                      arr[idx] = { ...arr[idx], employment_type: e.target.value };
+                      setWorkHistoryList(arr);
+                    }}
+                  >
+                    <option value="">Employment type</option>
+                    {employmentTypeOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                  <div>
+                    <label className="block text-xs text-muted-foreground mb-1">From (month & year)</label>
+                    <input
+                      type="month"
+                      className="border rounded px-2 py-1 w-full"
+                      value={workHistoryFromMonth(row)}
+                      onChange={e => {
+                        const arr = [...workHistoryList];
+                        arr[idx] = { ...arr[idx], from_month: e.target.value, from: e.target.value };
+                        setWorkHistoryList(sortWorkHistoryRecentFirst(arr));
+                      }}
+                    />
+                  </div>
+                  <div className="flex gap-1 items-end">
+                    <div className="flex-1">
+                      <label className="block text-xs text-muted-foreground mb-1">To (month & year)</label>
+                      <input
+                        type="month"
+                        className="border rounded px-2 py-1 w-full"
+                        value={workHistoryToMonth(row)}
+                        min={workHistoryFromMonth(row) || undefined}
+                        onChange={e => {
+                          const arr = [...workHistoryList];
+                          arr[idx] = { ...arr[idx], to_month: e.target.value, to: e.target.value };
+                          setWorkHistoryList(sortWorkHistoryRecentFirst(arr));
+                        }}
+                      />
+                    </div>
+                    <button type="button" className="text-red-500 pb-1" onClick={() => setWorkHistoryList(workHistoryList.filter((_, i) => i !== idx))}>✕</button>
                   </div>
                 </div>
               ))}
-              <button type="button" className="text-primary text-sm" onClick={() => setWorkHistoryList([...workHistoryList, { department: '', designation: '', from: '', to: '' }])}>Add role</button>
+              <button type="button" className="text-primary text-sm" onClick={() => setWorkHistoryList([{ company: '', title: '', employment_type: '', from_month: '', to_month: '' }, ...workHistoryList])}>Add role</button>
               <div className="pt-2 flex gap-2">
                 <button type="submit" className="bg-primary text-primary-foreground px-6 py-2 rounded" disabled={historySaving}>{historySaving ? 'Saving...' : 'Save'}</button>
                 <DialogClose asChild><button type="button" className="bg-gray-200 px-6 py-2 rounded">Cancel</button></DialogClose>

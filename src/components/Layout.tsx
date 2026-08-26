@@ -28,6 +28,7 @@ import {
   Network,
   FlaskConical,
   ClipboardList,
+  ClipboardCheck,
   TrendingUp,
   FileSpreadsheet,
   UserCircle,
@@ -105,7 +106,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       id: 'attendance',
       label: 'Attendance',
       icon: Clock,
-      roles: ['employee', 'admin', 'super_admin']
+      roles: ['employee', 'admin', 'super_admin', 'reporting_manager']
+    },
+    {
+      id: 'attendance-regularization',
+      label: 'Attendance Regularization',
+      icon: ClipboardCheck,
+      roles: ['employee', 'admin', 'super_admin', 'reporting_manager']
     },
     {
       id: 'leave',
@@ -261,6 +268,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
     if (['admin', 'super_admin'].includes(user.role)) {
       return result.filter(item => ![
         'attendance',
+        'attendance-regularization',
         'leave',
         'manage-attendance',
         'leave-management',
@@ -384,12 +392,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       <div className="flex">
         {/* Sidebar */}
         <div
-            className={`fixed inset-y-0 z-50 transition-all duration-300 ease-in-out transform ${sidebarVisible ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:inset-0 ${themeClass} sidebar flex flex-col shadow-lg left-0 w-64 lg:w-80 max-w-[80vw]`}
-          style={{ background: 'hsl(var(--background))', color: 'hsl(var(--foreground))', height: '100vh', position: 'fixed', top: 0, left: 0 }}
+            className={`fixed inset-y-0 z-50 transition-all duration-300 ease-in-out transform ${sidebarVisible ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:inset-0 ${themeClass} sidebar flex flex-col shadow-lg left-0 w-64 lg:w-80 max-w-[80vw] overflow-hidden`}
+          style={{ background: 'hsl(var(--background))', color: 'hsl(var(--foreground))', height: '100vh', maxHeight: '100vh', position: 'fixed', top: 0, left: 0 }}
         >
-          <div className="flex flex-col h-full">
+          <div className="flex flex-col h-full min-h-0 overflow-hidden">
             {/* Sidebar Header */}
-            <div className="flex flex-col items-center p-4 border-b border-border header-theme bg-white">
+            <div className="flex flex-col items-center p-4 border-b border-border header-theme bg-white shrink-0">
               {/* Product Branding */}
               <div className="flex items-center justify-center w-full mb-2">
                 <div className="flex items-center space-x-2">
@@ -422,7 +430,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 p-2 space-y-1">
+            <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-2 space-y-1">
               {/* Render Dashboard first */}
               {navItems.filter(item => item.id === 'dashboard').map((item) => {
                 const Icon = item.icon;
@@ -467,7 +475,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                     id="hr-menu"
                     className={`pl-6 mt-1 space-y-1 overflow-hidden transition-all duration-300 ease-in-out ${
                       isSectionOpen('hr')
-                        ? 'max-h-96 opacity-100 translate-y-0'
+                        ? 'max-h-[32rem] opacity-100 translate-y-0'
                         : 'max-h-0 opacity-0 -translate-y-2'
                     }`}
                     style={{ willChange: 'max-height, opacity, transform' }}
@@ -482,6 +490,18 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                     >
                       <Clock className="w-5 h-5" />
                       <span className="sidebar-label text-sm">Attendance</span>
+                    </button>
+
+                    <button
+                      onClick={() => onTabChange('attendance-regularization')}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${
+                        activeTab === 'attendance-regularization'
+                          ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold'
+                          : 'hover:bg-[rgba(0,0,0,0.02)]'
+                      }`}
+                    >
+                      <ClipboardCheck className="w-5 h-5" />
+                      <span className="sidebar-label text-sm">Attendance Regularization</span>
                     </button>
 
                     <button
@@ -770,7 +790,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
             </nav>
 
             {/* User Profile Section */}
-            <div className="p-3 border-t border-border header-theme">
+            <div className="p-3 border-t border-border header-theme shrink-0">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="w-full justify-between">

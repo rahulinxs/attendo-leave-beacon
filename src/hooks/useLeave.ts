@@ -404,6 +404,31 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
     }
   };
 
+  const deleteLeaveRequest = async (requestId: string) => {
+    if (!user || !['admin', 'super_admin'].includes(user.role)) return false;
+
+    setIsLoading(true);
+    try {
+      const { error } = await supabase
+        .from('leave_requests')
+        .delete()
+        .eq('id', requestId);
+
+      if (error) {
+        console.error('Delete leave request error:', error);
+        return false;
+      }
+
+      await fetchLeaveRequests();
+      return true;
+    } catch (error) {
+      console.error('Error deleting leave request:', error);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (user && currentCompany) {
       fetchLeaveRequests();
@@ -420,6 +445,7 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
     submitLeaveRequest,
     approveLeaveRequest,
     rejectLeaveRequest,
+    deleteLeaveRequest,
     fetchLeaveRequests,
     fetchLeaveBalances
   };

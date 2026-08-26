@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCompany } from '@/contexts/CompanyContext';
 import { useLeave } from '@/hooks/useLeave';
@@ -21,7 +21,6 @@ import {
   XCircle, 
   X, 
   AlertTriangle,
-  Filter,
   Download,
   FileText,
   CheckSquare,
@@ -42,9 +41,20 @@ import {
   Smartphone,
   MessageSquare,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Trash2
 } from 'lucide-react';
-import { Textarea } from '@/components/ui/textarea';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { format } from 'date-fns';
 import { parseDateLocal } from '@/utils/dateUtils';
 import { formatLeaveDuration } from '@/utils/leaveDuration';
@@ -55,6 +65,7 @@ interface TeamMember {
   name: string;
   department: string;
   email: string;
+  team_id?: string | null;
   pendingRequests: number;
   approvedRequests: number;
   totalLeaveDays: number;
@@ -88,7 +99,8 @@ const LeaveRequestManagement: React.FC = () => {
     isLoading,
     fetchLeaveRequests,
     leaveBalances,
-    fetchLeaveBalances
+    fetchLeaveBalances,
+    deleteLeaveRequest
   } = useLeave('manager');
 
   const [selectedRequests, setSelectedRequests] = useState<string[]>([]);
@@ -96,12 +108,13 @@ const LeaveRequestManagement: React.FC = () => {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [departmentStats, setDepartmentStats] = useState<DepartmentStats[]>([]);
   const [filters, setFilters] = useState({
-    status: 'all',
+    year: String(new Date().getFullYear()),
+    teamId: 'all',
+    employeeId: 'all',
     leaveType: 'all',
-    department: 'all',
-    dateRange: { start: '', end: '' },
-    search: ''
+    status: 'all',
   });
+  const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
 
   // Notification and Settings states
   const [showNotifications, setShowNotifications] = useState(false);
@@ -118,6 +131,7 @@ const LeaveRequestManagement: React.FC = () => {
   const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
 
   const canManageRequests = ['reporting_manager', 'admin', 'super_admin'].includes(user?.role || '');
+  const canReviseAnyRequest = user?.role === 'admin' || user?.role === 'super_admin';
 
   useEffect(() => {
     if (canManageRequests && currentCompany) {
@@ -142,13 +156,24 @@ const LeaveRequestManagement: React.FC = () => {
       .then(({ data }) => setDepartments(data || []));
   }, [currentCompany]);
 
+  useEffect(() => {
+    if (!currentCompany) return;
+    supabase
+      .from('teams')
+      .select('id, name')
+      .eq('company_id', currentCompany.id)
+      .eq('is_active', true)
+      .order('name')
+      .then(({ data }) => setTeams(data || []));
+  }, [currentCompany]);
+
   const fetchTeamData = async () => {
     if (!currentCompany) return;
 
     // Fetch team members and their stats for the current company
     const { data: employees, error: employeesError } = await supabase
       .from('employees')
-      .select('id, name, email, department')
+      .select('id, name, email, department, team_id')
       .eq('company_id', currentCompany.id)
       .eq('is_active', true)
       .order('name');
@@ -159,6 +184,7 @@ const LeaveRequestManagement: React.FC = () => {
         name: emp.name,
         department: emp.department,
         email: emp.email,
+        team_id: emp.team_id || null,
         pendingRequests: leaveRequests.filter(r => r.employee_id === emp.id && r.status === 'pending').length,
         approvedRequests: leaveRequests.filter(r => r.employee_id === emp.id && r.status === 'approved').length,
         totalLeaveDays: leaveRequests.filter(r => r.employee_id === emp.id && r.status === 'approved').reduce((sum, r) => sum + r.total_days, 0)
@@ -193,7 +219,7 @@ const LeaveRequestManagement: React.FC = () => {
     const commentText = comments[requestId] || '';
     
     // For rejections, require a comment
-    if (action === 'reject' && !commentText.trim()) {
+    if (action === 'reject' && !commentText.trim() && !canReviseAnyRequest) {
       toast({
         title: 'Comment Required',
         description: 'Please provide a reason for rejection',
@@ -213,7 +239,7 @@ const LeaveRequestManagement: React.FC = () => {
     if (success) {
       toast({
         title: 'Success',
-        description: `Request ${action}d successfully`,
+        description: `Request ${action === 'approve' ? 'approved' : 'rejected'} successfully`,
       });
       // Clear the comment and close the input
       setComments(prev => ({ ...prev, [requestId]: '' }));
@@ -226,6 +252,40 @@ const LeaveRequestManagement: React.FC = () => {
     }
   };
   
+  const handleSingleAction = (requestId: string, action: 'approve' | 'reject') => {
+    handleRequestAction(requestId, action);
+  };
+
+  const handleBulkAction = async (action: 'approve' | 'reject' | 'delete') => {
+    if (action === 'delete' && !canReviseAnyRequest) return;
+    for (const requestId of selectedRequests) {
+      if (action === 'delete') {
+        await deleteLeaveRequest(requestId);
+      } else {
+        await handleRequestAction(requestId, action);
+      }
+    }
+    if (action === 'delete') {
+      toast({ title: 'Success', description: 'Selected leave records deleted' });
+      setSelectedRequests([]);
+      await fetchLeaveRequests();
+    }
+  };
+
+  const handleDeleteRequest = async (requestId: string) => {
+    if (!canReviseAnyRequest) {
+      toast({ title: 'Not authorized', description: 'Only admins can delete leave records.', variant: 'destructive' });
+      return;
+    }
+    const success = await deleteLeaveRequest(requestId);
+    if (success) {
+      toast({ title: 'Success', description: 'Leave record deleted' });
+      setSelectedRequests((ids) => ids.filter((id) => id !== requestId));
+    } else {
+      toast({ title: 'Delete failed', description: 'Could not delete this leave record.', variant: 'destructive' });
+    }
+  };
+
   const toggleCommentInput = (requestId: string) => {
     setActiveRequest(activeRequest === requestId ? null : requestId);
   };
@@ -288,14 +348,44 @@ const LeaveRequestManagement: React.FC = () => {
     });
   };
 
+  const yearOptions = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const fromRequests = leaveRequests.flatMap((req) => [
+      Number(req.start_date?.slice(0, 4)),
+      Number(req.end_date?.slice(0, 4)),
+    ]).filter((year) => Number.isFinite(year) && year > 2000);
+    return Array.from(new Set([currentYear, currentYear - 1, currentYear - 2, ...fromRequests])).sort((a, b) => b - a);
+  }, [leaveRequests]);
+
+  const leaveTypeOptions = useMemo(() => {
+    return Array.from(new Set(leaveRequests.map((req) => req.leave_types?.name).filter(Boolean) as string[])).sort();
+  }, [leaveRequests]);
+
+  const employeesForFilter = useMemo(() => {
+    if (filters.teamId === 'all') return teamMembers;
+    if (filters.teamId === 'unassigned') return teamMembers.filter((emp) => !emp.team_id);
+    return teamMembers.filter((emp) => emp.team_id === filters.teamId);
+  }, [teamMembers, filters.teamId]);
+
+  const employeeTeamId = (employeeId: string) =>
+    teamMembers.find((emp) => emp.id === employeeId)?.team_id || null;
+
   const filteredRequests = leaveRequests.filter(req => {
     let match = true;
-    if (filters.status !== 'all') match = match && req.status === filters.status;
+    if (filters.year !== 'all') {
+      const year = Number(filters.year);
+      const startYear = Number(req.start_date?.slice(0, 4));
+      const endYear = Number(req.end_date?.slice(0, 4));
+      match = match && Number.isFinite(startYear) && Number.isFinite(endYear) && startYear <= year && endYear >= year;
+    }
+    if (filters.teamId !== 'all') {
+      const teamId = employeeTeamId(req.employee_id);
+      if (filters.teamId === 'unassigned') match = match && !teamId;
+      else match = match && teamId === filters.teamId;
+    }
+    if (filters.employeeId !== 'all') match = match && req.employee_id === filters.employeeId;
     if (filters.leaveType !== 'all') match = match && req.leave_types?.name === filters.leaveType;
-    if (filters.department !== 'all') match = match && (req.employees?.department || 'N/A') === filters.department;
-    if (filters.dateRange.start) match = match && req.start_date >= filters.dateRange.start;
-    if (filters.dateRange.end) match = match && req.end_date <= filters.dateRange.end;
-    if (filters.search) match = match && req.employees?.name?.toLowerCase().includes(filters.search.toLowerCase());
+    if (filters.status !== 'all') match = match && req.status === filters.status;
     return match;
   });
 
@@ -748,66 +838,113 @@ const LeaveRequestManagement: React.FC = () => {
 
         {/* All Requests Tab */}
         <TabsContent value="requests" className="space-y-6">
-          {/* Advanced Filters */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Filter className="w-5 h-5" />
-                Advanced Filters & Search
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-5 h-5" />
+                  Team Leave Requests ({filteredRequests.length})
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => exportRequests('xlsx')}>
+                    <Download className="w-4 h-4 mr-1" />
+                    Export Excel
+                  </Button>
+                </div>
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div>
-                  <Label>Status</Label>
-                  <Select value={filters.status} onValueChange={(value) => setFilters({...filters, status: value})}>
+                  <Label>Year</Label>
+                  <Select value={filters.year} onValueChange={(value) => setFilters({ ...filters, year: value })}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="all">All years</SelectItem>
+                      {yearOptions.map((year) => (
+                        <SelectItem key={year} value={String(year)}>{year}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Team</Label>
+                  <Select
+                    value={filters.teamId}
+                    onValueChange={(value) => setFilters({ ...filters, teamId: value, employeeId: 'all' })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All teams</SelectItem>
+                      <SelectItem value="unassigned">Unassigned</SelectItem>
+                      {teams.map((team) => (
+                        <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Employee</Label>
+                  <Select value={filters.employeeId} onValueChange={(value) => setFilters({ ...filters, employeeId: value })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All employees</SelectItem>
+                      {employeesForFilter.map((emp) => (
+                        <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Leave type</Label>
+                  <Select value={filters.leaveType} onValueChange={(value) => setFilters({ ...filters, leaveType: value })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All types</SelectItem>
+                      {leaveTypeOptions.map((type) => (
+                        <SelectItem key={type} value={type}>{type}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Status</Label>
+                  <Select value={filters.status} onValueChange={(value) => setFilters({ ...filters, status: value })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All statuses</SelectItem>
                       <SelectItem value="pending">Pending</SelectItem>
                       <SelectItem value="approved">Approved</SelectItem>
                       <SelectItem value="rejected">Rejected</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
-                  <Label>Department</Label>
-                  <Select value={filters.department} onValueChange={(value) => setFilters({...filters, department: value})}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Departments</SelectItem>
-                      {departments.map(dept => (
-                        <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Start Date</Label>
-                  <Input type="date" value={filters.dateRange.start} onChange={(e) => setFilters({...filters, dateRange: {...filters.dateRange, start: e.target.value}})} />
-                </div>
-                <div>
-                  <Label>End Date</Label>
-                  <Input type="date" value={filters.dateRange.end} onChange={(e) => setFilters({...filters, dateRange: {...filters.dateRange, end: e.target.value}})} />
-                </div>
-                <div>
-                  <Label>Search Employee</Label>
-                  <Input placeholder="Search by name..." value={filters.search} onChange={(e) => setFilters({...filters, search: e.target.value})} />
-                </div>
-                <div className="flex items-end">
-                  <Button variant="outline" onClick={() => setFilters({status: 'all', leaveType: 'all', department: 'all', dateRange: {start: '', end: ''}, search: ''})}>
-                    Clear All
-                  </Button>
-                </div>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Bulk Actions */}
+              <div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setFilters({
+                    year: String(new Date().getFullYear()),
+                    teamId: 'all',
+                    employeeId: 'all',
+                    leaveType: 'all',
+                    status: 'all',
+                  })}
+                >
+                  Clear filters
+                </Button>
+              </div>
           {selectedRequests.length > 0 && (
             <Card className="border-orange-200 bg-orange-50">
               <CardContent className="p-4">
@@ -825,6 +962,12 @@ const LeaveRequestManagement: React.FC = () => {
                       <UserX className="w-4 h-4 mr-1" />
                       Reject All
                     </Button>
+                    {canReviseAnyRequest && (
+                      <Button size="sm" variant="destructive" onClick={() => handleBulkAction('delete')}>
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        Delete All
+                      </Button>
+                    )}
                     <Button size="sm" variant="outline" onClick={() => setSelectedRequests([])}>
                       <X className="w-4 h-4 mr-1" />
                       Clear Selection
@@ -835,23 +978,6 @@ const LeaveRequestManagement: React.FC = () => {
             </Card>
           )}
 
-          {/* Enhanced Requests Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-5 h-5" />
-                  Team Leave Requests ({filteredRequests.length})
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => exportRequests('xlsx')}>
-                    <Download className="w-4 h-4 mr-1" />
-                    Export Excel
-                  </Button>
-                </div>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
@@ -906,19 +1032,52 @@ const LeaveRequestManagement: React.FC = () => {
                         </td>
                         <td className="p-3">
                           <div className="flex gap-1">
-                            {request.status === 'pending' && (
+                            {(request.status === 'pending' || canReviseAnyRequest) && (
                               <>
-                                <Button size="sm" variant="gradient" onClick={() => handleSingleAction(request.id, 'approve')}>
+                                <Button
+                                  size="sm"
+                                  variant="gradient"
+                                  title="Approve"
+                                  onClick={() => handleSingleAction(request.id, 'approve')}
+                                >
                                   <CheckCircle className="w-4 h-4" />
                                 </Button>
-                                <Button size="sm" variant="gradient" onClick={() => handleSingleAction(request.id, 'reject')}>
+                                <Button
+                                  size="sm"
+                                  variant="gradient"
+                                  title="Reject"
+                                  onClick={() => handleSingleAction(request.id, 'reject')}
+                                >
                                   <XCircle className="w-4 h-4" />
                                 </Button>
                               </>
                             )}
-                            <Button size="sm" variant="outline">
-                              <Eye className="w-4 h-4" />
-                            </Button>
+                            {canReviseAnyRequest && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button size="sm" variant="outline" title="Delete" className="text-red-600 hover:text-red-700">
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete leave record?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This will permanently remove {request.employees?.name}'s {request.leave_types?.name} request ({request.status}). This cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      className="bg-red-600 hover:bg-red-700"
+                                      onClick={() => handleDeleteRequest(request.id)}
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
                           </div>
                         </td>
                       </tr>

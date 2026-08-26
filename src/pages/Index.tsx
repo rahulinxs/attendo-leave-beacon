@@ -16,6 +16,7 @@ import ReportsAnalytics2 from '@/components/ReportsAnalytics2';
 import HolidayManagement from '@/components/HolidayManagement';
 import SystemSettings from '@/components/SystemSettings';
 import EmployeeAttendance from '@/components/EmployeeAttendance';
+import AttendanceRegularization from '@/components/AttendanceRegularization';
 import Profile from '@/components/Profile';
 import ProfileManagement from '@/components/ProfileManagement';
 import CompanyProfile from '@/components/CompanyProfile';
@@ -66,6 +67,8 @@ const Index = () => {
       
       case 'attendance':
         return <EmployeeAttendance />;
+      case 'attendance-regularization':
+        return <AttendanceRegularization />;
       case 'manage-attendance':
         return <AttendanceManagement />;
 
