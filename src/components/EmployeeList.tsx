@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
-import { Users, Mail, Building, Briefcase, UserPlus, Trash2, Edit, ChevronLeft, ChevronRight, Search, Filter, Download, Check, ChevronsUpDown, X } from 'lucide-react';
+import { Users, Mail, Building, Briefcase, UserPlus, Trash2, Edit, ChevronLeft, ChevronRight, Search, Filter, Download, Check, ChevronsUpDown, X, MapPin } from 'lucide-react';
 import EditEmployeeForm from './EditEmployeeForm';
 import {
   AlertDialog,
@@ -24,6 +24,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useCompany } from '@/contexts/CompanyContext';
 import { cn } from '@/lib/utils';
+import { UNASSIGNED_LOCATION } from '@/utils/companyLocations';
+import { isSuperAdminRecordLocked } from '@/utils/employeePermissions';
+import { useCompanyLocations } from '@/hooks/useCompanyLocations';
 
 interface Employee {
   id: string;
@@ -38,6 +41,7 @@ interface Employee {
   reporting_manager_id?: string;
   company_id?: string;
   avatar_url?: string | null;
+  work_location?: string | null;
 }
 
 interface EmployeeListProps {
@@ -61,6 +65,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
 }) => {
   const { user } = useAuth();
   const { currentCompany } = useCompany();
+  const { activeNames } = useCompanyLocations();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -74,6 +79,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [locationFilter, setLocationFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   
   // Searchable combobox state
@@ -117,6 +123,11 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
     return Array.from(depts).sort();
   }, [employees]);
 
+  const locationOptions = useMemo(
+    () => [...activeNames].sort((a, b) => a.localeCompare(b)),
+    [activeNames]
+  );
+
   const roles = useMemo(() => {
     const roleSet = new Set(employees.map(emp => emp.role));
     return Array.from(roleSet).sort();
@@ -143,6 +154,11 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
       // Department filter
       const matchesDepartment = departmentFilter === 'all' || employee.department === departmentFilter;
 
+      const matchesLocation =
+        locationFilter === 'all' ||
+        (locationFilter === UNASSIGNED_LOCATION && !employee.work_location) ||
+        employee.work_location === locationFilter;
+
       // Status filter (active/inactive)
       const matchesStatus = statusFilter === 'all' || 
         (statusFilter === 'active' && employee.is_active) ||
@@ -151,15 +167,21 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
       // Consultant filter (from searchable combobox)
       const matchesConsultant = !selectedConsultant || employee.id === selectedConsultant.id;
 
-      return matchesSearch && matchesRole && matchesDepartment && matchesStatus && matchesConsultant;
+      return matchesSearch && matchesRole && matchesDepartment && matchesLocation && matchesStatus && matchesConsultant;
     });
-  }, [employees, searchTerm, roleFilter, departmentFilter, statusFilter, selectedConsultant]);
+  }, [employees, searchTerm, roleFilter, departmentFilter, locationFilter, statusFilter, selectedConsultant]);
 
   const totalPages = Math.ceil(filteredEmployees.length / pageSize);
   const paginatedEmployees = useMemo(() => {
+    const sorted = [...filteredEmployees].sort((a, b) => {
+      const locA = a.work_location || 'zzzz';
+      const locB = b.work_location || 'zzzz';
+      const locCmp = locA.localeCompare(locB);
+      if (locCmp !== 0) return locCmp;
+      return (a.name || '').localeCompare(b.name || '');
+    });
     const startIndex = (page - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    return filteredEmployees.slice(startIndex, endIndex);
+    return sorted.slice(startIndex, startIndex + pageSize);
   }, [filteredEmployees, page, pageSize]);
 
   const handlePageChange = (newPage: number) => {
@@ -174,7 +196,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, roleFilter, departmentFilter, statusFilter, consultantId]);
+  }, [searchTerm, roleFilter, departmentFilter, locationFilter, statusFilter, consultantId]);
   
   // Fetch employees on mount and when refreshTrigger changes
   useEffect(() => {
@@ -192,8 +214,8 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
 
   const canRemoveEmployee = (employee: Employee) => {
     if (!user || !['admin', 'super_admin'].includes(user.role)) return false;
-    if (employee.id === user.id) return false; // Can't remove self
-    if (user.role === 'admin' && employee.role === 'super_admin') return false; // Admin can't remove super admin
+    if (employee.id === user.id) return false;
+    if (isSuperAdminRecordLocked(user.role, employee.role)) return false;
     if (employee.role === 'admin' && user.role === 'admin') return false; // Admin can't remove other admins
     return true;
   };
@@ -201,7 +223,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
   const canEditEmployee = (employee: Employee) => {
     if (!user || !['admin', 'super_admin'].includes(user.role)) return false;
     if (employee.id === user.id) return false; // Can't edit self
-    if (user.role === 'admin' && employee.role === 'super_admin') return false; // Admin can't edit super admin
+    if (isSuperAdminRecordLocked(user.role, employee.role)) return false;
     return true;
   };
 
@@ -270,13 +292,14 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
   const exportToCSV = () => {
     if (employees.length === 0) return;
 
-    const headers = ['Name', 'Email', 'Role', 'Department', 'Position', 'Hire Date', 'Status'];
+    const headers = ['Name', 'Email', 'Role', 'Department', 'Location', 'Position', 'Hire Date', 'Status'];
     
     const csvRows = employees.map(emp => [
       `"${emp.name}"`,
       `"${emp.email}"`,
       `"${emp.role}"`,
       `"${emp.department || ''}"`,
+      `"${emp.work_location || ''}"`,
       `"${emp.position || ''}"`,
       `"${emp.hire_date ? new Date(emp.hire_date).toLocaleDateString() : ''}"`,
       `"${emp.is_active ? 'Active' : 'Inactive'}"`
@@ -302,6 +325,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
     setSearchTerm('');
     setRoleFilter('all');
     setDepartmentFilter('all');
+    setLocationFilter('all');
     setStatusFilter('all');
     setConsultantId('all');
   };
@@ -403,7 +427,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
             </div>
 
             {/* Filter Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
               {/* Consultant Filter */}
               <div className="space-y-1">
                 <label className="text-sm font-medium">Consultant</label>
@@ -487,6 +511,23 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
                 </Select>
               </div>
 
+              {/* Location Filter */}
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Location</label>
+                <Select value={locationFilter} onValueChange={setLocationFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All locations" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Locations</SelectItem>
+                    <SelectItem value={UNASSIGNED_LOCATION}>No location</SelectItem>
+                    {locationOptions.map((loc) => (
+                      <SelectItem key={loc} value={loc}>{loc}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* Status Filter */}
               <div className="space-y-1">
                 <label className="text-sm font-medium">Status</label>
@@ -504,7 +545,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
             </div>
 
             {/* Filter Summary */}
-            {(searchTerm || roleFilter !== 'all' || departmentFilter !== 'all' || statusFilter !== 'all' || consultantId !== 'all') && (
+            {(searchTerm || roleFilter !== 'all' || departmentFilter !== 'all' || locationFilter !== 'all' || statusFilter !== 'all' || consultantId !== 'all') && (
               <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
                 <span className="text-sm text-blue-800">
                   {filteredEmployees.length} of {employees.length} employees match filters
@@ -536,11 +577,22 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {paginatedEmployees.map((employee) => (
-            <Card key={employee.id} className="border-0 shadow-lg card-hover">
+          {paginatedEmployees.map((employee, index) => {
+            const locLabel = employee.work_location || 'No location';
+            const prevLabel = index > 0 ? (paginatedEmployees[index - 1].work_location || 'No location') : null;
+            const showLocationHeader = locLabel !== prevLabel;
+            return (
+            <React.Fragment key={employee.id}>
+              {showLocationHeader && (
+                <div className="col-span-full flex items-center gap-2 mt-2 first:mt-0">
+                  <MapPin className="w-4 h-4 text-primary" />
+                  <h3 className="font-semibold text-sm">{locLabel}</h3>
+                </div>
+              )}
+            <Card className="border-0 shadow-lg card-hover">
               <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-3 min-w-0 flex-1">
                     {employee.avatar_url ? (
                       <img src={employee.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover border bg-white shrink-0" />
                     ) : (
@@ -548,58 +600,55 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
                         {toTitleCase(employee.name || '?').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('')}
                       </div>
                     )}
-                    <CardTitle className="text-lg font-semibold truncate">{toTitleCase(employee.name)}</CardTitle>
+                    <CardTitle
+                      className="text-lg font-semibold leading-snug break-words"
+                      title={toTitleCase(employee.name)}
+                    >
+                      {toTitleCase(employee.name)}
+                    </CardTitle>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Badge variant={employee.role === 'admin' || employee.role === 'super_admin' ? 'default' : 'secondary'}>
-                      {employee.role.replace('_', ' ')}
-                    </Badge>
-                    <Badge variant={employee.is_active ? 'default' : 'destructive'}>
-                      {employee.is_active ? 'Active' : 'Inactive'}
-                    </Badge>
-                    <div className="flex space-x-1">
-                      {canEditEmployee(employee) && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                          onClick={() => setEditingEmployee(employee)}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                      )}
-                      {canRemoveEmployee(employee) && employee.is_active && (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              disabled={removingId === employee.id}
+                  <div className="flex shrink-0 space-x-1">
+                    {canEditEmployee(employee) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        onClick={() => setEditingEmployee(employee)}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {canRemoveEmployee(employee) && employee.is_active && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            disabled={removingId === employee.id}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Remove Employee</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to remove {employee.name}? This action will deactivate their account and they will no longer be able to access the system.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleRemoveEmployee(employee.id, employee.name)}
+                              className="bg-red-600 hover:bg-red-700"
                             >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Remove Employee</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to remove {employee.name}? This action will deactivate their account and they will no longer be able to access the system.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleRemoveEmployee(employee.id, employee.name)}
-                                className="bg-red-600 hover:bg-red-700"
-                              >
-                                Remove
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      )}
-                    </div>
+                              Remove
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
                   </div>
                 </div>
               </CardHeader>
@@ -615,6 +664,13 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
                     <span className="text-sm">{employee.department}</span>
                   </div>
                 )}
+
+                {employee.work_location && (
+                  <div className="flex items-center space-x-2 text-gray-600">
+                    <MapPin className="w-4 h-4" />
+                    <span className="text-sm">{employee.work_location}</span>
+                  </div>
+                )}
                 
                 {employee.position && (
                   <div className="flex items-center space-x-2 text-gray-600">
@@ -623,14 +679,26 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
                   </div>
                 )}
 
-                {employee.hire_date && (
-                  <div className="text-xs text-gray-500 pt-2 border-t">
-                    Joined: {new Date(employee.hire_date).toLocaleDateString()}
+                <div className="flex items-center justify-between gap-2 pt-2 border-t">
+                  <div className="text-xs text-gray-500">
+                    {employee.hire_date
+                      ? `Joined: ${new Date(employee.hire_date).toLocaleDateString()}`
+                      : ''}
                   </div>
-                )}
+                  <div className="flex flex-wrap justify-end gap-1.5">
+                    <Badge variant={employee.role === 'admin' || employee.role === 'super_admin' ? 'default' : 'secondary'}>
+                      {employee.role.replace('_', ' ')}
+                    </Badge>
+                    <Badge variant={employee.is_active ? 'default' : 'destructive'}>
+                      {employee.is_active ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </div>
+                </div>
               </CardContent>
             </Card>
-          ))}
+            </React.Fragment>
+            );
+          })}
         </div>
       )}
 

@@ -12,6 +12,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCompany } from '@/contexts/CompanyContext';
 import { Switch } from '@/components/ui/switch';
 import { format } from 'date-fns';
+import { UNASSIGNED_LOCATION } from '@/utils/companyLocations';
+import { useCompanyLocations } from '@/hooks/useCompanyLocations';
 
 const editEmployeeSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -23,6 +25,7 @@ const editEmployeeSchema = z.object({
   is_active: z.boolean().optional(),
   team_id: z.string().optional(),
   reporting_manager_id: z.string().optional(),
+  work_location: z.string().optional(),
 });
 
 type EditEmployeeForm = z.infer<typeof editEmployeeSchema>;
@@ -38,6 +41,7 @@ interface Employee {
   is_active: boolean;
   team_id?: string;
   reporting_manager_id?: string;
+  work_location?: string | null;
 }
 
 interface Team {
@@ -55,6 +59,7 @@ interface EditEmployeeFormProps {
 const EditEmployeeForm: React.FC<EditEmployeeFormProps> = ({ employee, onSuccess, onCancel }) => {
   const { user } = useAuth();
   const { currentCompany } = useCompany();
+  const { activeNames } = useCompanyLocations();
   const [teams, setTeams] = useState<Team[]>([]);
   const [reportingManagers, setReportingManagers] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -71,6 +76,7 @@ const EditEmployeeForm: React.FC<EditEmployeeFormProps> = ({ employee, onSuccess
       is_active: employee.is_active,
       team_id: employee.team_id || '',
       reporting_manager_id: employee.reporting_manager_id || '',
+      work_location: employee.work_location || UNASSIGNED_LOCATION,
     },
   });
 
@@ -172,6 +178,7 @@ const EditEmployeeForm: React.FC<EditEmployeeFormProps> = ({ employee, onSuccess
           position: data.position || null,
           team_id: data.team_id === 'no_team' ? null : data.team_id || null,
           reporting_manager_id: data.reporting_manager_id === 'no_manager' ? null : data.reporting_manager_id || null,
+          work_location: !data.work_location || data.work_location === UNASSIGNED_LOCATION ? null : data.work_location,
       };
       if (user && ['admin', 'super_admin'].includes(user.role)) {
         updateObj.hire_date = data.hire_date || null;
@@ -182,6 +189,13 @@ const EditEmployeeForm: React.FC<EditEmployeeFormProps> = ({ employee, onSuccess
         .from('employees')
         .update(updateObj)
         .eq('id', employee.id);
+
+      if (!error && updateObj.work_location !== undefined) {
+        await supabase
+          .from('employee_profiles')
+          .update({ work_location: updateObj.work_location })
+          .eq('employee_id', employee.id);
+      }
 
       if (error) {
         console.error('Error updating employee:', error);
@@ -285,6 +299,33 @@ const EditEmployeeForm: React.FC<EditEmployeeFormProps> = ({ employee, onSuccess
           )}
         />
         </div>
+
+        <FormField
+          control={form.control}
+          name="work_location"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Location</FormLabel>
+              <Select onValueChange={field.onChange} value={field.value || UNASSIGNED_LOCATION}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select location" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value={UNASSIGNED_LOCATION}>No location</SelectItem>
+                  {activeNames.map((loc) => (
+                    <SelectItem key={loc} value={loc}>{loc}</SelectItem>
+                  ))}
+                  {employee.work_location && !activeNames.includes(employee.work_location) && (
+                    <SelectItem value={employee.work_location}>{employee.work_location} (inactive)</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <FormField

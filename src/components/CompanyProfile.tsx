@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Globe, MapPin, Users, Building, Calendar, Info, Camera } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Switch } from './ui/switch';
+import CompanyLocationsManager from './CompanyLocationsManager';
 
 const defaultFields = {
   name: '',
@@ -114,10 +115,10 @@ const CompanyProfile: React.FC = () => {
           headquarters: fields.headquarters,
           type: fields.type,
           founded: fields.founded,
-          locations: fields.locations,
         })
         .eq('id', currentCompany?.id);
       if (updateError) throw updateError;
+      if (refreshCompanies) await refreshCompanies();
       setEditMode(false);
     } catch (err: any) {
       setError(err.message || 'Failed to save changes');
@@ -232,8 +233,7 @@ const CompanyProfile: React.FC = () => {
                 <Input name="founded" value={fields.founded ?? ''} onChange={handleChange} readOnly={!isAdmin} />
               </div>
               <div className="md:col-span-2">
-                <label className="font-medium">Locations</label>
-                <Input name="locations" value={fields.locations ?? ''} onChange={handleChange} readOnly={!isAdmin} />
+                <CompanyLocationsManager />
               </div>
               <div className="md:col-span-2">
                 <label className="font-medium">Description</label>
@@ -271,10 +271,7 @@ const CompanyProfile: React.FC = () => {
               {/* Gradient divider */}
               <div className="h-1 w-full rounded-full bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 opacity-60 my-6 animate-pulse" />
               <div className="mb-6">
-                <div className="flex items-center gap-2 text-gray-500 font-semibold uppercase text-xs mb-1">
-                  <MapPin className="w-4 h-4" /> Locations
-                </div>
-                <div className="text-base text-gray-800">{fields.locations}</div>
+                <CompanyLocationsManager />
               </div>
               <div>
                 <div className="flex items-center gap-2 text-gray-500 font-semibold uppercase text-xs mb-1">

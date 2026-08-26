@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { isSuperAdminRecordLocked } from '@/utils/employeePermissions';
 import { 
   Users, 
   UserPlus, 
@@ -386,6 +387,11 @@ const TeamManagement: React.FC = () => {
   };
 
   const addMemberToTeam = async (teamId: string, employeeId: string) => {
+    const target = employees.find((emp) => emp.id === employeeId);
+    if (isSuperAdminRecordLocked(user?.role, target?.role)) {
+      toast({ title: 'Error', description: 'Only a Super Admin can edit Super Admin employee records', variant: 'destructive' });
+      return;
+    }
     const { error } = await supabase.from('employees').update({ team_id: teamId }).eq('id', employeeId);
     if (error) {
       toast({ title: 'Error', description: 'Failed to add member', variant: 'destructive' });
@@ -397,6 +403,11 @@ const TeamManagement: React.FC = () => {
   };
 
   const removeMemberFromTeam = async (employeeId: string) => {
+    const target = employees.find((emp) => emp.id === employeeId);
+    if (isSuperAdminRecordLocked(user?.role, target?.role)) {
+      toast({ title: 'Error', description: 'Only a Super Admin can edit Super Admin employee records', variant: 'destructive' });
+      return;
+    }
     setActionLoading(true);
     const { error } = await supabase.from('employees').update({ team_id: null }).eq('id', employeeId);
     setActionLoading(false);
@@ -701,7 +712,7 @@ const TeamManagement: React.FC = () => {
                             <SelectValue placeholder="Select employee" />
                           </SelectTrigger>
                           <SelectContent>
-                            {employees.filter(emp => !emp.team_id).map(emp => (
+                            {employees.filter(emp => !emp.team_id && !isSuperAdminRecordLocked(user?.role, emp.role)).map(emp => (
                               <SelectItem key={emp.id} value={emp.id}>{emp.name} ({emp.position})</SelectItem>
                             ))}
                           </SelectContent>
@@ -721,7 +732,7 @@ const TeamManagement: React.FC = () => {
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Button size="icon" variant="ghost" onClick={() => setRemovingMemberId(member.id)} disabled={actionLoading} className="text-gray-400 hover:text-red-500 transition-colors">
+                                <Button size="icon" variant="ghost" onClick={() => setRemovingMemberId(member.id)} disabled={actionLoading || isSuperAdminRecordLocked(user?.role, member.role)} className="text-gray-400 hover:text-red-500 transition-colors">
                                   <UserMinus className="w-4 h-4" />
                                 </Button>
                               </TooltipTrigger>

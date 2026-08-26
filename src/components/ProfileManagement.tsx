@@ -17,6 +17,9 @@ import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { calculateProfileCompletion, getCompletionColor, getCompletionBgColor, getCompletionProgressColor } from '@/utils/profileCompletion';
+import { useCompanyLocations } from '@/hooks/useCompanyLocations';
+import { UNASSIGNED_LOCATION } from '@/utils/companyLocations';
+import { isSuperAdminRecordLocked } from '@/utils/employeePermissions';
 
 const PROFILE_ROLES = ['admin', 'super_admin'];
 
@@ -29,6 +32,7 @@ interface EmployeeStats {
 
 const ProfileManagement: React.FC = () => {
   const { user } = useAuth();
+  const { activeNames } = useCompanyLocations();
   const { employees = [], fetchEmployees, isLoading: employeesLoading, error: employeesError } = useEmployees();
   const { completionData, loading: completionLoading, error: completionError } = useProfileCompletion(employees.map(emp => emp.id));
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
@@ -37,6 +41,7 @@ const ProfileManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
+  const [locationFilter, setLocationFilter] = useState<string>('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -108,10 +113,15 @@ const ProfileManagement: React.FC = () => {
       
       // Consultant filter (from searchable combobox)
       const matchesConsultant = !selectedConsultant || emp.id === selectedConsultant.id;
-      
-      return matchesSearch && matchesStatus && matchesDepartment && matchesConsultant;
+
+      const matchesLocation =
+        locationFilter === 'all' ||
+        (locationFilter === UNASSIGNED_LOCATION && !emp.work_location) ||
+        emp.work_location === locationFilter;
+
+      return matchesSearch && matchesStatus && matchesDepartment && matchesConsultant && matchesLocation;
     });
-  }, [employees, searchTerm, statusFilter, departmentFilter, selectedConsultant]);
+  }, [employees, searchTerm, statusFilter, departmentFilter, locationFilter, selectedConsultant]);
 
   const totalPages = Math.ceil(filteredEmployees.length / pageSize);
   const paginatedEmployees = useMemo(() => {
@@ -132,7 +142,7 @@ const ProfileManagement: React.FC = () => {
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, statusFilter, departmentFilter, consultantId]);
+  }, [searchTerm, statusFilter, departmentFilter, locationFilter, consultantId]);
 
   const toTitleCase = (str: string) => {
     if (!str) return '';
@@ -177,6 +187,7 @@ const ProfileManagement: React.FC = () => {
     setSearchTerm('');
     setStatusFilter('all');
     setDepartmentFilter('all');
+    setLocationFilter('all');
     setConsultantId('all');
   };
   
@@ -450,10 +461,26 @@ const ProfileManagement: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Location</label>
+                <Select value={locationFilter} onValueChange={setLocationFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Locations" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Locations</SelectItem>
+                    <SelectItem value={UNASSIGNED_LOCATION}>No location</SelectItem>
+                    {activeNames.map(loc => (
+                      <SelectItem key={loc} value={loc}>{loc}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             {/* Filter Summary */}
-            {(searchTerm || statusFilter !== 'all' || departmentFilter !== 'all' || consultantId !== 'all') && (
+            {(searchTerm || statusFilter !== 'all' || departmentFilter !== 'all' || locationFilter !== 'all' || consultantId !== 'all') && (
               <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
                 <span className="text-sm text-blue-800">
                   {filteredEmployees.length} of {employees.length} employees match filters
@@ -494,7 +521,7 @@ const ProfileManagement: React.FC = () => {
                       </div>
                     )}
                     <div className="min-w-0">
-                    <CardTitle className="text-lg font-semibold">{toTitleCase(emp.name)}</CardTitle>
+                    <CardTitle className="text-lg font-semibold leading-snug break-words">{toTitleCase(emp.name)}</CardTitle>
                     <p className="text-sm text-muted-foreground">{emp.designation || 'No designation'}</p>
                     </div>
                   </div>
@@ -507,6 +534,7 @@ const ProfileManagement: React.FC = () => {
                 <div className="text-sm">
                   <p className="text-muted-foreground">{emp.email}</p>
                   <p className="font-medium">{emp.department || 'No department'}</p>
+                  <p className="text-muted-foreground">{emp.work_location || 'No location'}</p>
                 </div>
                 
                 {/* Profile Completion */}
@@ -558,6 +586,17 @@ const ProfileManagement: React.FC = () => {
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
+                        {isSuperAdminRecordLocked(user.role, emp.role) ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled
+                            className="h-8 w-8 p-0"
+                          >
+                            <Pencil className="h-4 w-4" />
+                            <span className="sr-only">Edit</span>
+                          </Button>
+                        ) : (
                         <Button 
                           variant="outline" 
                           size="sm" 
@@ -570,8 +609,13 @@ const ProfileManagement: React.FC = () => {
                           <Pencil className="h-4 w-4" />
                           <span className="sr-only">Edit</span>
                         </Button>
+                        )}
                       </TooltipTrigger>
-                      <TooltipContent>Edit Profile</TooltipContent>
+                      <TooltipContent>
+                        {isSuperAdminRecordLocked(user.role, emp.role)
+                          ? 'Only Super Admin can edit this record'
+                          : 'Edit Profile'}
+                      </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                 </div>

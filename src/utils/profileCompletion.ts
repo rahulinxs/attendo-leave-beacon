@@ -86,7 +86,8 @@ export const calculateProfileCompletion = (profileData: any): ProfileCompletionR
     { field: 'work_location', label: 'Work Location' },
     { field: 'probation_status', label: 'Probation Status' },
     { field: 'work_experience_years', label: 'Work Experience' },
-    { field: 'designation', label: 'Designation' }
+    { field: 'designation', label: 'Designation' },
+    { field: 'employment_status', label: 'Employment Status' }
   ];
 
   let workCompleted = 0;
@@ -132,6 +133,40 @@ export const calculateProfileCompletion = (profileData: any): ProfileCompletionR
   } else {
     missingSections.push('Family & Emergency');
   }
+
+  const educationFilled = Array.isArray(profileData.education_history) && profileData.education_history.length > 0;
+  const historyFilled = Array.isArray(profileData.work_history) && profileData.work_history.length > 0;
+  totalFields += 2;
+  if (educationFilled) completedFields++;
+  if (historyFilled) completedFields++;
+  if (educationFilled) completedSections.push('Education');
+  else missingSections.push('Education');
+  if (historyFilled) completedSections.push('Work History');
+  else missingSections.push('Work History');
+
+  const identityFields = ['aadhaar_number', 'pan_number', 'uan_number', 'pf_number', 'esi_number'];
+  let identityDone = 0;
+  identityFields.forEach((field) => {
+    totalFields++;
+    if (profileData[field]) {
+      completedFields++;
+      identityDone++;
+    }
+  });
+  if (identityDone >= 2) completedSections.push('Identity & Statutory');
+  else missingSections.push('Identity & Statutory');
+
+  const bankFields = ['bank_name', 'ifsc_code', 'account_number'];
+  let bankDone = 0;
+  bankFields.forEach((field) => {
+    totalFields++;
+    if (profileData[field]) {
+      completedFields++;
+      bankDone++;
+    }
+  });
+  if (bankDone >= 2) completedSections.push('Bank');
+  else missingSections.push('Bank');
 
   // Documents (count from documents array)
   if (profileData.documents && Array.isArray(profileData.documents)) {

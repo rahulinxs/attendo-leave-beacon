@@ -32,11 +32,11 @@ import CommissionReports from '@/components/commission/CommissionReports';
 import CommissionIndex from '@/components/commission/CommissionIndex';
 
 const Index = () => {
-  const { user, isLoading } = useAuth();
+  const { user, isInitializing } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
 
-  // Show loading spinner while checking authentication
-  if (isLoading) {
+  // Only block the login form when restoring an existing session.
+  if (isInitializing) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

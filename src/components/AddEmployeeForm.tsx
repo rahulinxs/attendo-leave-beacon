@@ -14,6 +14,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCompany } from '@/contexts/CompanyContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Switch } from '@/components/ui/switch';
+import { UNASSIGNED_LOCATION } from '@/utils/companyLocations';
+import { useCompanyLocations } from '@/hooks/useCompanyLocations';
 
 const addEmployeeSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -26,6 +28,7 @@ const addEmployeeSchema = z.object({
   reporting_manager_id: z.string().optional(),
   hire_date: z.string().optional(),
   is_active: z.boolean(),
+  work_location: z.string().optional(),
 });
 
 type AddEmployeeForm = z.infer<typeof addEmployeeSchema>;
@@ -40,6 +43,7 @@ const DEFAULT_MANAGER_ID = '385fe928-0d70-4adc-9d4e-c11548e52f4f';
 const AddEmployeeForm: React.FC<AddEmployeeFormProps> = ({ onSuccess, onCancel }) => {
   const { user } = useAuth();
   const { currentCompany, companies, setCurrentCompany } = useCompany();
+  const { activeNames } = useCompanyLocations();
   const [selectedCompanyId, setSelectedCompanyId] = React.useState(currentCompany?.id || '');
   const [teams, setTeams] = React.useState<{ id: string; name: string }[]>([]);
   const [reportingManagers, setReportingManagers] = React.useState<{ id: string; name: string; department: string }[]>([]);
@@ -101,6 +105,7 @@ const AddEmployeeForm: React.FC<AddEmployeeFormProps> = ({ onSuccess, onCancel }
       reporting_manager_id: '',
       hire_date: '',
       is_active: true,
+      work_location: UNASSIGNED_LOCATION,
     },
   });
 
@@ -160,6 +165,11 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       }
 
       if (result.success) {
+        const locationValue =
+          !data.work_location || data.work_location === UNASSIGNED_LOCATION ? null : data.work_location;
+        if (locationValue) {
+          await supabase.from('employees').update({ work_location: locationValue }).eq('email', data.email);
+        }
         toast({ 
           title: 'Success', 
           description: result.message || 'Employee created successfully',
@@ -271,6 +281,30 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
           )}
         />
         </div>
+
+        <FormField
+          control={form.control}
+          name="work_location"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Location</FormLabel>
+              <Select onValueChange={field.onChange} value={field.value || UNASSIGNED_LOCATION}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select location" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value={UNASSIGNED_LOCATION}>No location</SelectItem>
+                  {activeNames.map((loc) => (
+                    <SelectItem key={loc} value={loc}>{loc}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <FormField

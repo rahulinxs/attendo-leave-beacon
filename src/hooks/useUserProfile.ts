@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { isSuperAdminRecordLocked } from '@/utils/employeePermissions';
 
 // Define the types for our new data structures
 export interface EmployeeProfile {
@@ -35,6 +36,21 @@ export interface EmployeeProfile {
   education_history?: any;
   family_members?: any;
   emergency_contacts?: any;
+  employment_status?: string;
+  last_working_day?: string;
+  billing_status?: string;
+  contract_valid_upto?: string;
+  annual_ctc?: number | null;
+  aadhaar_number?: string;
+  pan_number?: string;
+  uan_number?: string;
+  pf_number?: string;
+  esi_number?: string;
+  bank_name?: string;
+  bank_branch?: string;
+  bank_city?: string;
+  ifsc_code?: string;
+  account_number?: string;
 }
 
 export interface EmployeeDocument {
@@ -85,7 +101,24 @@ export const useUserProfile = (employeeId: string) => {
     setLoading(false);
   };
 
+  const assertCanEditRecord = async () => {
+    const { data } = await supabase
+      .from('employees')
+      .select('role')
+      .eq('id', employeeId)
+      .maybeSingle();
+    if (isSuperAdminRecordLocked(user?.role, data?.role)) {
+      return 'Only a Super Admin can edit Super Admin employee records';
+    }
+    return null;
+  };
+
   const updateUserProfile = async (profileUpdate: Partial<EmployeeProfile>) => {
+    const blocked = await assertCanEditRecord();
+    if (blocked) {
+      console.error(blocked);
+      return;
+    }
     setLoading(true);
     // Convert string fields to numbers if present
     const update: any = { ...profileUpdate };
@@ -96,18 +129,36 @@ export const useUserProfile = (employeeId: string) => {
       update.work_experience_years = update.work_experience_years ? parseInt(update.work_experience_years, 10) : null;
     }
     // Convert empty string date fields to null
+    if (typeof update.annual_ctc === 'string') {
+      update.annual_ctc = update.annual_ctc ? parseFloat(update.annual_ctc) : null;
+    }
     const dateFields = [
       'date_of_birth',
       'marriage_anniversary',
       'residing_since',
       'living_in_city_since',
-      'date_of_joining'
+      'date_of_joining',
+      'last_working_day',
+      'contract_valid_upto'
     ];
     dateFields.forEach(field => {
       if (update[field] === '') {
         update[field] = null;
       }
     });
+    const isHrAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+    const sensitiveFields = [
+      'annual_ctc', 'aadhaar_number', 'pan_number', 'uan_number', 'pf_number', 'esi_number',
+      'bank_name', 'bank_branch', 'bank_city', 'ifsc_code', 'account_number',
+      'employment_status', 'last_working_day', 'billing_status', 'contract_valid_upto',
+      'employee_code', 'date_of_joining', 'probation_period', 'employee_type',
+      'work_location', 'probation_status', 'designation', 'job_title', 'department', 'sub_department'
+    ];
+    if (!isHrAdmin) {
+      sensitiveFields.forEach((field) => {
+        delete update[field];
+      });
+    }
     // Parse JSON string fields to arrays if needed
     ['work_history', 'education_history', 'family_members', 'emergency_contacts'].forEach(field => {
       if (typeof update[field] === 'string') {
@@ -138,6 +189,16 @@ export const useUserProfile = (employeeId: string) => {
     if (error) {
       console.error('Error updating profile:', error);
     } else {
+      if (isHrAdmin) {
+        const employeePatch: Record<string, any> = {};
+        if (update.date_of_joining !== undefined) employeePatch.hire_date = update.date_of_joining;
+        if (update.department !== undefined) employeePatch.department = update.department;
+        if (update.designation !== undefined) employeePatch.position = update.designation;
+        if (update.work_location !== undefined) employeePatch.work_location = update.work_location || null;
+        if (Object.keys(employeePatch).length > 0) {
+          await supabase.from('employees').update(employeePatch).eq('id', employeeId);
+        }
+      }
       await fetchUserProfile();
     }
     setLoading(false);
@@ -145,6 +206,11 @@ export const useUserProfile = (employeeId: string) => {
 
   const uploadDocument = async (file: File, documentType: string) => {
     if (!user) return;
+    const blocked = await assertCanEditRecord();
+    if (blocked) {
+      alert(blocked);
+      return;
+    }
     setLoading(true);
     const filePath = `${employeeId}/${Date.now()}_${file.name}`;
     // Debug logs for RLS troubleshooting
@@ -182,6 +248,8 @@ export const useUserProfile = (employeeId: string) => {
 
   const uploadAvatar = async (file: File): Promise<{ error?: string }> => {
     if (!employeeId) return { error: 'Missing employee' };
+    const blocked = await assertCanEditRecord();
+    if (blocked) return { error: blocked };
     if (!file.type.startsWith('image/')) {
       return { error: 'Please choose an image file (JPG, PNG, or WebP).' };
     }
