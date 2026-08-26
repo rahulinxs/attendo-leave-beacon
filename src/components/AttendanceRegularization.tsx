@@ -64,17 +64,31 @@ const AttendanceRegularization: React.FC = () => {
       const startKey = toDateKey(monthStart);
       const endKey = toDateKey(rangeEnd);
 
-      const [{ data: employee }, { data: holidays }, { data: attendance }, { data: leaves }, { data: types }] = await Promise.all([
+      const [{ data: employee }, { data: holidays, error: holidaysError }, { data: attendance }, { data: leaves }, { data: types }] = await Promise.all([
         supabase.from('employees').select('hire_date').eq('id', user.id).maybeSingle(),
-        supabase.from('holidays').select('date').gte('date', startKey).lte('date', toDateKey(monthEnd)),
+        supabase.from('holidays').select('date, is_recurring'),
         supabase.from('attendance').select('date, status, check_in_time, pending_approval, notes').eq('employee_id', user.id).eq('company_id', currentCompany.id).gte('date', startKey).lte('date', endKey),
         supabase.from('leave_requests').select('start_date, end_date, status, leave_types(name)').eq('employee_id', user.id).eq('company_id', currentCompany.id).neq('status', 'rejected').lte('start_date', endKey).gte('end_date', startKey),
         supabase.from('leave_types').select('id, name').eq('company_id', currentCompany.id).eq('is_active', true).order('name'),
       ]);
 
+      if (holidaysError) {
+        console.error('Holiday load error:', holidaysError);
+      }
+
       setLeaveTypes(types || []);
-      const holidaySet = new Set((holidays || []).map((h) => h.date));
-      const attendanceMap = new Map((attendance || []).map((row) => [row.date, row]));
+      const holidaySet = new Set<string>();
+      for (const holiday of holidays || []) {
+        const stored = String(holiday.date || '').slice(0, 10);
+        if (!stored) continue;
+        const parsed = parseDateLocal(stored);
+        if (holiday.is_recurring) {
+          holidaySet.add(format(new Date(year, parsed.getMonth(), parsed.getDate()), 'yyyy-MM-dd'));
+        } else {
+          holidaySet.add(stored);
+        }
+      }
+      const attendanceMap = new Map((attendance || []).map((row) => [String(row.date).slice(0, 10), row]));
       const hireDate = employee?.hire_date || startKey;
       const startFrom = hireDate > startKey ? hireDate : startKey;
       if (startFrom > endKey) {
@@ -94,6 +108,7 @@ const AttendanceRegularization: React.FC = () => {
         if (holidaySet.has(date)) continue;
 
         const att = attendanceMap.get(date);
+        if (att?.status === 'holiday') continue;
         const coveringLeave = (leaves || []).find((leave) => leave.start_date <= date && leave.end_date >= date);
         const leaveTypeRel = coveringLeave?.leave_types as { name?: string } | { name?: string }[] | null | undefined;
         const leaveTypeName = Array.isArray(leaveTypeRel) ? leaveTypeRel[0]?.name : leaveTypeRel?.name;
