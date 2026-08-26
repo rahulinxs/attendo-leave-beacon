@@ -12,6 +12,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Search, Filter, Users, UserCheck, UserX, Building, BarChart2, Loader2, RefreshCw, Eye, Pencil, ChevronLeft, ChevronRight, Download, X, Check, ChevronsUpDown } from 'lucide-react';
 import Profile from './Profile';
+import ProfileExportDialog from './ProfileExportDialog';
 import { Employee } from '@/types/employee';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -38,6 +39,7 @@ const ProfileManagement: React.FC = () => {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
@@ -153,34 +155,12 @@ const ProfileManagement: React.FC = () => {
       .join(' ');
   };
 
-  const exportToCSV = () => {
-    if (employees.length === 0) return;
-
-    const headers = ['Name', 'Email', 'Role', 'Department', 'Designation', 'Status'];
-    
-    const csvRows = employees.map(emp => [
-      `"${emp.name}"`,
-      `"${emp.email}"`,
-      `"${emp.role}"`,
-      `"${emp.department || ''}"`,
-      `"${emp.designation || ''}"`,
-      `"${emp.is_active ? 'Active' : 'Inactive'}"`
-    ].join(','));
-
-    const csvContent = [
-      headers.join(','),
-      ...csvRows
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `employee_profiles_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const openExportDialog = () => {
+    if (!user || !PROFILE_ROLES.includes(user.role)) {
+      setError('You are not authorized to export profile data.');
+      return;
+    }
+    setExportOpen(true);
   };
 
   const clearFilters = () => {
@@ -254,10 +234,12 @@ const ProfileManagement: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={exportToCSV}>
-                <Download className="h-4 w-4 mr-2" />
-                Export
-              </Button>
+              {PROFILE_ROLES.includes(user.role) && (
+                <Button variant="outline" onClick={openExportDialog}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Export
+                </Button>
+              )}
               <Button onClick={handleRefresh} disabled={isRefreshing} variant="gradient">
                 {isRefreshing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
                 Refresh
@@ -696,6 +678,18 @@ const ProfileManagement: React.FC = () => {
           )}
         </DialogContent>
       </Dialog>
+      <ProfileExportDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        employees={filteredEmployees}
+        filters={{
+          search: searchTerm,
+          status: statusFilter,
+          department: departmentFilter,
+          location: locationFilter,
+          consultantId,
+        }}
+      />
     </div>
   );
 };
