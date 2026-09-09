@@ -32,6 +32,8 @@ type LeaveRequestRow = {
   session?: string | null;
 };
 
+export type AttendanceLeaveStatus = 'approved' | 'pending';
+
 const leaveTypeCache = new Map<string, string>();
 
 const isAutoSyncedLeave = (request: LeaveRequestRow, date: string) =>
@@ -44,6 +46,32 @@ const rowDurationType = (row: LeaveRequestRow): DurationType =>
 
 const dateWithinRange = (date: string, start: string, end: string) =>
   date >= start && date <= end;
+
+export async function fetchLeaveStatusesForDate(
+  companyId: string,
+  date: string
+): Promise<Record<string, AttendanceLeaveStatus>> {
+  const { data, error } = await supabase
+    .from('leave_requests')
+    .select('employee_id, start_date, end_date, status')
+    .eq('company_id', companyId)
+    .in('status', ['pending', 'approved'])
+    .lte('start_date', date)
+    .gte('end_date', date);
+
+  if (error) throw error;
+
+  const statusByEmployee: Record<string, AttendanceLeaveStatus> = {};
+  (data ?? []).forEach((request) => {
+    if (!request.employee_id || !dateWithinRange(date, request.start_date, request.end_date)) return;
+
+    if (request.status === 'approved' || !statusByEmployee[request.employee_id]) {
+      statusByEmployee[request.employee_id] = request.status as AttendanceLeaveStatus;
+    }
+  });
+
+  return statusByEmployee;
+}
 
 const pickHalfDaySession = (overlapping: LeaveRequestRow[]): LeaveSession | null => {
   const hasFullDay = overlapping.some((row) => rowDurationType(row) === 'full_day');

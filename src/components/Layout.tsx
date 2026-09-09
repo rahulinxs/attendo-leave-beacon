@@ -46,6 +46,7 @@ import {
   Upload,
   Book,
   Key
+  ,Contact
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -204,6 +205,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       id: 'profile',
       label: 'Profile',
       icon: User,
+      roles: ['employee', 'admin', 'super_admin', 'reporting_manager']
+    },
+    {
+      id: 'employee-id-card',
+      label: 'Employee ID Card',
+      icon: Contact,
       roles: ['employee', 'admin', 'super_admin', 'reporting_manager']
     },
     // System Settings - available to all, just before Profile

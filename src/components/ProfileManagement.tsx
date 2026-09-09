@@ -13,6 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Search, Filter, Users, UserCheck, UserX, Building, BarChart2, Loader2, RefreshCw, Eye, Pencil, ChevronLeft, ChevronRight, Download, X, Check, ChevronsUpDown } from 'lucide-react';
 import Profile from './Profile';
 import ProfileExportDialog from './ProfileExportDialog';
+import EmployeeProfileFieldSettings from './EmployeeProfileFieldSettings';
 import { Employee } from '@/types/employee';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -34,7 +35,7 @@ interface EmployeeStats {
 const ProfileManagement: React.FC = () => {
   const { user } = useAuth();
   const { activeNames } = useCompanyLocations();
-  const { employees = [], fetchEmployees, isLoading: employeesLoading, error: employeesError } = useEmployees();
+  const { employees = [], fetchEmployees, isLoading: employeesLoading, error: employeesError } = useEmployees({ includeInactive: true });
   const { completionData, loading: completionLoading, error: completionError } = useProfileCompletion(employees.map(emp => emp.id));
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -599,6 +600,7 @@ const ProfileManagement: React.FC = () => {
                           : 'Edit Profile'}
                       </TooltipContent>
                     </Tooltip>
+                    <EmployeeProfileFieldSettings employeeId={emp.id} employeeName={emp.name} />
                   </TooltipProvider>
                 </div>
               </CardContent>

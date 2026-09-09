@@ -23,7 +23,8 @@ import {
   TrendingUp,
   MapPin,
   Key,
-  ShieldCheck
+  ShieldCheck,
+  Mail
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { THEME_OPTIONS } from '@/contexts/ThemeContext';
@@ -93,6 +94,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   });
   const [showOnboarding, setShowOnboarding] = useState(true);
   const [showResetPassword, setShowResetPassword] = useState(false);
+  const [testEmailLoading, setTestEmailLoading] = useState(false);
 
   // Refresh all dashboard data when user or company changes
   const refreshDashboardData = async () => {
@@ -165,6 +167,42 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         title: "Leave Rejected",
         description: "Leave request has been rejected",
       });
+    }
+  };
+
+  const handleSendTestEmail = async (action: 'clock-in' | 'clock-out') => {
+    setTestEmailLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('test-email', {
+        body: {
+          action,
+          recipient_email: user?.email
+        }
+      });
+
+      if (error) {
+        toast({
+          title: "Email Failed",
+          description: `Failed to send test ${action} email: ${error.message}`,
+          variant: "destructive"
+        });
+        console.error('Error:', error);
+      } else {
+        toast({
+          title: "Email Sent",
+          description: `Test ${action} email sent successfully to ${user?.email}`,
+          variant: "default"
+        });
+      }
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to send test email",
+        variant: "destructive"
+      });
+      console.error('Exception:', err);
+    } finally {
+      setTestEmailLoading(false);
     }
   };
 
@@ -538,7 +576,47 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
           </CardContent>
         </Card>
       )}
-
+      {/* Test Email Section (Admin/Super Admin Only) */}
+      {(['admin', 'super_admin'].includes(user?.role || '')) && (
+        <Card className={`${themeClass} card-theme bg-white border-0 shadow-lg mb-6 w-full rounded-2xl p-6 bg-blue-50`}>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center text-lg">
+              <Mail className="w-5 h-5 mr-2 text-blue-600" />
+              Email System Test
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Test your email configuration by sending test emails to yourself.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full">
+                <Button 
+                  variant="outline" 
+                  onClick={() => handleSendTestEmail('clock-in')}
+                  disabled={testEmailLoading}
+                  className="flex items-center gap-2"
+                >
+                  <Mail className="w-4 h-4" />
+                  Test Clock-In Email
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => handleSendTestEmail('clock-out')}
+                  disabled={testEmailLoading}
+                  className="flex items-center gap-2"
+                >
+                  <Mail className="w-4 h-4" />
+                  Test Clock-Out Email
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Email will be sent to: <strong>{user?.email}</strong>
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       {/* Session Timeout Modal */}
       <SessionTimeoutModal 
         open={showTimeoutWarning} 

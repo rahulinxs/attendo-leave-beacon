@@ -26,6 +26,15 @@ const editEmployeeSchema = z.object({
   team_id: z.string().optional(),
   reporting_manager_id: z.string().optional(),
   work_location: z.string().optional(),
+  exit_date: z.string().optional(),
+  exit_reason: z.string().optional(),
+  exit_interview_details: z.string().optional(),
+}).superRefine((data, context) => {
+  if (!data.is_active) {
+    if (!data.exit_date) context.addIssue({ code: z.ZodIssueCode.custom, path: ['exit_date'], message: 'Exit date is required when inactive' });
+    if (!data.exit_reason?.trim()) context.addIssue({ code: z.ZodIssueCode.custom, path: ['exit_reason'], message: 'Exit reason is required when inactive' });
+    if (!data.exit_interview_details?.trim()) context.addIssue({ code: z.ZodIssueCode.custom, path: ['exit_interview_details'], message: 'Exit interview details are required when inactive' });
+  }
 });
 
 type EditEmployeeForm = z.infer<typeof editEmployeeSchema>;
@@ -77,6 +86,9 @@ const EditEmployeeForm: React.FC<EditEmployeeFormProps> = ({ employee, onSuccess
       team_id: employee.team_id || '',
       reporting_manager_id: employee.reporting_manager_id || '',
       work_location: employee.work_location || UNASSIGNED_LOCATION,
+      exit_date: '',
+      exit_reason: '',
+      exit_interview_details: '',
     },
   });
 
@@ -107,6 +119,20 @@ const EditEmployeeForm: React.FC<EditEmployeeFormProps> = ({ employee, onSuccess
 
         if (managersData) {
           setReportingManagers(managersData);
+        }
+
+        const { data: profileData } = await supabase
+          .from('employee_profiles')
+          .select('exit_date, exit_reason, exit_interview_details')
+          .eq('employee_id', employee.id)
+          .maybeSingle();
+        if (profileData) {
+          form.reset({
+            ...form.getValues(),
+            exit_date: profileData.exit_date || '',
+            exit_reason: profileData.exit_reason || '',
+            exit_interview_details: profileData.exit_interview_details || '',
+          });
         }
       } catch (error) {
         console.error('Error fetching teams and managers:', error);
@@ -183,6 +209,20 @@ const EditEmployeeForm: React.FC<EditEmployeeFormProps> = ({ employee, onSuccess
       if (user && ['admin', 'super_admin'].includes(user.role)) {
         updateObj.hire_date = data.hire_date || null;
         updateObj.is_active = data.is_active;
+      }
+
+      const { error: profileError } = await supabase
+        .from('employee_profiles')
+        .upsert({
+          employee_id: employee.id,
+          exit_date: data.exit_date || null,
+          exit_reason: data.exit_reason?.trim() || null,
+          exit_interview_details: data.exit_interview_details?.trim() || null,
+        }, { onConflict: 'employee_id' });
+
+      if (profileError) {
+        toast({ title: 'Error', description: 'Failed to save exit details', variant: 'destructive' });
+        return;
       }
 
       const { error } = await supabase
@@ -432,6 +472,48 @@ const EditEmployeeForm: React.FC<EditEmployeeFormProps> = ({ employee, onSuccess
                 </FormItem>
               )}
             />
+        )}
+
+        {!form.watch('is_active') && (
+          <div className="space-y-4 rounded-lg border border-red-200 bg-red-50 p-4">
+            <div>
+              <FormLabel className="text-base">Offboarding Details</FormLabel>
+              <p className="text-sm text-muted-foreground">These details are required before the employee can be marked inactive.</p>
+            </div>
+            <FormField
+              control={form.control}
+              name="exit_date"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Exit Date</FormLabel>
+                  <FormControl><Input type="date" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="exit_reason"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Exit Reason</FormLabel>
+                  <FormControl><Input placeholder="Resigned, terminated, end of contract..." {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="exit_interview_details"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Exit Interview Details</FormLabel>
+                  <FormControl><textarea className="min-h-24 w-full rounded-md border bg-background px-3 py-2 text-sm" placeholder="Record exit interview notes or outcome" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
         )}
 
         <div className="flex gap-2">

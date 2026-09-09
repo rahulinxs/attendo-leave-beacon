@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCompany } from '@/contexts/CompanyContext';
 import { resolveLeaveTotalDays, type DurationType, type LeaveSession } from '@/utils/leaveDuration';
 import { hasConflictingLeave } from '@/services/leaveOverlap';
+import { leaveNotificationService } from '@/services/leaveNotificationService';
 
 interface LeaveRequest {
   id: string;
@@ -359,6 +360,18 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
         return false;
       }
       
+      // Send approval notification email
+      if (currentCompany?.id) {
+        const notificationResult = await leaveNotificationService.notifyLeaveApproved(
+          requestId,
+          currentCompany.id
+        );
+        if (!notificationResult.success) {
+          console.warn('Failed to send approval notification:', notificationResult.error);
+          // Don't return false - the approval was successful, just email failed
+        }
+      }
+
       await fetchLeaveRequests();
       return true;
     } catch (error) {
@@ -394,6 +407,18 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
         return false;
       }
       
+      // Send rejection notification email
+      if (currentCompany?.id) {
+        const notificationResult = await leaveNotificationService.notifyLeaveRejected(
+          requestId,
+          currentCompany.id
+        );
+        if (!notificationResult.success) {
+          console.warn('Failed to send rejection notification:', notificationResult.error);
+          // Don't return false - the rejection was successful, just email failed
+        }
+      }
+
       await fetchLeaveRequests();
       return true;
     } catch (error) {

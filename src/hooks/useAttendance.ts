@@ -8,6 +8,7 @@ import {
   mergeAttendanceLocation,
   type AttendanceLocation,
 } from '@/utils/geoLocation';
+import { attendanceNotificationService } from '@/services/attendanceNotificationService';
 
 interface AttendanceRecord {
   id: string;
@@ -144,6 +145,12 @@ export const useAttendance = () => {
           return false;
         }
       }
+
+      const notificationResult = await attendanceNotificationService.notifyClockIn(user.id, currentCompany.id);
+      if (!notificationResult.success) {
+        console.warn('Clock-in notification failed:', notificationResult.error);
+      }
+
       await fetchTodayAttendance();
       return true;
     } catch (error) {
@@ -176,6 +183,11 @@ export const useAttendance = () => {
       if (error) {
         console.error('Check-out error:', error);
         return false;
+      }
+
+      const notificationResult = await attendanceNotificationService.notifyClockOut(user.id, currentCompany.id);
+      if (!notificationResult.success) {
+        console.warn('Clock-out notification failed:', notificationResult.error);
       }
       
       await fetchTodayAttendance();

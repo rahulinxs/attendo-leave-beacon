@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils';
 import { UNASSIGNED_LOCATION } from '@/utils/companyLocations';
 import { isSuperAdminRecordLocked } from '@/utils/employeePermissions';
 import { useCompanyLocations } from '@/hooks/useCompanyLocations';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface Employee {
   id: string;
@@ -70,6 +71,11 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [offboardingEmployee, setOffboardingEmployee] = useState<Employee | null>(null);
+  const [exitDate, setExitDate] = useState('');
+  const [exitReason, setExitReason] = useState('');
+  const [exitInterviewDetails, setExitInterviewDetails] = useState('');
+  const [offboardingSaving, setOffboardingSaving] = useState(false);
   
   // Pagination state
   const [page, setPage] = useState(1);
@@ -227,7 +233,11 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
     return true;
   };
 
-  const handleRemoveEmployee = async (employeeId: string, employeeName: string) => {
+  const handleRemoveEmployee = async (employeeId: string, employeeName: string, details?: {
+    exitDate: string;
+    exitReason: string;
+    exitInterviewDetails: string;
+  }) => {
     const employee = employees.find(emp => emp.id === employeeId);
     if (!employee || !canRemoveEmployee(employee)) {
       toast({
@@ -238,9 +248,24 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
       return;
     }
 
+    if (!details?.exitDate || !details.exitReason.trim() || !details.exitInterviewDetails.trim()) {
+      toast({ title: 'Exit details required', description: 'Enter the exit date, reason, and exit interview details.', variant: 'destructive' });
+      return;
+    }
+
     setRemovingId(employeeId);
     try {
-      // Mark employee as inactive instead of deleting
+      const { error: profileError } = await supabase
+        .from('employee_profiles')
+        .upsert({
+          employee_id: employeeId,
+          exit_date: details.exitDate,
+          exit_reason: details.exitReason.trim(),
+          exit_interview_details: details.exitInterviewDetails.trim(),
+        }, { onConflict: 'employee_id' });
+
+      if (profileError) throw profileError;
+
       const { error } = await supabase
         .from('employees')
         .update({ is_active: false })
@@ -263,6 +288,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
 
       // Refresh the list
       fetchEmployees();
+      setOffboardingEmployee(null);
     } catch (error) {
       console.error('Error removing employee:', error);
       toast({
@@ -273,6 +299,24 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
     } finally {
       setRemovingId(null);
     }
+  };
+
+  const openOffboardingDialog = (employee: Employee) => {
+    setOffboardingEmployee(employee);
+    setExitDate(new Date().toISOString().slice(0, 10));
+    setExitReason('');
+    setExitInterviewDetails('');
+  };
+
+  const submitOffboarding = async () => {
+    if (!offboardingEmployee) return;
+    setOffboardingSaving(true);
+    await handleRemoveEmployee(offboardingEmployee.id, offboardingEmployee.name, {
+      exitDate,
+      exitReason,
+      exitInterviewDetails,
+    });
+    setOffboardingSaving(false);
   };
 
   const handleEditSuccess = () => {
@@ -640,7 +684,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction
-                              onClick={() => handleRemoveEmployee(employee.id, employee.name)}
+                              onClick={() => openOffboardingDialog(employee)}
                               className="bg-red-600 hover:bg-red-700"
                             >
                               Remove
@@ -743,6 +787,35 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
           </div>
         </div>
       )}
+
+      <Dialog open={Boolean(offboardingEmployee)} onOpenChange={(open) => !open && setOffboardingEmployee(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Offboard {offboardingEmployee?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">Enter the required exit information before marking this employee inactive.</p>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Exit Date</label>
+              <Input type="date" value={exitDate} onChange={(event) => setExitDate(event.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Exit Reason</label>
+              <Input value={exitReason} onChange={(event) => setExitReason(event.target.value)} placeholder="Resigned, terminated, end of contract..." />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Exit Interview Details</label>
+              <textarea className="min-h-28 w-full rounded-md border bg-background px-3 py-2 text-sm" value={exitInterviewDetails} onChange={(event) => setExitInterviewDetails(event.target.value)} placeholder="Record exit interview notes or outcome" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setOffboardingEmployee(null)} disabled={offboardingSaving}>Cancel</Button>
+              <Button variant="destructive" onClick={submitOffboarding} disabled={offboardingSaving || !exitDate || !exitReason.trim() || !exitInterviewDetails.trim()}>
+                {offboardingSaving ? 'Saving...' : 'Mark Inactive'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

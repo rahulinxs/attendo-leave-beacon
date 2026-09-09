@@ -23,6 +23,7 @@ import { THEME_OPTIONS } from '@/contexts/ThemeContext';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import BulkAttendanceImport from './BulkAttendanceImport';
 import {
+  fetchLeaveStatusesForDate,
   syncLeaveForAbsentAttendance,
   syncLeaveForHalfDayAttendance,
   cancelSyncedLeaveForAttendance,
@@ -58,6 +59,7 @@ const AttendanceManagement: React.FC = () => {
   const [pendingEntries, setPendingEntries] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [dateAttendanceMap, setDateAttendanceMap] = useState<Record<string, string>>({});
+  const [dateLeaveStatusMap, setDateLeaveStatusMap] = useState<Record<string, 'approved' | 'pending'>>({});
   const [employeeAttendance, setEmployeeAttendance] = useState<any[]>([]);
   const [employeeTab, setEmployeeTab] = useState('today');
   const [backdateRequest, setBackdateRequest] = useState({ date: '', status: '', reason: '' });
@@ -137,6 +139,38 @@ const AttendanceManagement: React.FC = () => {
                 </Badge>
               </TooltipTrigger>
               <TooltipContent>Leave: Employee is on leave today</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      case 'on_leave':
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  className={`${badgeBase} bg-blue-600 hover:bg-blue-700 text-white border-blue-700`}
+                  aria-label="On Leave: Employee has approved leave"
+                >
+                  <Calendar className="w-4 h-4 mr-1" /> On Leave
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>On Leave: Employee has approved leave</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      case 'leave_pending':
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  className={`${badgeBase} bg-orange-500 hover:bg-orange-600 text-white border-orange-600`}
+                  aria-label="Leave Pending: Employee has a pending leave request"
+                >
+                  <Calendar className="w-4 h-4 mr-1" /> Leave Pending
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>Leave Pending: Employee has a pending leave request</TooltipContent>
             </Tooltip>
           </TooltipProvider>
         );
@@ -534,22 +568,37 @@ const AttendanceManagement: React.FC = () => {
          user.role !== 'reporting_manager') ||
         !currentCompany
       ) return;
-      const dateStr = selectedDate.toISOString().split('T')[0];
-      const { data, error } = await supabase
-        .from('attendance')
-        .select('employee_id, status, date')
-        .eq('date', dateStr)
-        .eq('company_id', currentCompany.id);
+      const dateStr = format(selectedDate, 'yyyy-MM-dd');
+      const [{ data, error }, leaveStatusMap] = await Promise.all([
+        supabase
+          .from('attendance')
+          .select('employee_id, status, date')
+          .eq('date', dateStr)
+          .eq('company_id', currentCompany.id),
+        fetchLeaveStatusesForDate(currentCompany.id, dateStr),
+      ]);
       if (!error && data) {
         const map: Record<string, string> = {};
         data.forEach((rec: any) => {
           map[rec.employee_id] = rec.status;
         });
         setDateAttendanceMap(map);
+        setDateLeaveStatusMap(leaveStatusMap);
       }
     };
     fetchAllAttendance();
   }, [user, employees, selectedDate, currentCompany]);
+
+  const getAttendanceListStatus = (employeeId: string) => {
+    const attendanceStatus = dateAttendanceMap[employeeId];
+    const leaveStatus = dateLeaveStatusMap[employeeId];
+
+    if (leaveStatus && (!attendanceStatus || attendanceStatus === 'absent')) {
+      return leaveStatus === 'approved' ? 'on_leave' : 'leave_pending';
+    }
+
+    return attendanceStatus;
+  };
 
   const handleStatusChange = async () => {
     if (!statusChangeForm.employeeId || !statusChangeForm.newStatus || !statusChangeForm.date) {
@@ -941,7 +990,7 @@ const AttendanceManagement: React.FC = () => {
                 {paginatedEmployees.map((emp) => (
                   <tr key={emp.id} className="border-b bg-gradient-to-r from-blue-50 to-green-50">
                     <td className="px-4 py-2">{emp.name}</td>
-                    <td className="px-4 py-2">{getStatusBadge(dateAttendanceMap[emp.id])}</td>
+                    <td className="px-4 py-2">{getStatusBadge(getAttendanceListStatus(emp.id))}</td>
                     <td className="px-4 py-2 flex gap-2">
                       <Button
                         size="sm"

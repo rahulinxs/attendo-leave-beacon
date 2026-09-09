@@ -18,6 +18,7 @@ import SystemSettings from '@/components/SystemSettings';
 import EmployeeAttendance from '@/components/EmployeeAttendance';
 import AttendanceRegularization from '@/components/AttendanceRegularization';
 import Profile from '@/components/Profile';
+import EmployeeIdCard from '@/components/EmployeeIdCard';
 import ProfileManagement from '@/components/ProfileManagement';
 import CompanyProfile from '@/components/CompanyProfile';
 import PerformanceReport from '@/components/PerformanceReport';
@@ -174,6 +175,9 @@ const Index = () => {
         return (
           <Profile employeeId={user.id} />
         );
+
+      case 'employee-id-card':
+        return <EmployeeIdCard employeeId={user.id} />;
       
       case 'company-profile':
         return <CompanyProfile />;

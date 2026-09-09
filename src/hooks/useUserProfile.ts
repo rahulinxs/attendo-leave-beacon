@@ -38,6 +38,9 @@ export interface EmployeeProfile {
   emergency_contacts?: any;
   employment_status?: string;
   last_working_day?: string;
+  exit_date?: string;
+  exit_reason?: string;
+  exit_interview_details?: string;
   billing_status?: string;
   contract_valid_upto?: string;
   annual_ctc?: number | null;
@@ -153,6 +156,7 @@ export const useUserProfile = (employeeId: string) => {
       'employment_status', 'last_working_day', 'billing_status', 'contract_valid_upto',
       'employee_code', 'date_of_joining', 'probation_period', 'employee_type',
       'work_location', 'probation_status', 'designation', 'job_title', 'department', 'sub_department'
+      , 'exit_date', 'exit_reason', 'exit_interview_details'
     ];
     if (!isHrAdmin) {
       sensitiveFields.forEach((field) => {

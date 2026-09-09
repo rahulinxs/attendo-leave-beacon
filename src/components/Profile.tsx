@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useCompanyLocations } from '@/hooks/useCompanyLocations';
 import { isSuperAdminRecordLocked } from '@/utils/employeePermissions';
+import { useEmployeeProfileFieldVisibility } from '@/hooks/useEmployeeProfileFieldVisibility';
 
 interface ProfileProps {
   employeeId: string;
@@ -114,6 +115,7 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
   const { activeNames: companyLocations } = useCompanyLocations();
   const isHrAdmin = user?.role === 'admin' || user?.role === 'super_admin';
   const { profileData, fetchUserProfile, loading, updateUserProfile, uploadDocument, uploadAvatar } = useUserProfile(employeeId);
+  const { isVisible } = useEmployeeProfileFieldVisibility(employeeId);
   const readOnly = readOnlyProp || isSuperAdminRecordLocked(user?.role, profileData?.employee?.role);
   const [personalForm, setPersonalForm] = useState({
     name: '',
@@ -150,6 +152,9 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
     sub_department: '',
     employment_status: '',
     last_working_day: '',
+    exit_date: '',
+    exit_reason: '',
+    exit_interview_details: '',
     billing_status: '',
     contract_valid_upto: '',
     reporting_manager_id: '',
@@ -264,6 +269,9 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
         sub_department: profileData.profile.sub_department || '',
         employment_status: profileData.profile.employment_status || '',
         last_working_day: profileData.profile.last_working_day || '',
+        exit_date: profileData.profile.exit_date || '',
+        exit_reason: profileData.profile.exit_reason || '',
+        exit_interview_details: profileData.profile.exit_interview_details || '',
         billing_status: profileData.profile.billing_status || '',
         contract_valid_upto: profileData.profile.contract_valid_upto || '',
         reporting_manager_id: profileData.employee?.reporting_manager_id || '',
@@ -406,6 +414,9 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
       sub_department: workForm.sub_department,
       employment_status: workForm.employment_status,
       last_working_day: workForm.last_working_day,
+      exit_date: workForm.exit_date,
+      exit_reason: workForm.exit_reason,
+      exit_interview_details: workForm.exit_interview_details,
       billing_status: workForm.billing_status,
       contract_valid_upto: workForm.contract_valid_upto,
     });
@@ -691,6 +702,7 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         {/* Personal Info Card */}
+        {isVisible('personal') && (
         <div className={`${themeClass} card-theme rounded-2xl p-6 flex flex-col min-h-[160px]`}>
           <div className="flex items-center gap-2 mb-2">
             <span className="text-primary text-2xl">👤</span>
@@ -708,7 +720,9 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
           </div>
           <button className="mt-auto self-end bg-primary text-primary-foreground px-5 py-1.5 rounded hover:bg-primary/80" onClick={() => setEditTab('personal')}>Edit</button>
         </div>
+        )}
         {/* Contact Info Card */}
+        {isVisible('contact') && (
         <div className={`${themeClass} card-theme rounded-2xl p-6 flex flex-col min-h-[160px]`}>
           <div className="flex items-center gap-2 mb-2">
             <span className="text-green-500 text-2xl">📞</span>
@@ -723,7 +737,9 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
           </div>
           <button className="mt-auto self-end bg-primary text-primary-foreground px-5 py-1.5 rounded hover:bg-primary/80" onClick={() => setEditTab('contact')}>Edit</button>
         </div>
+        )}
         {/* Work Info Card */}
+        {isVisible('work') && (
         <div className={`${themeClass} card-theme rounded-2xl p-6 flex flex-col min-h-[160px]`}>
           <div className="flex items-center gap-2 mb-2">
             <span className="text-purple-500 text-2xl">💼</span>
@@ -737,13 +753,22 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
             <span>Dept: <span className="font-bold">{workForm.department || '-'}</span></span>
             <span>Job: <span className="font-bold">{workForm.job_title || '-'}</span></span>
             <span>Profile status: <span className="font-bold">{workForm.employment_status || '-'}</span></span>
+            {!profileData?.employee?.is_active && (
+              <>
+                <span>Exit date: <span className="font-bold">{formatDisplayDate(workForm.exit_date) || '-'}</span></span>
+                <span>Exit reason: <span className="font-bold">{workForm.exit_reason || '-'}</span></span>
+                <span className="basis-full">Exit interview: <span className="font-bold">{workForm.exit_interview_details || '-'}</span></span>
+              </>
+            )}
             <span>App access: <span className="font-bold">{profileData?.employee?.is_active ? 'Active' : 'Inactive'}</span></span>
             <span>Manager: <span className="font-bold">{colleagues.find(c => c.id === workForm.reporting_manager_id)?.name || '-'}</span></span>
             <span>Reportees: <span className="font-bold">{reportees.length ? reportees.map(r => r.name).join(', ') : 'None'}</span></span>
           </div>
           {!readOnly && isHrAdmin && <button className="mt-auto self-end bg-primary text-primary-foreground px-5 py-1.5 rounded hover:bg-primary/80" onClick={() => setEditTab('work')}>Edit</button>}
         </div>
+        )}
         {/* Family/Emergency Card */}
+        {isVisible('family') && (
         <div className={`${themeClass} card-theme rounded-2xl p-6 flex flex-col min-h-[160px]`}>
           <div className="flex items-center gap-2 mb-2">
             <span className="text-pink-500 text-2xl">👪</span>
@@ -825,7 +850,9 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
           </div>
           <button className="mt-auto self-end bg-primary text-primary-foreground px-5 py-1.5 rounded hover:bg-primary/80" onClick={() => setEditTab('family')}>Edit</button>
         </div>
+        )}
         {/* Documents Card */}
+        {isVisible('documents') && (
         <div className={`${themeClass} card-theme rounded-2xl p-6 flex flex-col min-h-[160px]`}>
           <div className="flex items-center gap-2 mb-2">
             <span className="text-yellow-500 text-2xl">📄</span>
@@ -856,7 +883,9 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
           </ul>
           <button className="mt-auto self-end bg-primary text-primary-foreground px-5 py-1.5 rounded hover:bg-primary/80" onClick={() => setEditTab('documents')}>Manage</button>
         </div>
+        )}
 
+        {isVisible('education') && (
         <div className={`${themeClass} card-theme rounded-2xl p-6 flex flex-col min-h-[160px]`}>
           <div className="flex items-center gap-2 mb-2">
             <span className="text-indigo-500 text-2xl">🎓</span>
@@ -870,7 +899,9 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
           </ul>
           {!readOnly && <button className="mt-auto self-end bg-primary text-primary-foreground px-5 py-1.5 rounded hover:bg-primary/80" onClick={() => setEditTab('education')}>Edit</button>}
         </div>
+        )}
 
+        {isVisible('work_history') && (
         <div className={`${themeClass} card-theme rounded-2xl p-6 flex flex-col min-h-[160px]`}>
           <div className="flex items-center gap-2 mb-2">
             <span className="text-orange-500 text-2xl">🗂️</span>
@@ -892,7 +923,9 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
           </ul>
           {!readOnly && <button className="mt-auto self-end bg-primary text-primary-foreground px-5 py-1.5 rounded hover:bg-primary/80" onClick={() => setEditTab('history')}>Edit</button>}
         </div>
+        )}
 
+        {isVisible('identity') && (
         <div className={`${themeClass} card-theme rounded-2xl p-6 flex flex-col min-h-[160px]`}>
           <div className="flex items-center gap-2 mb-2">
             <span className="text-teal-600 text-2xl">🪪</span>
@@ -907,7 +940,9 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
           </div>
           {!readOnly && isHrAdmin && <button className="mt-auto self-end bg-primary text-primary-foreground px-5 py-1.5 rounded hover:bg-primary/80" onClick={() => setEditTab('identity')}>Edit</button>}
         </div>
+        )}
 
+        {isVisible('bank') && (
         <div className={`${themeClass} card-theme rounded-2xl p-6 flex flex-col min-h-[160px]`}>
           <div className="flex items-center gap-2 mb-2">
             <span className="text-emerald-600 text-2xl">🏦</span>
@@ -921,6 +956,7 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
           </div>
           {!readOnly && isHrAdmin && <button className="mt-auto self-end bg-primary text-primary-foreground px-5 py-1.5 rounded hover:bg-primary/80" onClick={() => setEditTab('bank')}>Edit</button>}
         </div>
+        )}
 
         <div className={`${themeClass} card-theme rounded-2xl p-6 flex flex-col min-h-[160px]`}>
           <div className="flex items-center gap-2 mb-2">
@@ -944,7 +980,7 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
         </div>
       </div>
       {/* Edit Forms as Dialogs */}
-      <Dialog open={editTab === 'personal'} onOpenChange={open => !open && setEditTab(null)}>
+      <Dialog open={isVisible('personal') && editTab === 'personal'} onOpenChange={open => !open && setEditTab(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Personal Info</DialogTitle>
@@ -1032,7 +1068,7 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
         </DialogContent>
       </Dialog>
       {editTab === 'contact' && (
-        <Dialog open={editTab === 'contact'} onOpenChange={open => !open && setEditTab(null)}>
+        <Dialog open={isVisible('contact') && editTab === 'contact'} onOpenChange={open => !open && setEditTab(null)}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Edit Contact Info</DialogTitle>
@@ -1173,7 +1209,7 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
         </Dialog>
       )}
       {editTab === 'work' && (
-        <Dialog open={editTab === 'work'} onOpenChange={open => !open && setEditTab(null)}>
+        <Dialog open={isVisible('work') && editTab === 'work'} onOpenChange={open => !open && setEditTab(null)}>
           <DialogContent className="max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit Work Info</DialogTitle>
@@ -1333,6 +1369,26 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
                   <input type="date" name="contract_valid_upto" value={workForm.contract_valid_upto} onChange={handleWorkChange} className="w-full border rounded px-3 py-2" />
                 </div>
               </div>
+              {!profileData?.employee?.is_active && isHrAdmin && !readOnly && (
+                <div className="space-y-4 rounded-lg border border-red-200 bg-red-50 p-4">
+                  <div>
+                    <label className="block text-sm font-medium">Offboarding Details</label>
+                    <p className="text-xs text-muted-foreground mt-1">These details are editable by Admin and Super Admin users for inactive employees.</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Exit Date</label>
+                    <input type="date" name="exit_date" value={workForm.exit_date} onChange={handleWorkChange} className="w-full border rounded px-3 py-2" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Exit Reason</label>
+                    <input type="text" name="exit_reason" value={workForm.exit_reason} onChange={handleWorkChange} className="w-full border rounded px-3 py-2" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Exit Interview Details</label>
+                    <textarea name="exit_interview_details" value={workForm.exit_interview_details} onChange={handleWorkChange} className="min-h-24 w-full border rounded px-3 py-2" />
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium mb-1">Reporting manager</label>
                 <select name="reporting_manager_id" value={workForm.reporting_manager_id} onChange={handleWorkChange} className="w-full border rounded px-3 py-2">
@@ -1356,7 +1412,7 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
         </Dialog>
       )}
       {editTab === 'family' && (
-        <Dialog open={editTab === 'family'} onOpenChange={open => !open && setEditTab(null)}>
+        <Dialog open={isVisible('family') && editTab === 'family'} onOpenChange={open => !open && setEditTab(null)}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Edit Family & Emergency</DialogTitle>
@@ -1499,7 +1555,7 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
         </Dialog>
       )}
       {editTab === 'identity' && (
-        <Dialog open={editTab === 'identity'} onOpenChange={open => !open && setEditTab(null)}>
+        <Dialog open={isVisible('identity') && editTab === 'identity'} onOpenChange={open => !open && setEditTab(null)}>
           <DialogContent>
             <DialogHeader><DialogTitle>Edit Identity & Statutory</DialogTitle></DialogHeader>
             <form className="space-y-3" onSubmit={handleIdentitySave}>
@@ -1517,7 +1573,7 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
         </Dialog>
       )}
       {editTab === 'bank' && (
-        <Dialog open={editTab === 'bank'} onOpenChange={open => !open && setEditTab(null)}>
+        <Dialog open={isVisible('bank') && editTab === 'bank'} onOpenChange={open => !open && setEditTab(null)}>
           <DialogContent>
             <DialogHeader><DialogTitle>Edit Bank & CTC</DialogTitle></DialogHeader>
             <form className="space-y-3" onSubmit={handleBankSave}>
@@ -1536,7 +1592,7 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
         </Dialog>
       )}
       {editTab === 'education' && (
-        <Dialog open={editTab === 'education'} onOpenChange={open => !open && setEditTab(null)}>
+        <Dialog open={isVisible('education') && editTab === 'education'} onOpenChange={open => !open && setEditTab(null)}>
           <DialogContent>
             <DialogHeader><DialogTitle>Edit Educational Info</DialogTitle></DialogHeader>
             <form className="space-y-3" onSubmit={handleEducationSave}>
@@ -1560,7 +1616,7 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
         </Dialog>
       )}
       {editTab === 'history' && (
-        <Dialog open={editTab === 'history'} onOpenChange={open => !open && setEditTab(null)}>
+        <Dialog open={isVisible('work_history') && editTab === 'history'} onOpenChange={open => !open && setEditTab(null)}>
           <DialogContent className="max-h-[85vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Edit Work History</DialogTitle></DialogHeader>
             <form className="space-y-3" onSubmit={handleWorkHistorySave}>
@@ -1642,7 +1698,7 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
         </Dialog>
       )}
       {editTab === 'documents' && (
-        <Dialog open={editTab === 'documents'} onOpenChange={open => !open && setEditTab(null)}>
+        <Dialog open={isVisible('documents') && editTab === 'documents'} onOpenChange={open => !open && setEditTab(null)}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Manage Documents</DialogTitle>

@@ -21,9 +21,10 @@ interface Employee {
   work_location?: string | null;
 }
 
-export const useEmployees = () => {
+export const useEmployees = (options: { includeInactive?: boolean } = {}) => {
   const { user } = useAuth();
   const { currentCompany } = useCompany();
+  const includeInactive = options.includeInactive === true;
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -33,12 +34,17 @@ export const useEmployees = () => {
     try {
       setIsLoading(true);
       
-      const { data, error } = await supabase
+      let query = supabase
         .from('employees')
         .select('*')
         .eq('company_id', currentCompany.id)
-        .eq('is_active', true)
         .order('name');
+
+      if (!includeInactive) {
+        query = query.eq('is_active', true);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error fetching employees:', error);
@@ -90,7 +96,7 @@ export const useEmployees = () => {
     ) {
       fetchEmployees();
     }
-  }, [user, currentCompany]);
+  }, [user, currentCompany, includeInactive]);
 
   return {
     employees,

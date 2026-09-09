@@ -17,6 +17,7 @@ import {
   type LeaveSession,
 } from '@/utils/leaveDuration';
 import { hasConflictingLeave } from '@/services/leaveOverlap';
+import { leaveNotificationService } from '@/services/leaveNotificationService';
 
 interface LeaveType {
   id: string;
@@ -147,7 +148,7 @@ const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSuccess, onCancel
         return;
       }
 
-      const { error } = await supabase
+      const { data: insertedData, error } = await supabase
         .from('leave_requests')
         .insert({
           employee_id: user.id,
@@ -160,7 +161,9 @@ const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSuccess, onCancel
           session,
           reason: formData.reason,
           status: 'pending'
-        });
+        })
+        .select()
+        .single();
 
       if (error) {
         console.error('Submit leave request error:', error);
@@ -176,6 +179,18 @@ const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSuccess, onCancel
         title: "Success",
         description: "Leave request submitted successfully",
       });
+
+      // Send notification email
+      if (insertedData?.id) {
+        const notificationResult = await leaveNotificationService.notifyLeaveApplied(
+          insertedData.id,
+          currentCompany.id
+        );
+        if (!notificationResult.success) {
+          console.warn('Failed to send notification:', notificationResult.error);
+          // Don't show error to user - the leave request was submitted successfully
+        }
+      }
 
       // Reset form
       setFormData({
