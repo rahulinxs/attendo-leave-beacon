@@ -7,6 +7,13 @@ import { useUserProfile } from '@/hooks/useUserProfile';
 import { useEmployeeProfileFieldVisibility } from '@/hooks/useEmployeeProfileFieldVisibility';
 
 const MUMBAI_OFFICE_ADDRESS = 'Knox Plaza, B-Wing, Office No. 307, Chincholi Bunder Road, Mindspace (Next to VIBGYOR School), Malad (West), Mumbai, 400064';
+const OFFICE_ADDRESSES: Record<string, string> = {
+  mumbai: MUMBAI_OFFICE_ADDRESS,
+  noida: 'A-130, A Block, Sector 63, Noida, Uttar Pradesh 201309',
+  indore: '207, Princess Business Skyline, Westside Building, AB Road, Indore, 452001',
+  iselin: '120 Wood Ave S, suite 504. Iselin NJ 08830',
+  wfh: MUMBAI_OFFICE_ADDRESS,
+};
 
 const parseEmergencyContact = (value: unknown) => {
   if (Array.isArray(value)) return value[0] || {};
@@ -63,6 +70,8 @@ const EmployeeIdCard: React.FC<EmployeeIdCardProps> = ({ employeeId }) => {
   const employeeCode = profile?.employee_code || '-';
   const bloodGroup = profile?.blood_group || '-';
   const emergencyNumber = emergencyContact.phone_number || emergencyContact.phone || '-';
+  const workLocation = profile?.work_location || employee?.work_location || '';
+  const officeAddress = OFFICE_ADDRESSES[workLocation.trim().toLowerCase()] || MUMBAI_OFFICE_ADDRESS;
   const logoUrl = currentCompany?.logo_url;
   const avatarUrl = employee?.avatar_url || (employeeId === user?.id ? user.avatar_url : null);
 
@@ -143,7 +152,7 @@ const EmployeeIdCard: React.FC<EmployeeIdCardProps> = ({ employeeId }) => {
 
           <footer className="employee-id-card-footer relative z-10 shrink-0 border-t border-slate-200 bg-slate-50 px-5 py-2">
             <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-500">Office Address</p>
-            <p className="employee-id-card-address mt-1 text-[9px] leading-3 text-slate-700">{MUMBAI_OFFICE_ADDRESS}</p>
+            <p className="employee-id-card-address mt-1 text-[9px] leading-3 text-slate-700">{officeAddress}</p>
           </footer>
         </article>
       </div>
