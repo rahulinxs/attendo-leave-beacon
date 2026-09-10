@@ -84,7 +84,7 @@ const EmployeeIdCard: React.FC<EmployeeIdCardProps> = ({ employeeId }) => {
       <div className="employee-id-card-print flex justify-center">
         <article className="employee-id-card relative overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-900 shadow-xl">
           <div className="employee-id-card-accent" />
-          <header className="employee-id-card-header flex flex-col items-center gap-2 border-b border-slate-200 px-5 py-3 text-center">
+          <header className="employee-id-card-header relative z-10 flex flex-col items-center gap-2 border-b border-slate-200 px-5 py-3 text-center">
             <div className="flex w-full min-w-0 items-center justify-center">
               {logoUrl ? (
                 <img src={logoUrl} alt="Company logo" className="employee-id-card-logo rounded-md object-contain" />
@@ -95,17 +95,25 @@ const EmployeeIdCard: React.FC<EmployeeIdCardProps> = ({ employeeId }) => {
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Employee identity card</p>
           </header>
 
-          <div className="employee-id-card-body flex gap-4 px-5 py-4">
-            <div className="employee-id-card-photo h-28 w-24 shrink-0 overflow-hidden rounded-lg border-2 border-slate-200 bg-slate-100">
+          <div className="employee-id-card-body relative z-10 flex gap-4 px-5 py-4">
+            {logoUrl && (
+              <img
+                src={logoUrl}
+                alt=""
+                aria-hidden="true"
+                className="employee-id-card-watermark absolute inset-0 z-0 h-full w-full object-contain p-3"
+              />
+            )}
+            <div className="employee-id-card-photo relative z-10 h-28 w-24 shrink-0 overflow-hidden rounded-lg border-2 border-slate-200 bg-slate-100">
               {avatarUrl ? (
-                <img src={avatarUrl} alt={employeeName} className="h-full w-full object-cover" />
+                <img src={avatarUrl} alt={employeeName} className="relative z-10 h-full w-full object-cover" />
               ) : (
-                <div className="flex h-full w-full items-center justify-center text-3xl font-bold text-slate-400">
+                <div className="relative z-10 flex h-full w-full items-center justify-center bg-white/45 text-3xl font-bold text-slate-400">
                   {employeeName.split(/\s+/).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase()}
                 </div>
               )}
             </div>
-            <dl className="employee-id-card-details min-w-0 flex-1 space-y-2 text-xs">
+            <dl className="employee-id-card-details relative z-10 min-w-0 flex-1 space-y-2 text-xs">
               <div>
                 <dt className="text-[9px] font-semibold uppercase tracking-wider text-slate-500">Name</dt>
                 <dd className="truncate text-base font-bold">{employeeName}</dd>
@@ -133,7 +141,7 @@ const EmployeeIdCard: React.FC<EmployeeIdCardProps> = ({ employeeId }) => {
             </dl>
           </div>
 
-          <footer className="employee-id-card-footer shrink-0 border-t border-slate-200 bg-slate-50 px-5 py-2">
+          <footer className="employee-id-card-footer relative z-10 shrink-0 border-t border-slate-200 bg-slate-50 px-5 py-2">
             <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-500">Office Address</p>
             <p className="employee-id-card-address mt-1 text-[9px] leading-3 text-slate-700">{MUMBAI_OFFICE_ADDRESS}</p>
           </footer>
@@ -153,8 +161,13 @@ const EmployeeIdCard: React.FC<EmployeeIdCardProps> = ({ employeeId }) => {
           background: linear-gradient(90deg, #0f172a 0%, #2563eb 55%, #14b8a6 100%);
         }
         .employee-id-card-logo {
-          width: 76px;
-          height: 76px;
+          width: 88px;
+          height: 88px;
+        }
+        .employee-id-card-watermark {
+          opacity: 0.18;
+          filter: saturate(0.65);
+          pointer-events: none;
         }
         .employee-id-card-body {
           flex-direction: column;
@@ -209,8 +222,8 @@ const EmployeeIdCard: React.FC<EmployeeIdCardProps> = ({ employeeId }) => {
             padding: 5px 10px !important;
           }
           .employee-id-card-logo {
-            width: 58px !important;
-            height: 58px !important;
+            width: 66px !important;
+            height: 66px !important;
           }
           .employee-id-card-address {
             font-size: 7px !important;
