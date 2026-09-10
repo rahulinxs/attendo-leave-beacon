@@ -84,23 +84,19 @@ const EmployeeIdCard: React.FC<EmployeeIdCardProps> = ({ employeeId }) => {
       <div className="employee-id-card-print flex justify-center">
         <article className="employee-id-card relative overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-900 shadow-xl">
           <div className="employee-id-card-accent" />
-          <header className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-3">
-            <div className="flex min-w-0 items-center gap-3">
+          <header className="employee-id-card-header flex flex-col items-center gap-2 border-b border-slate-200 px-5 py-3 text-center">
+            <div className="flex w-full min-w-0 items-center justify-center">
               {logoUrl ? (
-                <img src={logoUrl} alt="Company logo" className="h-11 w-11 rounded-md object-contain" />
+                <img src={logoUrl} alt="Company logo" className="employee-id-card-logo rounded-md object-contain" />
               ) : (
-                <div className="flex h-11 w-11 items-center justify-center rounded-md bg-slate-100 text-xs font-bold text-slate-500">LOGO</div>
+                <div className="employee-id-card-logo flex items-center justify-center rounded-md bg-slate-100 text-xs font-bold text-slate-500">LOGO</div>
               )}
-              <div className="min-w-0">
-                <p className="truncate text-sm font-bold">{currentCompany?.name || 'Company'}</p>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Employee identity card</p>
-              </div>
             </div>
-            <span className="shrink-0 rounded-full bg-slate-900 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-white">Official</span>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Employee identity card</p>
           </header>
 
-          <div className="flex gap-4 px-5 py-4">
-            <div className="h-28 w-24 shrink-0 overflow-hidden rounded-lg border-2 border-slate-200 bg-slate-100">
+          <div className="employee-id-card-body flex gap-4 px-5 py-4">
+            <div className="employee-id-card-photo h-28 w-24 shrink-0 overflow-hidden rounded-lg border-2 border-slate-200 bg-slate-100">
               {avatarUrl ? (
                 <img src={avatarUrl} alt={employeeName} className="h-full w-full object-cover" />
               ) : (
@@ -109,7 +105,7 @@ const EmployeeIdCard: React.FC<EmployeeIdCardProps> = ({ employeeId }) => {
                 </div>
               )}
             </div>
-            <dl className="min-w-0 flex-1 space-y-2 text-xs">
+            <dl className="employee-id-card-details min-w-0 flex-1 space-y-2 text-xs">
               <div>
                 <dt className="text-[9px] font-semibold uppercase tracking-wider text-slate-500">Name</dt>
                 <dd className="truncate text-base font-bold">{employeeName}</dd>
@@ -137,25 +133,58 @@ const EmployeeIdCard: React.FC<EmployeeIdCardProps> = ({ employeeId }) => {
             </dl>
           </div>
 
-          <footer className="border-t border-slate-200 bg-slate-50 px-5 py-3">
+          <footer className="employee-id-card-footer shrink-0 border-t border-slate-200 bg-slate-50 px-5 py-2">
             <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-500">Office Address</p>
-            <p className="mt-1 text-[10px] leading-4 text-slate-700">{MUMBAI_OFFICE_ADDRESS}</p>
+            <p className="employee-id-card-address mt-1 text-[9px] leading-3 text-slate-700">{MUMBAI_OFFICE_ADDRESS}</p>
           </footer>
         </article>
       </div>
 
       <style>{`
         .employee-id-card {
-          width: min(100%, 560px);
-          aspect-ratio: 85.6 / 53.98;
-          min-height: 340px;
+          width: min(100%, 360px);
+          aspect-ratio: 53.98 / 85.6;
+          min-height: 560px;
+          display: flex;
+          flex-direction: column;
         }
         .employee-id-card-accent {
           height: 7px;
           background: linear-gradient(90deg, #0f172a 0%, #2563eb 55%, #14b8a6 100%);
         }
+        .employee-id-card-logo {
+          width: 76px;
+          height: 76px;
+        }
+        .employee-id-card-body {
+          flex-direction: column;
+          align-items: center;
+          flex: 1;
+          min-height: 0;
+          padding-top: 1.25rem;
+          background: linear-gradient(145deg, #fbfdff 0%, #f1f7ff 52%, #eaf2ff 100%);
+        }
+        .employee-id-card-address {
+          overflow-wrap: anywhere;
+          word-break: normal;
+        }
+        .employee-id-card-photo {
+          width: 132px;
+          height: 156px;
+        }
+        .employee-id-card-details {
+          width: 100%;
+        }
+        .employee-id-card-details > div {
+          border-bottom: 1px solid #e2e8f0;
+          padding-bottom: 0.5rem;
+        }
+        .employee-id-card-details .grid {
+          grid-template-columns: 1fr;
+          gap: 0.5rem;
+        }
         @media print {
-          @page { size: 85.6mm 53.98mm; margin: 0; }
+          @page { size: 53.98mm 85.6mm; margin: 0; }
           body { background: white !important; }
           body * { visibility: hidden !important; }
           .employee-id-card-print,
@@ -163,12 +192,29 @@ const EmployeeIdCard: React.FC<EmployeeIdCardProps> = ({ employeeId }) => {
           .employee-id-card-page { padding: 0 !important; }
           .employee-id-card-print { display: block !important; }
           .employee-id-card {
-            width: 85.6mm !important;
-            height: 53.98mm !important;
+            width: 53.98mm !important;
+            height: 85.6mm !important;
             min-height: 0 !important;
             border: 0 !important;
             border-radius: 0 !important;
             box-shadow: none !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .employee-id-card-footer {
+            padding: 5px 10px !important;
+          }
+          .employee-id-card-header {
+            gap: 1px !important;
+            padding: 5px 10px !important;
+          }
+          .employee-id-card-logo {
+            width: 58px !important;
+            height: 58px !important;
+          }
+          .employee-id-card-address {
+            font-size: 7px !important;
+            line-height: 1.2 !important;
           }
         }
       `}</style>

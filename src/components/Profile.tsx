@@ -767,6 +767,24 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
           {!readOnly && isHrAdmin && <button className="mt-auto self-end bg-primary text-primary-foreground px-5 py-1.5 rounded hover:bg-primary/80" onClick={() => setEditTab('work')}>Edit</button>}
         </div>
         )}
+        {!profileData?.employee?.is_active && (
+        <div className={`${themeClass} card-theme rounded-2xl p-6 flex flex-col min-h-[160px] border border-red-200`}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-red-500 text-2xl">⚠</span>
+            <span className="font-semibold">Offboarding Details</span>
+          </div>
+          <div className="space-y-2 text-sm" style={{ color: 'var(--card-text)' }}>
+            <p><span className="font-medium">Exit Date:</span> {formatDisplayDate(workForm.exit_date) || '-'}</p>
+            <p><span className="font-medium">Exit Reason:</span> {workForm.exit_reason || '-'}</p>
+            <p className="break-words"><span className="font-medium">Exit Interview:</span> {workForm.exit_interview_details || '-'}</p>
+          </div>
+          {!readOnly && isHrAdmin && (
+            <button className="mt-auto self-end bg-primary text-primary-foreground px-5 py-1.5 rounded hover:bg-primary/80" onClick={() => setEditTab('work')}>
+              Edit
+            </button>
+          )}
+        </div>
+        )}
         {/* Family/Emergency Card */}
         {isVisible('family') && (
         <div className={`${themeClass} card-theme rounded-2xl p-6 flex flex-col min-h-[160px]`}>
