@@ -180,16 +180,18 @@ const LeaveRequestForm: React.FC<LeaveRequestFormProps> = ({ onSuccess, onCancel
         description: "Leave request submitted successfully",
       });
 
-      // Send notification email
+      // Trigger notification email as soon as the leave record is created,
+      // without blocking the user flow on the external email call.
       if (insertedData?.id) {
-        const notificationResult = await leaveNotificationService.notifyLeaveApplied(
+        console.log('[LeaveNotification DEBUG] notifyLeaveApplied triggered', {
+          leaveRequestId: insertedData.id,
+          companyId: currentCompany.id,
+          action: 'apply'
+        });
+        void leaveNotificationService.notifyLeaveApplied(
           insertedData.id,
           currentCompany.id
         );
-        if (!notificationResult.success) {
-          console.warn('Failed to send notification:', notificationResult.error);
-          // Don't show error to user - the leave request was submitted successfully
-        }
       }
 
       // Reset form

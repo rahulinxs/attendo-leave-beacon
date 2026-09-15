@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { getEdgeFunctionErrorMessage } from '@/lib/edgeFunctionError';
 
 export type AttendanceNotificationAction = 'clock-in' | 'clock-out';
 
@@ -23,10 +24,11 @@ export const attendanceNotificationService = {
       });
 
       if (error) {
-        console.error('Attendance notification error:', error);
+        const message = await getEdgeFunctionErrorMessage(error, 'Failed to send attendance notification');
+        console.error('Attendance notification error:', error, message);
         return {
           success: false,
-          error: error.message || 'Failed to send attendance notification',
+          error: message,
         };
       }
 

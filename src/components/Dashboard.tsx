@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { getEdgeFunctionErrorMessage } from '@/lib/edgeFunctionError';
 import { format } from 'date-fns';
 import { parseDateLocal } from '@/utils/dateUtils';
 
@@ -181,12 +182,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       });
 
       if (error) {
+        const message = await getEdgeFunctionErrorMessage(error, `Failed to send test ${action} email`);
         toast({
           title: "Email Failed",
-          description: `Failed to send test ${action} email: ${error.message}`,
+          description: message,
           variant: "destructive"
         });
-        console.error('Error:', error);
+        console.error('Test email error:', error, message);
       } else {
         toast({
           title: "Email Sent",
@@ -552,10 +554,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full">
             <Button variant="gradient" onClick={() => onNavigate?.('leave')}>Apply for Leave</Button>
             <Button variant="gradient" onClick={() => onNavigate?.('attendance')}>Attendance Calendar</Button>
-            <Button variant="gradient" onClick={() => onNavigate?.('reports')}>View Payslip</Button>
           </div>
         </CardContent>
       </Card>
@@ -568,10 +569,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full">
               <Button variant="gradient" onClick={() => onNavigate?.('employees')}><Users className="w-4 h-4 mr-2" />Manage Employees</Button>
               <Button variant="gradient" onClick={() => onNavigate?.('leave-management')}><Calendar className="w-4 h-4 mr-2" />Leave Management</Button>
-              <Button variant="gradient" onClick={() => onNavigate?.('reports')}><TrendingUp className="w-4 h-4 mr-2" />View Reports</Button>
             </div>
           </CardContent>
         </Card>

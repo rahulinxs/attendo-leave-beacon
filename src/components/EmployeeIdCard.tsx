@@ -35,11 +35,11 @@ interface EmployeeIdCardProps {
 const EmployeeIdCard: React.FC<EmployeeIdCardProps> = ({ employeeId }) => {
   const { user } = useAuth();
   const { currentCompany } = useCompany();
-  const { profileData, fetchUserProfile, loading } = useUserProfile(employeeId);
+  const { profileData, fetchEmployeeIdCardProfile, loading } = useUserProfile(employeeId);
   const { isVisible } = useEmployeeProfileFieldVisibility(employeeId);
 
   useEffect(() => {
-    fetchUserProfile();
+    fetchEmployeeIdCardProfile();
     // The employee ID is the fetch boundary for this page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employeeId]);

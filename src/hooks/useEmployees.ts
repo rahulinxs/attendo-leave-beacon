@@ -36,7 +36,7 @@ export const useEmployees = (options: { includeInactive?: boolean } = {}) => {
       
       let query = supabase
         .from('employees')
-        .select('*')
+        .select('id, name, email, role, department, position, hire_date, is_active, created_at, updated_at, company_id, team_id, reporting_manager_id, avatar_url, work_location')
         .eq('company_id', currentCompany.id)
         .order('name');
 
@@ -68,7 +68,7 @@ export const useEmployees = (options: { includeInactive?: boolean } = {}) => {
     try {
       const { data, error } = await supabase
         .from('employees')
-        .select('*')
+        .select('id')
         .eq('id', employeeId)
         .single();
 

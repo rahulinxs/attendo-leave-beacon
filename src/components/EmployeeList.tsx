@@ -80,6 +80,8 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
   // Pagination state
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
+  const [totalEmployeeCount, setTotalEmployeeCount] = useState(0);
+  const [filterOptions, setFilterOptions] = useState<Employee[]>([]);
   
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -103,11 +105,29 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
     setIsLoading(true);
     
     try {
-      const { data: employees, error } = await supabase
+      const start = (page - 1) * pageSize;
+      let query = supabase
         .from('employees')
-        .select('*')
+        .select('id, name, email, role, department, position, hire_date, is_active, team_id, reporting_manager_id, company_id, avatar_url, work_location', { count: 'exact' })
         .eq('company_id', currentCompany.id)
         .order('name');
+
+      if (searchTerm.trim()) {
+        const search = searchTerm.trim();
+        query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,department.ilike.%${search}%,position.ilike.%${search}%`);
+      }
+      if (roleFilter !== 'all') query = query.eq('role', roleFilter);
+      if (departmentFilter !== 'all') query = query.eq('department', departmentFilter);
+      if (locationFilter === UNASSIGNED_LOCATION) {
+        query = query.is('work_location', null);
+      } else if (locationFilter !== 'all') {
+        query = query.eq('work_location', locationFilter);
+      }
+      if (statusFilter === 'active') query = query.eq('is_active', true);
+      if (statusFilter === 'inactive') query = query.eq('is_active', false);
+      if (consultantId !== 'all') query = query.eq('id', consultantId);
+
+      const { data: employees, count, error } = await query.range(start, start + pageSize - 1);
 
       if (error) {
         console.error('Error fetching employees:', error);
@@ -116,18 +136,39 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
 
       console.log('Employees fetched successfully');
       setEmployees(employees || []);
+      setTotalEmployeeCount(count || 0);
     } catch (error) {
       console.error('Error fetching employees:', error);
     } finally {
       setIsLoading(false);
     }
+  }, [currentCompany, page, pageSize, searchTerm, roleFilter, departmentFilter, locationFilter, statusFilter, consultantId]);
+
+  const fetchFilterOptions = React.useCallback(async () => {
+    if (!currentCompany) {
+      setFilterOptions([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('employees')
+      .select('id, name, email, role, department, work_location')
+      .eq('company_id', currentCompany.id)
+      .order('name');
+
+    if (error) {
+      console.error('Error fetching employee filter options:', error);
+      return;
+    }
+
+    setFilterOptions((data || []) as Employee[]);
   }, [currentCompany]);
   
   // Get unique departments and roles for filter options
   const departments = useMemo(() => {
-    const depts = new Set(employees.map(emp => emp.department).filter(Boolean));
+    const depts = new Set(filterOptions.map(emp => emp.department).filter(Boolean));
     return Array.from(depts).sort();
-  }, [employees]);
+  }, [filterOptions]);
 
   const locationOptions = useMemo(
     () => [...activeNames].sort((a, b) => a.localeCompare(b)),
@@ -135,60 +176,20 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
   );
 
   const roles = useMemo(() => {
-    const roleSet = new Set(employees.map(emp => emp.role));
+    const roleSet = new Set(filterOptions.map(emp => emp.role));
     return Array.from(roleSet).sort();
-  }, [employees]);
+  }, [filterOptions]);
 
   const selectedConsultant = useMemo(() => {
     if (consultantId === 'all') return null;
-    return employees.find(e => e.id === consultantId) || null;
-  }, [consultantId, employees]);
+    return filterOptions.find(e => e.id === consultantId) || null;
+  }, [consultantId, filterOptions]);
 
   // Filter employees
-  const filteredEmployees = useMemo(() => {
-    return employees.filter(employee => {
-      // Search filter
-      const matchesSearch = searchTerm === '' || 
-        employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        employee.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        employee.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        employee.position?.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredEmployees = employees;
 
-      // Role filter
-      const matchesRole = roleFilter === 'all' || employee.role === roleFilter;
-
-      // Department filter
-      const matchesDepartment = departmentFilter === 'all' || employee.department === departmentFilter;
-
-      const matchesLocation =
-        locationFilter === 'all' ||
-        (locationFilter === UNASSIGNED_LOCATION && !employee.work_location) ||
-        employee.work_location === locationFilter;
-
-      // Status filter (active/inactive)
-      const matchesStatus = statusFilter === 'all' || 
-        (statusFilter === 'active' && employee.is_active) ||
-        (statusFilter === 'inactive' && !employee.is_active);
-
-      // Consultant filter (from searchable combobox)
-      const matchesConsultant = !selectedConsultant || employee.id === selectedConsultant.id;
-
-      return matchesSearch && matchesRole && matchesDepartment && matchesLocation && matchesStatus && matchesConsultant;
-    });
-  }, [employees, searchTerm, roleFilter, departmentFilter, locationFilter, statusFilter, selectedConsultant]);
-
-  const totalPages = Math.ceil(filteredEmployees.length / pageSize);
-  const paginatedEmployees = useMemo(() => {
-    const sorted = [...filteredEmployees].sort((a, b) => {
-      const locA = a.work_location || 'zzzz';
-      const locB = b.work_location || 'zzzz';
-      const locCmp = locA.localeCompare(locB);
-      if (locCmp !== 0) return locCmp;
-      return (a.name || '').localeCompare(b.name || '');
-    });
-    const startIndex = (page - 1) * pageSize;
-    return sorted.slice(startIndex, startIndex + pageSize);
-  }, [filteredEmployees, page, pageSize]);
+  const totalPages = Math.ceil(totalEmployeeCount / pageSize);
+  const paginatedEmployees = filteredEmployees;
 
   const handlePageChange = (newPage: number) => {
     setPage(Math.max(1, Math.min(newPage, totalPages)));
@@ -204,19 +205,9 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
     setPage(1);
   }, [searchTerm, roleFilter, departmentFilter, locationFilter, statusFilter, consultantId]);
   
-  // Fetch employees on mount and when refreshTrigger changes
   useEffect(() => {
-    const controller = new AbortController();
-    
-    // Only fetch if we have a current company
-    if (currentCompany) {
-      fetchEmployees();
-    }
-    
-    return () => {
-      controller.abort();
-    };
-  }, [currentCompany, fetchEmployees, refreshTrigger]);
+    fetchFilterOptions();
+  }, [fetchFilterOptions, refreshTrigger]);
 
   const canRemoveEmployee = (employee: Employee) => {
     if (!user || !['admin', 'super_admin'].includes(user.role)) return false;
@@ -376,7 +367,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
 
   useEffect(() => {
     fetchEmployees();
-  }, [refreshTrigger, currentCompany]);
+  }, [fetchEmployees, refreshTrigger]);
 
   const canAddEmployee = user && ['admin', 'super_admin'].includes(user.role);
 
@@ -436,7 +427,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
               <div>
                 <h1 className="text-2xl font-bold">{title}</h1>
                 <p className="text-sm text-muted-foreground">
-                  {filteredEmployees.length} of {employees.length} employees
+                  {totalEmployeeCount} employees
                 </p>
               </div>
             </div>
@@ -497,7 +488,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
                             />
                             All Consultants
                           </CommandItem>
-                          {employees.map((employee) => (
+                          {filterOptions.map((employee) => (
                             <CommandItem
                               key={employee.id}
                               value={`${employee.name} ${employee.email}`}
@@ -592,7 +583,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
             {(searchTerm || roleFilter !== 'all' || departmentFilter !== 'all' || locationFilter !== 'all' || statusFilter !== 'all' || consultantId !== 'all') && (
               <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
                 <span className="text-sm text-blue-800">
-                  {filteredEmployees.length} of {employees.length} employees match filters
+                  {totalEmployeeCount} employees match filters
                 </span>
                 <Button variant="gradient" size="sm" onClick={clearFilters}>
                   <X className="h-4 w-4 mr-2" />
@@ -750,7 +741,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <div className="text-sm text-muted-foreground">
-            Page {page} of {totalPages} - Showing {paginatedEmployees.length} of {filteredEmployees.length} employees
+            Page {page} of {totalPages} - Showing {paginatedEmployees.length} of {totalEmployeeCount} employees
           </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-2">

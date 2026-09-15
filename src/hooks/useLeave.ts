@@ -360,16 +360,17 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
         return false;
       }
       
-      // Send approval notification email
+      // Trigger approval notification email without blocking the approval flow.
       if (currentCompany?.id) {
-        const notificationResult = await leaveNotificationService.notifyLeaveApproved(
+        console.log('[LeaveNotification DEBUG] notifyLeaveApproved triggered', {
+          leaveRequestId: requestId,
+          companyId: currentCompany.id,
+          action: 'approve'
+        });
+        void leaveNotificationService.notifyLeaveApproved(
           requestId,
           currentCompany.id
         );
-        if (!notificationResult.success) {
-          console.warn('Failed to send approval notification:', notificationResult.error);
-          // Don't return false - the approval was successful, just email failed
-        }
       }
 
       await fetchLeaveRequests();
@@ -407,16 +408,17 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
         return false;
       }
       
-      // Send rejection notification email
+      // Trigger rejection notification email without blocking the rejection flow.
       if (currentCompany?.id) {
-        const notificationResult = await leaveNotificationService.notifyLeaveRejected(
+        console.log('[LeaveNotification DEBUG] notifyLeaveRejected triggered', {
+          leaveRequestId: requestId,
+          companyId: currentCompany.id,
+          action: 'reject'
+        });
+        void leaveNotificationService.notifyLeaveRejected(
           requestId,
           currentCompany.id
         );
-        if (!notificationResult.success) {
-          console.warn('Failed to send rejection notification:', notificationResult.error);
-          // Don't return false - the rejection was successful, just email failed
-        }
       }
 
       await fetchLeaveRequests();

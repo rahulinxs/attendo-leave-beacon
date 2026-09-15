@@ -180,15 +180,6 @@ export const DashboardGrid: React.FC<DashboardGridProps> = ({
                 
                 <Button 
                   variant="outline" 
-                  className="h-16 flex flex-col items-center justify-center gap-2 hover:bg-purple-50 hover:border-purple-300 transition-all"
-                  onClick={() => onNavigate('reports')}
-                >
-                  <BarChart3 className="w-5 h-5 text-purple-600" />
-                  <span className="text-xs">Reports</span>
-                </Button>
-                
-                <Button 
-                  variant="outline" 
                   className="h-16 flex flex-col items-center justify-center gap-2 hover:bg-orange-50 hover:border-orange-300 transition-all"
                   onClick={() => onNavigate('teams')}
                 >

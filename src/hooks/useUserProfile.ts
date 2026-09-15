@@ -70,6 +70,9 @@ export interface FullUserProfile {
   documents: EmployeeDocument[];
 }
 
+const EMPLOYEE_ID_CARD_COLUMNS = 'id, name, position, avatar_url, work_location';
+const EMPLOYEE_ID_CARD_PROFILE_COLUMNS = 'employee_code, blood_group, emergency_contacts, designation, work_location';
+
 export const useUserProfile = (employeeId: string) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -101,6 +104,30 @@ export const useUserProfile = (employeeId: string) => {
       profile,
       documents: documents || [],
     });
+    setLoading(false);
+  };
+
+  const fetchEmployeeIdCardProfile = async () => {
+    if (!employeeId) return;
+    setLoading(true);
+    const [{ data: employee, error: employeeError }, { data: profile, error: profileError }] = await Promise.all([
+      supabase
+        .from('employees')
+        .select(EMPLOYEE_ID_CARD_COLUMNS)
+        .eq('id', employeeId)
+        .maybeSingle(),
+      supabase
+        .from('employee_profiles')
+        .select(EMPLOYEE_ID_CARD_PROFILE_COLUMNS)
+        .eq('employee_id', employeeId)
+        .maybeSingle(),
+    ]);
+
+    if (employeeError || profileError) {
+      console.error('Error fetching employee ID card profile:', employeeError || profileError);
+    }
+
+    setProfileData({ employee, profile, documents: [] });
     setLoading(false);
   };
 
@@ -304,6 +331,7 @@ export const useUserProfile = (employeeId: string) => {
     loading,
     profileData,
     fetchUserProfile,
+    fetchEmployeeIdCardProfile,
     updateUserProfile,
     uploadDocument,
     uploadAvatar,

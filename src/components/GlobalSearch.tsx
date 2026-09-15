@@ -86,15 +86,6 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
       category: 'Management'
     },
     {
-      id: 'reports',
-      title: 'Reports & Analytics',
-      description: 'View detailed reports and analytics',
-      type: 'page',
-      path: 'reports',
-      icon: BarChart3,
-      category: 'Management'
-    },
-    {
       id: 'profile',
       title: 'Profile',
       description: 'View and edit your profile information',
@@ -140,15 +131,6 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
       icon: Calendar,
       category: 'Quick Actions'
     },
-    {
-      id: 'view-reports',
-      title: 'View Reports',
-      description: 'Access detailed reports and analytics',
-      type: 'action',
-      path: 'reports',
-      icon: BarChart3,
-      category: 'Quick Actions'
-    }
   ];
 
   // Filter results based on query

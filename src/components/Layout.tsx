@@ -172,13 +172,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       requiresPermission: true
     },
     {
-      id: 'reports',
-      label: 'Reports & Analytics',
-      icon: BarChart3,
-      roles: ['admin', 'super_admin'],
-      requiresPermission: true
-    },
-    {
       id: 'reports-2',
       label: 'Reports & Analytics 2',
       icon: BarChart3,
@@ -647,14 +640,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                     style={{ willChange: 'max-height, opacity, transform' }}
                   >
                     <button
-                      onClick={() => onTabChange('reports')}
-                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'reports' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
-                    >
-                      <BarChart3 className="w-5 h-5" />
-                      <span className="sidebar-label text-sm">Reports & Analytics</span>
-                    </button>
-
-                    <button
                       onClick={() => onTabChange('reports-2')}
                       className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${activeTab === 'reports-2' ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold' : 'hover:bg-[rgba(0,0,0,0.02)]'}`}
                     >
@@ -760,7 +745,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
               {/* Render the rest of the navigation items */}
               {navItems.filter(item => ![
                 'dashboard', 
-                'reports', 
                 'reports-2',
                 'performance-report', 
                 'recruitment-report',

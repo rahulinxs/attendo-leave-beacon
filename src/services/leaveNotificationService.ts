@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { getEdgeFunctionErrorMessage } from '@/lib/edgeFunctionError';
 
 export type LeaveNotificationAction = 'apply' | 'approve' | 'reject';
 
@@ -14,6 +15,13 @@ export const leaveNotificationService = {
     companyId: string
   ): Promise<LeaveNotificationResult> {
     try {
+      console.log('[LeaveNotification DEBUG] invoking edge function', {
+        functionName: 'send-leave-notification',
+        action,
+        leaveRequestId,
+        company_id: companyId,
+      });
+
       const { data, error } = await supabase.functions.invoke('send-leave-notification', {
         body: {
           action,
@@ -22,11 +30,19 @@ export const leaveNotificationService = {
         },
       });
 
+      console.log('[LeaveNotification DEBUG] edge function response', {
+        action,
+        leaveRequestId,
+        data,
+        error: error ? { message: error.message, name: error.name } : null,
+      });
+
       if (error) {
-        console.error('Leave notification error:', error);
+        const message = await getEdgeFunctionErrorMessage(error, 'Failed to send leave notification');
+        console.error('Leave notification error:', error, message);
         return {
           success: false,
-          error: error.message || 'Failed to send leave notification',
+          error: message,
         };
       }
 
