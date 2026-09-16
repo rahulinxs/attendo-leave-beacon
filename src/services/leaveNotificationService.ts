@@ -15,6 +15,18 @@ export const leaveNotificationService = {
     companyId: string
   ): Promise<LeaveNotificationResult> {
     try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError || !session?.access_token) {
+        const message = sessionError?.message || 'You must be signed in to send a leave notification';
+        console.error('[LeaveNotification DEBUG] no valid session for edge function invocation', {
+          action,
+          leaveRequestId,
+          message,
+        });
+        return { success: false, error: message };
+      }
+
       console.log('[LeaveNotification DEBUG] invoking edge function', {
         functionName: 'send-leave-notification',
         action,
@@ -27,6 +39,9 @@ export const leaveNotificationService = {
           action,
           leaveRequestId,
           company_id: companyId,
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
         },
       });
 

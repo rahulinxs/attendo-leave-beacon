@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { leaveNotificationService } from '@/services/leaveNotificationService';
 import { 
   Calendar, 
   Plus, 
@@ -1083,18 +1084,22 @@ const EmployeeLeaveView: React.FC = () => {
       return;
     }
 
-    const { error } = await supabase.from('leave_requests').insert({
-      employee_id: user?.id,
-      company_id: currentCompany.id,
-          leave_type_id: formData.leaveTypeId,
-          start_date: startDate,
-          end_date: endDate,
-          total_days: totalDays,
-          duration_type: formData.durationType,
-          session,
-          reason: formData.reason,
-      status: user?.role === 'super_admin' ? 'approved' : 'pending'
-        });
+    const { data: insertedRequest, error } = await supabase
+      .from('leave_requests')
+      .insert({
+        employee_id: user?.id,
+        company_id: currentCompany.id,
+        leave_type_id: formData.leaveTypeId,
+        start_date: startDate,
+        end_date: endDate,
+        total_days: totalDays,
+        duration_type: formData.durationType,
+        session,
+        reason: formData.reason,
+        status: user?.role === 'super_admin' ? 'approved' : 'pending',
+      })
+      .select('id')
+      .single();
 
       if (error) {
         toast({
@@ -1103,6 +1108,13 @@ const EmployeeLeaveView: React.FC = () => {
         variant: "destructive",
       });
     } else {
+      if (insertedRequest?.id) {
+        void leaveNotificationService.notifyLeaveApplied(
+          insertedRequest.id,
+          currentCompany.id
+        );
+      }
+
       toast({
         title: "Success",
         description: "Leave request submitted successfully",

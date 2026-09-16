@@ -301,7 +301,7 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
       const approvedBy = user.role === 'super_admin' ? user.id : null;
       const approvedAt = user.role === 'super_admin' ? new Date().toISOString() : null;
 
-      const { error } = await supabase
+      const { data: insertedRequest, error } = await supabase
         .from('leave_requests')
         .insert({
           employee_id: user.id,
@@ -316,11 +316,20 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
           status,
           approved_by: approvedBy,
           approved_at: approvedAt
-        });
+        })
+        .select('id')
+        .single();
 
       if (error) {
         console.error('Submit leave request error:', error);
         return false;
+      }
+
+      if (insertedRequest?.id) {
+        void leaveNotificationService.notifyLeaveApplied(
+          insertedRequest.id,
+          currentCompany.id
+        );
       }
       
       await fetchLeaveRequests();

@@ -1,30 +1,1189 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import nodemailer from "npm:nodemailer";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
 interface LeaveNotificationRequest {
-  action: 'apply' | 'approve' | 'reject';
+  action: "apply" | "approve" | "reject";
   leaveRequestId: string;
   company_id: string;
 }
 
-// Format date for display
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', { 
-    weekday: 'short', 
-    year: 'numeric', 
-    month: 'short', 
-    day: 'numeric' 
+interface EmployeeRecord {
+  id: string;
+  email: string | null;
+  name: string | null;
+  role: string | null;
+  reporting_manager_id: string | null;
+  company_id: string | null;
+  is_active: boolean | null;
+}
+
+interface LeaveRequestRecord {
+  id: string;
+  employee_id: string;
+  company_id: string;
+  start_date: string;
+  end_date: string;
+  total_days: number;
+  reason: string | null;
+  status: string | null;
+  approved_by: string | null;
+  admin_comments: string | null;
+  leave_type_id: string | null;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Helpers                                                                    */
+/* -------------------------------------------------------------------------- */
+
+function jsonResponse(
+  body: Record<string, unknown>,
+  status = 200
+): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+    },
   });
 }
 
-// Email template: Leave Application
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function formatDate(
+  dateStr: string | null | undefined
+): string {
+  if (!dateStr) return "-";
+
+  const raw = String(dateStr).slice(0, 10);
+  const parts = raw.split("-");
+
+  if (parts.length !== 3) {
+    return String(dateStr);
+  }
+
+  const year = Number(parts[0]);
+  const month = Number(parts[1]);
+  const day = Number(parts[2]);
+
+  if (!year || !month || !day) {
+    return String(dateStr);
+  }
+
+  const date = new Date(
+    year,
+    month - 1,
+    day
+  );
+
+  return date.toLocaleDateString("en-IN", {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function normalizeEmail(
+  email: string | null | undefined
+): string | null {
+  if (!email) return null;
+
+  const value = email.trim().toLowerCase();
+
+  return value || null;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Environment                                                                */
+/* -------------------------------------------------------------------------- */
+
+const SUPABASE_URL =
+  Deno.env.get("SUPABASE_URL");
+
+const SUPABASE_SERVICE_ROLE_KEY =
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+const SMTP_HOST =
+  Deno.env.get("SMTP_HOST") ||
+  "smtp.gmail.com";
+
+const SMTP_PORT =
+  Number(Deno.env.get("SMTP_PORT") || "465");
+
+const SMTP_USER =
+  Deno.env.get("SMTP_USER");
+
+const SMTP_PASS =
+  Deno.env.get("SMTP_PASS");
+
+const MAIL_FROM =
+  Deno.env.get("MAIL_FROM") ||
+  SMTP_USER;
+
+const MAIL_FROM_NAME =
+  Deno.env.get("MAIL_FROM_NAME") ||
+  "AttendEdge";
+
+const APP_URL =
+  Deno.env.get("APP_URL") ||
+  "https://attendedge.netlify.app";
+
+/* -------------------------------------------------------------------------- */
+/* Main                                                                       */
+/* -------------------------------------------------------------------------- */
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", {
+      headers: corsHeaders,
+    });
+  }
+
+  if (req.method !== "POST") {
+    return jsonResponse(
+      {
+        success: false,
+        error: "Only POST requests are allowed.",
+      },
+      405
+    );
+  }
+
+  try {
+    console.log(
+      "=============================================="
+    );
+    console.log(
+      "AttendEdge - send-leave-notification"
+    );
+    console.log(
+      "=============================================="
+    );
+
+    /* ---------------------------------------------------------------------- */
+    /* Validate environment                                                    */
+    /* ---------------------------------------------------------------------- */
+
+    if (
+      !SUPABASE_URL ||
+      !SUPABASE_SERVICE_ROLE_KEY
+    ) {
+      console.error(
+        "Missing Supabase environment variables."
+      );
+
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Supabase server configuration error.",
+        },
+        500
+      );
+    }
+
+    if (
+      !SMTP_HOST ||
+      !SMTP_USER ||
+      !SMTP_PASS ||
+      !MAIL_FROM
+    ) {
+      console.error(
+        "SMTP configuration incomplete."
+      );
+
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Email service is not configured.",
+        },
+        500
+      );
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* Read Authorization header                                               */
+    /* ---------------------------------------------------------------------- */
+
+    const authorization =
+      req.headers.get("Authorization");
+
+    /*
+     * We intentionally do NOT call auth.getUser()
+     * here because your current Supabase legacy JWT
+     * setup is rejecting that token.
+     *
+     * The gateway JWT verification has already been
+     * disabled for this Edge Function.
+     */
+
+    if (!authorization) {
+      console.error(
+        "Authorization header missing."
+      );
+
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Authorization header missing.",
+        },
+        401
+      );
+    }
+
+    console.log(
+      "Authorization header received."
+    );
+
+    /* ---------------------------------------------------------------------- */
+    /* Parse request body                                                      */
+    /* ---------------------------------------------------------------------- */
+
+    let body: LeaveNotificationRequest;
+
+    try {
+      body = await req.json();
+    } catch {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Invalid JSON request body.",
+        },
+        400
+      );
+    }
+
+    const {
+      action,
+      leaveRequestId,
+      company_id,
+    } = body;
+
+    console.log("Action:", action);
+    console.log(
+      "Leave Request ID:",
+      leaveRequestId
+    );
+    console.log(
+      "Company ID:",
+      company_id
+    );
+
+    if (
+      !action ||
+      !["apply", "approve", "reject"].includes(
+        action
+      )
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Invalid action. Allowed values: apply, approve, reject.",
+        },
+        400
+      );
+    }
+
+    if (!leaveRequestId) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "leaveRequestId is required.",
+        },
+        400
+      );
+    }
+
+    if (!company_id) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "company_id is required.",
+        },
+        400
+      );
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* Service-role client                                                     */
+    /* ---------------------------------------------------------------------- */
+
+    const supabase = createClient(
+      SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY
+    );
+
+    /* ---------------------------------------------------------------------- */
+    /* Find leave request                                                      */
+    /* ---------------------------------------------------------------------- */
+
+    console.log(
+      "Looking up leave request..."
+    );
+
+    const {
+      data: leaveRequest,
+      error: leaveError,
+    } = await supabase
+      .from("leave_requests")
+      .select(`
+        id,
+        employee_id,
+        company_id,
+        start_date,
+        end_date,
+        total_days,
+        reason,
+        status,
+        approved_by,
+        admin_comments,
+        leave_type_id
+      `)
+      .eq("id", leaveRequestId)
+      .eq("company_id", company_id)
+      .maybeSingle();
+
+    if (leaveError) {
+      console.error(
+        "Leave request lookup error:",
+        leaveError.message
+      );
+
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Database error while retrieving leave request.",
+          details: leaveError.message,
+        },
+        500
+      );
+    }
+
+    if (!leaveRequest) {
+      console.error(
+        "Leave request not found."
+      );
+
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Leave request not found.",
+        },
+        404
+      );
+    }
+
+    console.log(
+      "Leave request found:",
+      leaveRequest.id
+    );
+
+    /* ---------------------------------------------------------------------- */
+    /* Fetch employee                                                          */
+    /* ---------------------------------------------------------------------- */
+
+    const {
+      data: employee,
+      error: employeeError,
+    } = await supabase
+      .from("employees")
+      .select(`
+        id,
+        email,
+        name,
+        role,
+        reporting_manager_id,
+        company_id,
+        is_active
+      `)
+      .eq("id", leaveRequest.employee_id)
+      .eq("company_id", company_id)
+      .maybeSingle();
+
+    if (employeeError) {
+      console.error(
+        "Employee lookup error:",
+        employeeError.message
+      );
+
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Database error while retrieving employee.",
+        },
+        500
+      );
+    }
+
+    if (!employee) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Employee associated with leave request was not found.",
+        },
+        404
+      );
+    }
+
+    console.log(
+      "Employee:",
+      employee.name,
+      employee.email
+    );
+
+    /* ---------------------------------------------------------------------- */
+    /* Leave type                                                              */
+    /* ---------------------------------------------------------------------- */
+
+    let leaveTypeName = "Leave";
+
+    if (leaveRequest.leave_type_id) {
+      const {
+        data: leaveType,
+        error: leaveTypeError,
+      } = await supabase
+        .from("leave_types")
+        .select("id, name")
+        .eq(
+          "id",
+          leaveRequest.leave_type_id
+        )
+        .maybeSingle();
+
+      if (leaveTypeError) {
+        console.error(
+          "Leave type lookup error:",
+          leaveTypeError.message
+        );
+      }
+
+      if (leaveType?.name) {
+        leaveTypeName =
+          leaveType.name;
+      }
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* Email recipients                                                        */
+    /* ---------------------------------------------------------------------- */
+
+    const emails: Array<{
+      to: string;
+      subject: string;
+      html: string;
+    }> = [];
+
+    const employeeName =
+      employee.name || "Employee";
+
+    /* ---------------------------------------------------------------------- */
+    /* APPLY                                                                    */
+    /* ---------------------------------------------------------------------- */
+
+    if (action === "apply") {
+      console.log(
+        "Processing APPLY notification..."
+      );
+
+      /*
+       * Reporting manager
+       */
+      if (
+        employee.reporting_manager_id
+      ) {
+        const {
+          data: manager,
+          error: managerError,
+        } = await supabase
+          .from("employees")
+          .select(`
+            id,
+            email,
+            name,
+            role,
+            reporting_manager_id,
+            company_id,
+            is_active
+          `)
+          .eq(
+            "id",
+            employee.reporting_manager_id
+          )
+          .eq(
+            "company_id",
+            company_id
+          )
+          .maybeSingle();
+
+        if (managerError) {
+          console.error(
+            "Manager lookup error:",
+            managerError.message
+          );
+        }
+
+        if (
+          manager &&
+          manager.email &&
+          manager.is_active !== false
+        ) {
+          emails.push({
+            to: manager.email,
+            subject:
+              `New Leave Application - ${employeeName}`,
+            html: getLeaveAppliedEmail(
+              employeeName,
+              leaveTypeName,
+              leaveRequest.start_date,
+              leaveRequest.end_date,
+              leaveRequest.total_days,
+              leaveRequest.reason ||
+                "No reason provided",
+              manager.name ||
+                "Manager"
+            ),
+          });
+
+          console.log(
+            "Manager notification:",
+            manager.email
+          );
+        }
+      }
+
+      /*
+       * Admins + Super Admins
+       */
+      const {
+        data: admins,
+        error: adminError,
+      } = await supabase
+        .from("employees")
+        .select(`
+          id,
+          email,
+          name,
+          role,
+          reporting_manager_id,
+          company_id,
+          is_active
+        `)
+        .eq(
+          "company_id",
+          company_id
+        )
+        .eq(
+          "is_active",
+          true
+        )
+        .in(
+          "role",
+          ["admin", "super_admin"]
+        );
+
+      if (adminError) {
+        console.error(
+          "Admin lookup error:",
+          adminError.message
+        );
+      }
+
+      if (admins) {
+        for (const admin of admins) {
+          if (admin.email) {
+            emails.push({
+              to: admin.email,
+              subject:
+                `New Leave Application - ${employeeName}`,
+              html: getLeaveAppliedEmail(
+                employeeName,
+                leaveTypeName,
+                leaveRequest.start_date,
+                leaveRequest.end_date,
+                leaveRequest.total_days,
+                leaveRequest.reason ||
+                  "No reason provided",
+                admin.name ||
+                  "Administrator"
+              ),
+            });
+          }
+        }
+      }
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* APPROVE                                                                  */
+    /* ---------------------------------------------------------------------- */
+
+    if (action === "approve") {
+      console.log(
+        "Processing APPROVE notification..."
+      );
+
+      const employeeEmail =
+        normalizeEmail(employee.email);
+
+      if (!employeeEmail) {
+        return jsonResponse(
+          {
+            success: false,
+            error:
+              "Employee does not have a valid email address.",
+          },
+          400
+        );
+      }
+
+      let approverName =
+        "Administrator";
+
+      if (leaveRequest.approved_by) {
+        const {
+          data: approver,
+          error: approverError,
+        } = await supabase
+          .from("employees")
+          .select(
+            "id, name, email"
+          )
+          .eq(
+            "id",
+            leaveRequest.approved_by
+          )
+          .maybeSingle();
+
+        if (approverError) {
+          console.error(
+            "Approver lookup error:",
+            approverError.message
+          );
+        }
+
+        if (approver?.name) {
+          approverName =
+            approver.name;
+        }
+      }
+
+      emails.push({
+        to: employeeEmail,
+        subject:
+          `Leave Request Approved - ${leaveTypeName}`,
+        html:
+          getLeaveApprovedEmail(
+            employeeName,
+            leaveTypeName,
+            leaveRequest.start_date,
+            leaveRequest.end_date,
+            leaveRequest.total_days,
+            approverName,
+            leaveRequest.admin_comments
+          ),
+      });
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* REJECT                                                                   */
+    /* ---------------------------------------------------------------------- */
+
+    if (action === "reject") {
+      console.log(
+        "Processing REJECT notification..."
+      );
+
+      const employeeEmail =
+        normalizeEmail(employee.email);
+
+      if (!employeeEmail) {
+        return jsonResponse(
+          {
+            success: false,
+            error:
+              "Employee does not have a valid email address.",
+          },
+          400
+        );
+      }
+
+      let rejectorName =
+        "Administrator";
+
+      /*
+       * Current schema uses approved_by for the actor.
+       * Keep this until a dedicated rejected_by field
+       * exists in the database.
+       */
+      if (leaveRequest.approved_by) {
+        const {
+          data: rejector,
+          error: rejectorError,
+        } = await supabase
+          .from("employees")
+          .select(
+            "id, name, email"
+          )
+          .eq(
+            "id",
+            leaveRequest.approved_by
+          )
+          .maybeSingle();
+
+        if (rejectorError) {
+          console.error(
+            "Rejector lookup error:",
+            rejectorError.message
+          );
+        }
+
+        if (rejector?.name) {
+          rejectorName =
+            rejector.name;
+        }
+      }
+
+      emails.push({
+        to: employeeEmail,
+        subject:
+          `Leave Request Rejected - ${leaveTypeName}`,
+        html:
+          getLeaveRejectedEmail(
+            employeeName,
+            leaveTypeName,
+            leaveRequest.start_date,
+            leaveRequest.end_date,
+            leaveRequest.total_days,
+            rejectorName,
+            leaveRequest.admin_comments
+          ),
+      });
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* Deduplicate                                                             */
+    /* ---------------------------------------------------------------------- */
+
+    const emailMap =
+      new Map<
+        string,
+        {
+          to: string;
+          subject: string;
+          html: string;
+        }
+      >();
+
+    for (const email of emails) {
+      const normalized =
+        normalizeEmail(email.to);
+
+      if (
+        normalized &&
+        !emailMap.has(normalized)
+      ) {
+        emailMap.set(
+          normalized,
+          {
+            ...email,
+            to: normalized,
+          }
+        );
+      }
+    }
+
+    const finalEmails =
+      Array.from(emailMap.values());
+
+    console.log(
+      "Final email recipients:",
+      finalEmails.map(
+        (email) => email.to
+      )
+    );
+
+    if (finalEmails.length === 0) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "No valid email recipients found.",
+          action,
+          totalAttempted: 0,
+        },
+        404
+      );
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* SMTP                                                                    */
+    /* ---------------------------------------------------------------------- */
+
+    const transporter =
+      nodemailer.createTransport({
+        host: SMTP_HOST,
+        port: SMTP_PORT,
+        secure: SMTP_PORT === 465,
+        auth: {
+          user: SMTP_USER,
+          pass: SMTP_PASS,
+        },
+      });
+
+    try {
+      await transporter.verify();
+
+      console.log(
+        "SMTP connection verified."
+      );
+    } catch (smtpError) {
+      console.error(
+        "SMTP verification failed:",
+        smtpError
+      );
+
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Email server connection failed. Check SMTP configuration.",
+        },
+        500
+      );
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* Send                                                                    */
+    /* ---------------------------------------------------------------------- */
+
+    const sentEmails: Array<{
+      to: string;
+      status: string;
+    }> = [];
+
+    const failedEmails: Array<{
+      to: string;
+      error: string;
+    }> = [];
+
+    for (const email of finalEmails) {
+      try {
+        await transporter.sendMail({
+          from:
+            `"${MAIL_FROM_NAME}" <${MAIL_FROM}>`,
+          to: email.to,
+          subject: email.subject,
+          html: email.html,
+        });
+
+        sentEmails.push({
+          to: email.to,
+          status: "sent",
+        });
+
+        console.log(
+          "Email sent:",
+          email.to
+        );
+      } catch (sendError) {
+        const message =
+          sendError instanceof Error
+            ? sendError.message
+            : "Failed to send email";
+
+        failedEmails.push({
+          to: email.to,
+          error: message,
+        });
+
+        console.error(
+          "Email send failed:",
+          email.to,
+          message
+        );
+      }
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* Response                                                                */
+    /* ---------------------------------------------------------------------- */
+
+    if (sentEmails.length === 0) {
+      return jsonResponse(
+        {
+          success: false,
+          message:
+            "All notification emails failed to send.",
+          sent: sentEmails,
+          failed: failedEmails,
+          action,
+          totalAttempted:
+            finalEmails.length,
+        },
+        500
+      );
+    }
+
+    return jsonResponse({
+      success: true,
+      message:
+        `${sentEmails.length} email(s) sent successfully` +
+        (
+          failedEmails.length
+            ? `, ${failedEmails.length} failed`
+            : ""
+        ),
+      sent: sentEmails,
+      failed: failedEmails,
+      action,
+      totalAttempted:
+        finalEmails.length,
+    });
+
+  } catch (error) {
+    console.error(
+      "Unexpected send-leave-notification error:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          "Internal server error.",
+        details:
+          error instanceof Error
+            ? error.message
+            : "Unknown error",
+      },
+      500
+    );
+  }
+});
+
+/* -------------------------------------------------------------------------- */
+/* Email Templates                                                            */
+/* -------------------------------------------------------------------------- */
+
+function getEmailShell(
+  title: string,
+  headerTitle: string,
+  subtitle: string,
+  content: string
+): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>${escapeHtml(title)}</title>
+
+<style>
+body {
+  margin: 0;
+  padding: 0;
+  background: #f5f7fa;
+  font-family: Arial, Helvetica, sans-serif;
+  color: #333;
+}
+
+.wrapper {
+  width: 100%;
+  padding: 30px 0;
+}
+
+.container {
+  max-width: 650px;
+  margin: auto;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.brand {
+  padding: 24px 30px 10px;
+  text-align: center;
+}
+
+.brand-name {
+  font-size: 30px;
+  font-weight: 700;
+}
+
+.attend {
+  color: #1702f9;
+}
+
+.edge {
+  color: #39FF14;
+}
+
+.tagline {
+  margin-top: 5px;
+  font-size: 13px;
+  color: #777;
+}
+
+.header {
+  background: #1702f9;
+  color: white;
+  padding: 28px;
+  text-align: center;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.header p {
+  margin: 8px 0 0;
+  font-size: 14px;
+}
+
+.content {
+  padding: 30px;
+  background: #f8f9fa;
+}
+
+.greeting {
+  font-size: 16px;
+}
+
+.message {
+  font-size: 15px;
+  line-height: 1.7;
+  color: #555;
+}
+
+.details {
+  background: white;
+  padding: 20px;
+  border-left: 4px solid #1702f9;
+  margin: 22px 0;
+  border-radius: 5px;
+}
+
+.details-row {
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+.details-label {
+  font-weight: 600;
+  color: #1702f9;
+}
+
+.details-value {
+  color: #333;
+}
+
+.button-wrapper {
+  text-align: center;
+  margin: 28px 0;
+}
+
+.button {
+  display: inline-block;
+  padding: 13px 28px;
+  background: #1702f9;
+  color: white !important;
+  text-decoration: none;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.status-approved {
+  color: #198754;
+  font-weight: 700;
+}
+
+.status-rejected {
+  color: #dc3545;
+  font-weight: 700;
+}
+
+.status-pending {
+  color: #b7791f;
+  font-weight: 700;
+}
+
+.footer {
+  background: #f0f0f0;
+  padding: 20px;
+  text-align: center;
+  font-size: 12px;
+  color: #888;
+}
+</style>
+</head>
+
+<body>
+
+<div class="wrapper">
+
+<div class="container">
+
+<div class="brand">
+  <div class="brand-name">
+    <span class="attend">Attend</span><span class="edge">Edge</span>
+  </div>
+
+  <div class="tagline">
+    Smart Attendance &amp; Leave Management
+  </div>
+</div>
+
+<div class="header">
+  <h1>${escapeHtml(headerTitle)}</h1>
+  <p>${escapeHtml(subtitle)}</p>
+</div>
+
+<div class="content">
+${content}
+</div>
+
+<div class="footer">
+  <p>This is an automated email from AttendEdge. Please do not reply.</p>
+  <p>AttendEdge Workforce Management</p>
+</div>
+
+</div>
+
+</div>
+
+</body>
+</html>
+`;
+}
+
 function getLeaveAppliedEmail(
   employeeName: string,
   leaveType: string,
@@ -34,78 +1193,70 @@ function getLeaveAppliedEmail(
   reason: string,
   recipientName: string
 ): string {
-  const appUrl = Deno.env.get('APP_URL') || 'https://attendease.com';
-  
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <style>
-    body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-    .container { max-width: 600px; margin: 0 auto; padding: 0; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .header { background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; padding: 30px 20px; text-align: center; }
-    .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
-    .content { padding: 30px; background-color: #f8f9fa; }
-    .greeting { font-size: 16px; margin-bottom: 20px; }
-    .details { background-color: white; padding: 20px; border-left: 4px solid #007bff; margin: 20px 0; border-radius: 4px; }
-    .details-row { display: flex; margin: 12px 0; }
-    .details-label { font-weight: 600; color: #007bff; width: 150px; min-width: 150px; }
-    .details-value { color: #333; flex: 1; }
-    .message { font-size: 15px; color: #555; margin: 20px 0; line-height: 1.8; }
-    .action-button { display: inline-block; padding: 12px 30px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px; font-weight: 600; margin-top: 15px; }
-    .action-button:hover { background-color: #0056b3; }
-    .footer { background-color: #f0f0f0; padding: 20px; text-align: center; font-size: 12px; color: #888; border-top: 1px solid #e0e0e0; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>📋 New Leave Application</h1>
-    </div>
-    <div class="content">
-      <p class="greeting">Dear ${recipientName},</p>
-      <p class="message"><strong>${employeeName}</strong> has submitted a new leave application that requires your attention.</p>
-      
-      <div class="details">
-        <div class="details-row">
-          <span class="details-label">Leave Type:</span>
-          <span class="details-value">${leaveType}</span>
-        </div>
-        <div class="details-row">
-          <span class="details-label">Start Date:</span>
-          <span class="details-value">${formatDate(startDate)}</span>
-        </div>
-        <div class="details-row">
-          <span class="details-label">End Date:</span>
-          <span class="details-value">${formatDate(endDate)}</span>
-        </div>
-        <div class="details-row">
-          <span class="details-label">Duration:</span>
-          <span class="details-value">${totalDays} day(s)</span>
-        </div>
-        <div class="details-row">
-          <span class="details-label">Reason:</span>
-          <span class="details-value">${reason}</span>
-        </div>
-      </div>
-      
-      <p class="message">Please review and approve or reject this request at your earliest convenience.</p>
-      <div style="text-align: center;">
-        <a href="${appUrl}/leave-management" class="action-button">Review Leave Requests</a>
-      </div>
-    </div>
-    <div class="footer">
-      <p>This is an automated email from AttendEase. Please do not reply to this email.</p>
-      <p>&copy; ${new Date().getFullYear()} AttendEase. All rights reserved.</p>
-    </div>
-  </div>
-</body>
-</html>
-  `;
+  return getEmailShell(
+    "New Leave Application",
+    "New Leave Application",
+    "A leave request requires your attention",
+    `
+<p class="greeting">
+  Dear ${escapeHtml(recipientName)},
+</p>
+
+<p class="message">
+  <strong>${escapeHtml(employeeName)}</strong>
+  has submitted a new leave application that requires your attention.
+</p>
+
+<div class="details">
+
+<div class="details-row">
+<span class="details-label">Leave Type:</span>
+<span class="details-value">${escapeHtml(leaveType)}</span>
+</div>
+
+<div class="details-row">
+<span class="details-label">Start Date:</span>
+<span class="details-value">${escapeHtml(formatDate(startDate))}</span>
+</div>
+
+<div class="details-row">
+<span class="details-label">End Date:</span>
+<span class="details-value">${escapeHtml(formatDate(endDate))}</span>
+</div>
+
+<div class="details-row">
+<span class="details-label">Duration:</span>
+<span class="details-value">${escapeHtml(totalDays)} day(s)</span>
+</div>
+
+<div class="details-row">
+<span class="details-label">Reason:</span>
+<span class="details-value">${escapeHtml(reason)}</span>
+</div>
+
+<div class="details-row">
+<span class="details-label">Status:</span>
+<span class="status-pending">Pending Approval</span>
+</div>
+
+</div>
+
+<p class="message">
+Please review and approve or reject this request.
+</p>
+
+<div class="button-wrapper">
+<a
+href="${escapeHtml(APP_URL)}/leave-management"
+class="button"
+>
+Review Leave Request
+</a>
+</div>
+`
+  );
 }
 
-// Email template: Approved
 function getLeaveApprovedEmail(
   employeeName: string,
   leaveType: string,
@@ -113,369 +1264,136 @@ function getLeaveApprovedEmail(
   endDate: string,
   totalDays: number,
   approverName: string,
-  comments?: string
+  comments?: string | null
 ): string {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <style>
-    body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-    .container { max-width: 600px; margin: 0 auto; padding: 0; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .header { background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); color: white; padding: 30px 20px; text-align: center; }
-    .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
-    .content { padding: 30px; background-color: #f8f9fa; }
-    .greeting { font-size: 16px; margin-bottom: 20px; }
-    .badge { display: inline-block; background-color: #28a745; color: white; padding: 8px 16px; border-radius: 20px; font-weight: 600; margin: 10px 0; }
-    .details { background-color: white; padding: 20px; border-left: 4px solid #28a745; margin: 20px 0; border-radius: 4px; }
-    .details-row { display: flex; margin: 12px 0; }
-    .details-label { font-weight: 600; color: #28a745; width: 150px; min-width: 150px; }
-    .details-value { color: #333; flex: 1; }
-    .message { font-size: 15px; color: #555; margin: 20px 0; line-height: 1.8; }
-    .footer { background-color: #f0f0f0; padding: 20px; text-align: center; font-size: 12px; color: #888; border-top: 1px solid #e0e0e0; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>✓ Leave Request Approved</h1>
-    </div>
-    <div class="content">
-      <p class="greeting">Dear ${employeeName},</p>
-      <p class="message">Good news! Your leave request has been <span class="badge">APPROVED</span></p>
-      
-      <div class="details">
-        <div class="details-row">
-          <span class="details-label">Leave Type:</span>
-          <span class="details-value">${leaveType}</span>
-        </div>
-        <div class="details-row">
-          <span class="details-label">Start Date:</span>
-          <span class="details-value">${formatDate(startDate)}</span>
-        </div>
-        <div class="details-row">
-          <span class="details-label">End Date:</span>
-          <span class="details-value">${formatDate(endDate)}</span>
-        </div>
-        <div class="details-row">
-          <span class="details-label">Duration:</span>
-          <span class="details-value">${totalDays} day(s)</span>
-        </div>
-        <div class="details-row">
-          <span class="details-label">Approved By:</span>
-          <span class="details-value">${approverName}</span>
-        </div>
-        ${comments ? `<div class="details-row"><span class="details-label">Comments:</span><span class="details-value">${comments}</span></div>` : ''}
-      </div>
-      
-      <p class="message">Your leave has been confirmed. Please ensure all handover activities are completed before your leave period.</p>
-    </div>
-    <div class="footer">
-      <p>This is an automated email from AttendEase. Please do not reply to this email.</p>
-    </div>
-  </div>
-</body>
-</html>
-  `;
+  return getEmailShell(
+    "Leave Request Approved",
+    "Leave Request Approved",
+    "Your leave request has been approved",
+    `
+<p class="greeting">
+Dear ${escapeHtml(employeeName)},
+</p>
+
+<p class="message">
+Your leave request has been
+<span class="status-approved">APPROVED</span>.
+</p>
+
+<div class="details">
+
+<div class="details-row">
+<span class="details-label">Leave Type:</span>
+<span class="details-value">${escapeHtml(leaveType)}</span>
+</div>
+
+<div class="details-row">
+<span class="details-label">Start Date:</span>
+<span class="details-value">${escapeHtml(formatDate(startDate))}</span>
+</div>
+
+<div class="details-row">
+<span class="details-label">End Date:</span>
+<span class="details-value">${escapeHtml(formatDate(endDate))}</span>
+</div>
+
+<div class="details-row">
+<span class="details-label">Duration:</span>
+<span class="details-value">${escapeHtml(totalDays)} day(s)</span>
+</div>
+
+<div class="details-row">
+<span class="details-label">Approved By:</span>
+<span class="details-value">${escapeHtml(approverName)}</span>
+</div>
+
+${
+  comments
+    ? `
+<div class="details-row">
+<span class="details-label">Comments:</span>
+<span class="details-value">${escapeHtml(comments)}</span>
+</div>
+`
+    : ""
 }
 
-// Email template: Rejected
+</div>
+
+<p class="message">
+Your leave has been confirmed.
+</p>
+`
+  );
+}
+
 function getLeaveRejectedEmail(
   employeeName: string,
   leaveType: string,
   startDate: string,
   endDate: string,
+  totalDays: number,
   rejectorName: string,
-  comments?: string
+  comments?: string | null
 ): string {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <style>
-    body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-    .container { max-width: 600px; margin: 0 auto; padding: 0; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .header { background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; padding: 30px 20px; text-align: center; }
-    .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
-    .content { padding: 30px; background-color: #f8f9fa; }
-    .greeting { font-size: 16px; margin-bottom: 20px; }
-    .badge { display: inline-block; background-color: #dc3545; color: white; padding: 8px 16px; border-radius: 20px; font-weight: 600; margin: 10px 0; }
-    .details { background-color: white; padding: 20px; border-left: 4px solid #dc3545; margin: 20px 0; border-radius: 4px; }
-    .details-row { display: flex; margin: 12px 0; }
-    .details-label { font-weight: 600; color: #dc3545; width: 150px; min-width: 150px; }
-    .details-value { color: #333; flex: 1; }
-    .message { font-size: 15px; color: #555; margin: 20px 0; line-height: 1.8; }
-    .footer { background-color: #f0f0f0; padding: 20px; text-align: center; font-size: 12px; color: #888; border-top: 1px solid #e0e0e0; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>✗ Leave Request Rejected</h1>
-    </div>
-    <div class="content">
-      <p class="greeting">Dear ${employeeName},</p>
-      <p class="message">We regret to inform you that your leave request has been <span class="badge">REJECTED</span></p>
-      
-      <div class="details">
-        <div class="details-row">
-          <span class="details-label">Leave Type:</span>
-          <span class="details-value">${leaveType}</span>
-        </div>
-        <div class="details-row">
-          <span class="details-label">Period:</span>
-          <span class="details-value">${formatDate(startDate)} to ${formatDate(endDate)}</span>
-        </div>
-        <div class="details-row">
-          <span class="details-label">Rejected By:</span>
-          <span class="details-value">${rejectorName}</span>
-        </div>
-        ${comments ? `<div class="details-row"><span class="details-label">Reason:</span><span class="details-value">${comments}</span></div>` : ''}
-      </div>
-      
-      <p class="message">If you have any questions about this decision, please contact your reporting manager. You can reapply for leave on alternative dates if needed.</p>
-    </div>
-    <div class="footer">
-      <p>This is an automated email from AttendEase. Please do not reply to this email.</p>
-    </div>
-  </div>
-</body>
-</html>
-  `;
+  return getEmailShell(
+    "Leave Request Rejected",
+    "Leave Request Rejected",
+    "Your leave request has been rejected",
+    `
+<p class="greeting">
+Dear ${escapeHtml(employeeName)},
+</p>
+
+<p class="message">
+Your leave request has been
+<span class="status-rejected">REJECTED</span>.
+</p>
+
+<div class="details">
+
+<div class="details-row">
+<span class="details-label">Leave Type:</span>
+<span class="details-value">${escapeHtml(leaveType)}</span>
+</div>
+
+<div class="details-row">
+<span class="details-label">Start Date:</span>
+<span class="details-value">${escapeHtml(formatDate(startDate))}</span>
+</div>
+
+<div class="details-row">
+<span class="details-label">End Date:</span>
+<span class="details-value">${escapeHtml(formatDate(endDate))}</span>
+</div>
+
+<div class="details-row">
+<span class="details-label">Duration:</span>
+<span class="details-value">${escapeHtml(totalDays)} day(s)</span>
+</div>
+
+<div class="details-row">
+<span class="details-label">Rejected By:</span>
+<span class="details-value">${escapeHtml(rejectorName)}</span>
+</div>
+
+${
+  comments
+    ? `
+<div class="details-row">
+<span class="details-label">Reason / Comments:</span>
+<span class="details-value">${escapeHtml(comments)}</span>
+</div>
+`
+    : ""
 }
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+</div>
 
-  try {
-    const { action, leaveRequestId, company_id } = await req.json() as LeaveNotificationRequest;
-
-    if (!action || !leaveRequestId || !company_id) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields: action, leaveRequestId, company_id' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-    // Fetch the leave request
-    const { data: leaveRequest, error: leaveError } = await supabase
-      .from('leave_requests')
-      .select(`
-        id,
-        employee_id,
-        start_date,
-        end_date,
-        total_days,
-        reason,
-        status,
-        approved_by,
-        admin_comments,
-        leave_types(name),
-        employees(name, email, reporting_manager_id)
-      `)
-      .eq('id', leaveRequestId)
-      .eq('company_id', company_id)
-      .single();
-
-    if (leaveError || !leaveRequest) {
-      console.error('❌ Leave request not found:', leaveError);
-      return new Response(
-        JSON.stringify({ error: 'Leave request not found' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const emails: Array<{ to: string; subject: string; html: string }> = [];
-    const employee = leaveRequest.employees as any;
-    const leaveType = (leaveRequest.leave_types as any)?.name || 'Leave';
-
-    console.log(`📧 Processing ${action} notification for leave request:`, leaveRequestId);
-
-    if (action === 'apply') {
-      // Notify reporting manager
-      if (employee.reporting_manager_id) {
-        const { data: manager } = await supabase
-          .from('profiles')
-          .select('email, name')
-          .eq('id', employee.reporting_manager_id)
-          .single();
-
-        if (manager?.email) {
-          emails.push({
-            to: manager.email,
-            subject: `New Leave Application - ${employee.name}`,
-            html: getLeaveAppliedEmail(
-              employee.name,
-              leaveType,
-              leaveRequest.start_date,
-              leaveRequest.end_date,
-              leaveRequest.total_days,
-              leaveRequest.reason || 'No reason provided',
-              manager.name
-            )
-          });
-          console.log(`✓ Added email for reporting manager: ${manager.email}`);
-        }
-      }
-
-      // Notify admins and super_admins
-      const { data: admins } = await supabase
-        .from('profiles')
-        .select('email, name')
-        .eq('company_id', company_id)
-        .in('role', ['admin', 'super_admin']);
-
-      if (admins && admins.length > 0) {
-        for (const admin of admins) {
-          emails.push({
-            to: admin.email,
-            subject: `New Leave Application - ${employee.name}`,
-            html: getLeaveAppliedEmail(
-              employee.name,
-              leaveType,
-              leaveRequest.start_date,
-              leaveRequest.end_date,
-              leaveRequest.total_days,
-              leaveRequest.reason || 'No reason provided',
-              admin.name
-            )
-          });
-        }
-        console.log(`✓ Added ${admins.length} admin email(s)`);
-      }
-    } else if (action === 'approve') {
-      // Notify employee
-      const { data: approver } = await supabase
-        .from('profiles')
-        .select('name')
-        .eq('id', leaveRequest.approved_by)
-        .single();
-
-      emails.push({
-        to: employee.email,
-        subject: `Leave Request Approved - ${leaveType}`,
-        html: getLeaveApprovedEmail(
-          employee.name,
-          leaveType,
-          leaveRequest.start_date,
-          leaveRequest.end_date,
-          leaveRequest.total_days,
-          (approver as any)?.name || 'Administrator',
-          leaveRequest.admin_comments
-        )
-      });
-      console.log(`✓ Added approval email for employee: ${employee.email}`);
-    } else if (action === 'reject') {
-      // Notify employee
-      const { data: rejector } = await supabase
-        .from('profiles')
-        .select('name')
-        .eq('id', leaveRequest.approved_by)
-        .single();
-
-      emails.push({
-        to: employee.email,
-        subject: `Leave Request Rejected - ${leaveType}`,
-        html: getLeaveRejectedEmail(
-          employee.name,
-          leaveType,
-          leaveRequest.start_date,
-          leaveRequest.end_date,
-          (rejector as any)?.name || 'Administrator',
-          leaveRequest.admin_comments
-        )
-      });
-      console.log(`✓ Added rejection email for employee: ${employee.email}`);
-    }
-
-    console.log(`📨 Total emails to send: ${emails.length}`, emails.map(e => e.to));
-
-    // Send emails using Gmail SMTP
-    const gmailEmail = Deno.env.get('GMAIL_EMAIL');
-    const gmailPassword = Deno.env.get('GMAIL_PASSWORD');
-    
-    if (!gmailEmail || !gmailPassword) {
-      console.error('❌ Gmail credentials not set! GMAIL_EMAIL or GMAIL_PASSWORD missing.');
-      return new Response(
-        JSON.stringify({ 
-          error: 'Email service not configured',
-          message: 'GMAIL_EMAIL and GMAIL_PASSWORD environment variables are required',
-          emailsQueued: emails.length,
-          recipients: emails.map(e => e.to)
-        }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const sentEmails = [];
-    const failedEmails = [];
-
-    const client = new SmtpClient();
-
-    try {
-      await client.connectTLS({
-        hostname: "smtp.gmail.com",
-        port: 465,
-        username: gmailEmail,
-        password: gmailPassword,
-      });
-
-      console.log(`✅ Connected to Gmail SMTP server`);
-
-      for (const email of emails) {
-        try {
-          await client.send({
-            from: gmailEmail,
-            to: email.to,
-            subject: email.subject,
-            content: email.html,
-            html: true,
-          });
-
-          sentEmails.push({ to: email.to, status: 'sent' });
-          console.log(`✅ Email sent to ${email.to}`);
-        } catch (err) {
-          failedEmails.push({ to: email.to, error: err instanceof Error ? err.message : 'Failed to send' });
-          console.error(`❌ Failed to send email to ${email.to}:`, err);
-        }
-      }
-
-      await client.close();
-      console.log(`✅ Disconnected from Gmail SMTP server`);
-    } catch (err) {
-      console.error('❌ SMTP Connection error:', err);
-      failedEmails.push(...emails.map(e => ({ to: e.to, error: 'SMTP connection failed' })));
-    }
-
-    return new Response(
-      JSON.stringify({ 
-        success: true,
-        message: `${sentEmails.length} email(s) sent successfully${failedEmails.length > 0 ? `, ${failedEmails.length} failed` : ''}`,
-        sent: sentEmails,
-        failed: failedEmails,
-        action,
-        totalAttempted: emails.length
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-
-  } catch (error) {
-    console.error('💥 Error in send-leave-notification:', error);
-    return new Response(
-      JSON.stringify({ 
-        error: 'Internal server error', 
-        details: error instanceof Error ? error.message : 'Unknown error'
-      }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
-});
+<p class="message">
+If you have any questions about this decision,
+please contact your reporting manager.
+</p>
+`
+  );
+}

@@ -4,6 +4,7 @@ import { useCompany } from '@/contexts/CompanyContext';
 import { supabase } from '@/integrations/supabase/client';
 import { resolveLeaveTotalDays, type DurationType, type LeaveSession } from '@/utils/leaveDuration';
 import { hasConflictingLeave } from '@/services/leaveOverlap';
+import { leaveNotificationService } from '@/services/leaveNotificationService';
 
 const BackdatedLeave: React.FC = () => {
   const { user } = useAuth();
@@ -77,22 +78,33 @@ const BackdatedLeave: React.FC = () => {
       return;
     }
 
-    const { error } = await supabase.from('leave_requests').insert({
-      employee_id: user.id,
-      company_id: currentCompany.id,
-      leave_type_id: leaveTypeId,
-      start_date: startDate,
-      end_date: resolvedEndDate,
-      total_days: totalDays,
-      duration_type: durationType,
-      session: resolvedSession,
-      reason,
-      status: 'pending',
-    });
+    const { data: insertedRequest, error } = await supabase
+      .from('leave_requests')
+      .insert({
+        employee_id: user.id,
+        company_id: currentCompany.id,
+        leave_type_id: leaveTypeId,
+        start_date: startDate,
+        end_date: resolvedEndDate,
+        total_days: totalDays,
+        duration_type: durationType,
+        session: resolvedSession,
+        reason,
+        status: 'pending',
+      })
+      .select('id')
+      .single();
 
     if (error) {
       setMessage('Error submitting leave: ' + error.message);
     } else {
+      if (insertedRequest?.id) {
+        void leaveNotificationService.notifyLeaveApplied(
+          insertedRequest.id,
+          currentCompany.id
+        );
+      }
+
       setMessage('Backdated leave request submitted!');
       setStartDate('');
       setEndDate('');
