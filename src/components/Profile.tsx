@@ -6,7 +6,7 @@ import { THEME_OPTIONS } from '@/contexts/ThemeContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from './ui/dialog';
 import { calculateProfileCompletion, getCompletionColor, getCompletionBgColor, getCompletionProgressColor } from '@/utils/profileCompletion';
 import { Progress } from './ui/progress';
-import { Camera } from 'lucide-react';
+import { Camera, FileText, Linkedin, Upload, Wand2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useCompanyLocations } from '@/hooks/useCompanyLocations';
@@ -72,6 +72,48 @@ const initialsFromName = (name: string) => {
 };
 
 const employmentTypeOptions = ['Full-time', 'Part-time', 'Contract', 'Internship', 'Freelance', 'Consultant'];
+
+interface ImportedWorkExperience {
+  id: string;
+  company: string;
+  title: string;
+  employment_type: string;
+  from_month: string;
+  to_month: string;
+}
+
+const monthFromText = (value: string) => {
+  const match = value.match(/(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{4})/i);
+  if (!match) return '';
+  const month = new Date(`${match[1]} 1, ${match[2]}`).getMonth() + 1;
+  return `${match[2]}-${String(month).padStart(2, '0')}`;
+};
+
+const extractWorkExperiences = (text: string): ImportedWorkExperience[] => {
+  const lines = text.split(/\r?\n/).map(line => line.replace(/[•|]+/g, ' ').trim()).filter(Boolean);
+  const datePattern = /((?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4})\s*(?:-|–|—|to)\s*((?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}|Present|Current)?/i;
+  const results: ImportedWorkExperience[] = [];
+
+  lines.forEach((line, index) => {
+    const match = line.match(datePattern);
+    if (!match) return;
+    const title = lines[index - 1] || '';
+    const company = lines[index - 2] || '';
+    if (!title || !company || title.length > 120 || company.length > 120) return;
+    results.push({
+      id: `import-${index}-${Date.now()}`,
+      company,
+      title,
+      employment_type: '',
+      from_month: monthFromText(match[1]),
+      to_month: match[2] && !/present|current/i.test(match[2]) ? monthFromText(match[2]) : '',
+    });
+  });
+
+  return results.filter((item, index, list) =>
+    list.findIndex(candidate => candidate.company === item.company && candidate.title === item.title && candidate.from_month === item.from_month) === index
+  );
+};
 
 const toMonthValue = (value?: string) => {
   if (!value) return '';
@@ -197,6 +239,13 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
   const [editTab, setEditTab] = useState<string | null>(null);
   const [acceptAllLoading, setAcceptAllLoading] = useState(false);
   const [acceptAllSuccess, setAcceptAllSuccess] = useState(false);
+  const [importSource, setImportSource] = useState<'resume' | 'linkedin'>('resume');
+  const [linkedinText, setLinkedinText] = useState('');
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [importedExperiences, setImportedExperiences] = useState<ImportedWorkExperience[]>([]);
+  const [importingExperiences, setImportingExperiences] = useState(false);
+  const [importError, setImportError] = useState('');
+  const [acceptingExperienceId, setAcceptingExperienceId] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState('');
   const [photoLoading, setPhotoLoading] = useState(false);
   const photoInputRef = React.useRef<HTMLInputElement>(null);
@@ -497,6 +546,59 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
     await updateUserProfile({ work_history: orderedHistory });
     setHistorySaving(false);
     setEditTab(null);
+  };
+
+  const extractResumeText = async (file: File) => {
+    if (file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt') || file.name.toLowerCase().endsWith('.md')) {
+      return file.text();
+    }
+
+    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+      const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const pdf = await pdfjs.getDocument({ data: bytes, disableWorker: true }).promise;
+      const pages: string[] = [];
+      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+        const page = await pdf.getPage(pageNumber);
+        const content = await page.getTextContent();
+        pages.push(content.items.map((item: any) => item.str || '').join(' '));
+      }
+      return pages.join('\n');
+    }
+
+    throw new Error('Please choose a PDF, TXT, or Markdown resume file.');
+  };
+
+  const handleExperienceImport = async () => {
+    setImportError('');
+    setImportedExperiences([]);
+    setImportingExperiences(true);
+    try {
+      const text = importSource === 'resume'
+        ? resumeFile ? await extractResumeText(resumeFile) : ''
+        : linkedinText;
+      if (!text.trim()) {
+        throw new Error(importSource === 'resume' ? 'Choose a resume file first.' : 'Paste the LinkedIn profile text first.');
+      }
+      const extracted = extractWorkExperiences(text);
+      if (extracted.length === 0) {
+        throw new Error('No work experiences were detected. Include each role, company, and its date range in the source text.');
+      }
+      setImportedExperiences(extracted);
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : 'Could not extract work history.');
+    } finally {
+      setImportingExperiences(false);
+    }
+  };
+
+  const acceptImportedExperience = async (experience: ImportedWorkExperience) => {
+    setAcceptingExperienceId(experience.id);
+    const nextHistory = sortWorkHistoryRecentFirst([...workHistoryList, experience]);
+    await updateUserProfile({ work_history: nextHistory });
+    setWorkHistoryList(nextHistory);
+    setImportedExperiences(current => current.filter(item => item.id !== experience.id));
+    setAcceptingExperienceId(null);
   };
 
   // Document upload
@@ -1638,6 +1740,58 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
           <DialogContent className="max-h-[85vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Edit Work History</DialogTitle></DialogHeader>
             <form className="space-y-3" onSubmit={handleWorkHistorySave}>
+              <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                <div className="flex items-center gap-2 font-medium">
+                  <Wand2 className="h-4 w-4 text-primary" />
+                  Import work history
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Upload an updated resume or paste the text from a LinkedIn profile. Review each detected experience before saving it.
+                </p>
+                <div className="flex gap-2">
+                  <button type="button" className={`flex items-center gap-2 rounded border px-3 py-1.5 text-sm ${importSource === 'resume' ? 'border-primary bg-primary/10' : ''}`} onClick={() => setImportSource('resume')}>
+                    <FileText className="h-4 w-4" /> Resume
+                  </button>
+                  <button type="button" className={`flex items-center gap-2 rounded border px-3 py-1.5 text-sm ${importSource === 'linkedin' ? 'border-primary bg-primary/10' : ''}`} onClick={() => setImportSource('linkedin')}>
+                    <Linkedin className="h-4 w-4" /> LinkedIn text
+                  </button>
+                </div>
+                {importSource === 'resume' ? (
+                  <div className="flex items-center gap-2">
+                    <label className="flex cursor-pointer items-center gap-2 rounded border px-3 py-2 text-sm hover:bg-muted">
+                      <Upload className="h-4 w-4" /> Choose resume
+                      <input type="file" accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown" className="hidden" onChange={event => setResumeFile(event.target.files?.[0] || null)} />
+                    </label>
+                    <span className="truncate text-xs text-muted-foreground">{resumeFile?.name || 'No file selected'}</span>
+                  </div>
+                ) : (
+                  <textarea
+                    value={linkedinText}
+                    onChange={event => setLinkedinText(event.target.value)}
+                    placeholder="Paste the LinkedIn Experience section here"
+                    className="min-h-24 w-full rounded border bg-background px-3 py-2 text-sm"
+                  />
+                )}
+                <button type="button" onClick={handleExperienceImport} disabled={importingExperiences} className="flex items-center gap-2 rounded bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50">
+                  {importingExperiences ? 'Extracting...' : 'Extract experiences'}
+                </button>
+                {importError && <p className="text-sm text-destructive">{importError}</p>}
+                {importedExperiences.length > 0 && (
+                  <div className="space-y-2 border-t pt-3">
+                    <p className="text-sm font-medium">Review detected experiences</p>
+                    {importedExperiences.map(experience => (
+                      <div key={experience.id} className="rounded border bg-background p-3">
+                        <div className="text-sm font-medium">{experience.title}</div>
+                        <div className="text-sm text-muted-foreground">{experience.company}</div>
+                        <div className="text-xs text-muted-foreground">{formatMonthLabel(experience.from_month) || 'Start not detected'}{experience.to_month ? ` – ${formatMonthLabel(experience.to_month)}` : ' – Present'}</div>
+                        <button type="button" onClick={() => acceptImportedExperience(experience)} disabled={acceptingExperienceId === experience.id} className="mt-2 rounded border border-primary px-3 py-1.5 text-sm text-primary disabled:opacity-50">
+                          {acceptingExperienceId === experience.id ? 'Saving...' : 'Accept & Save'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               {workHistoryList.map((row, idx) => (
                 <div key={idx} className="grid grid-cols-1 sm:grid-cols-2 gap-2 border rounded p-3">
                   <input

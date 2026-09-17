@@ -510,6 +510,27 @@ Deno.serve(async (req: Request) => {
         "Processing APPLY notification..."
       );
 
+      // Confirm receipt to the employee who submitted the request.
+      const employeeEmail =
+        normalizeEmail(employee.email);
+
+      if (employeeEmail) {
+        emails.push({
+          to: employeeEmail,
+          subject:
+            `Leave Application Received - ${leaveTypeName}`,
+          html: getLeaveApplicationReceivedEmail(
+            employeeName,
+            leaveTypeName,
+            leaveRequest.start_date,
+            leaveRequest.end_date,
+            leaveRequest.total_days,
+            leaveRequest.reason ||
+              "No reason provided"
+          ),
+        });
+      }
+
       /*
        * Reporting manager
        */
@@ -1253,6 +1274,69 @@ class="button"
 Review Leave Request
 </a>
 </div>
+`
+  );
+}
+
+function getLeaveApplicationReceivedEmail(
+  employeeName: string,
+  leaveType: string,
+  startDate: string,
+  endDate: string,
+  totalDays: number,
+  reason: string
+): string {
+  return getEmailShell(
+    "Leave Application Received",
+    "Leave Application Received",
+    "Your leave request is pending approval",
+    `
+<p class="greeting">
+Dear ${escapeHtml(employeeName)},
+</p>
+
+<p class="message">
+We have received your leave application. It is now
+<span class="status-pending">PENDING APPROVAL</span>.
+</p>
+
+<div class="details">
+
+<div class="details-row">
+<span class="details-label">Leave Type:</span>
+<span class="details-value">${escapeHtml(leaveType)}</span>
+</div>
+
+<div class="details-row">
+<span class="details-label">Start Date:</span>
+<span class="details-value">${escapeHtml(formatDate(startDate))}</span>
+</div>
+
+<div class="details-row">
+<span class="details-label">End Date:</span>
+<span class="details-value">${escapeHtml(formatDate(endDate))}</span>
+</div>
+
+<div class="details-row">
+<span class="details-label">Duration:</span>
+<span class="details-value">${escapeHtml(totalDays)} day(s)</span>
+</div>
+
+<div class="details-row">
+<span class="details-label">Reason:</span>
+<span class="details-value">${escapeHtml(reason)}</span>
+</div>
+
+<div class="details-row">
+<span class="details-label">Status:</span>
+<span class="status-pending">Pending Approval</span>
+</div>
+
+</div>
+
+<p class="message">
+You will receive another email when your request is approved or rejected.
+</p>
 `
   );
 }

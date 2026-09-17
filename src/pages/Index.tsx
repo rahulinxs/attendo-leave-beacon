@@ -19,6 +19,7 @@ import AttendanceRegularization from '@/components/AttendanceRegularization';
 import Profile from '@/components/Profile';
 import EmployeeIdCard from '@/components/EmployeeIdCard';
 import ProfileManagement from '@/components/ProfileManagement';
+import EmployeeAnniversaries from '@/components/EmployeeAnniversaries';
 import CompanyProfile from '@/components/CompanyProfile';
 import PerformanceReport from '@/components/PerformanceReport';
 import AttendanceSimplifierPage from '@/pages/AttendanceSimplifierPage';
@@ -112,6 +113,17 @@ const Index = () => {
         // Only admins and super admins can access profile management
         if (['admin', 'super_admin'].includes(user.role)) {
           return <ProfileManagement />;
+        }
+        return (
+          <div className="glass-effect rounded-2xl p-8 border text-center">
+            <h2 className="text-2xl font-bold mb-4">Access Denied</h2>
+            <p className="text-gray-600">You don't have permission to access this section</p>
+          </div>
+        );
+
+      case 'employee-anniversaries':
+        if (['admin', 'super_admin'].includes(user.role)) {
+          return <EmployeeAnniversaries />;
         }
         return (
           <div className="glass-effect rounded-2xl p-8 border text-center">

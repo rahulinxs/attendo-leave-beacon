@@ -85,6 +85,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
   
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
+  const [appliedSearchTerm, setAppliedSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
@@ -93,6 +94,14 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
   // Searchable combobox state
   const [consultantOpen, setConsultantOpen] = useState(false);
   const [consultantId, setConsultantId] = useState('all');
+
+  useEffect(() => {
+    const debounceTimer = window.setTimeout(() => {
+      setAppliedSearchTerm(searchTerm);
+    }, 300);
+
+    return () => window.clearTimeout(debounceTimer);
+  }, [searchTerm]);
 
   const fetchEmployees = React.useCallback(async () => {
     if (!currentCompany) {
@@ -112,8 +121,8 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
         .eq('company_id', currentCompany.id)
         .order('name');
 
-      if (searchTerm.trim()) {
-        const search = searchTerm.trim();
+      if (appliedSearchTerm.trim()) {
+        const search = appliedSearchTerm.trim();
         query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,department.ilike.%${search}%,position.ilike.%${search}%`);
       }
       if (roleFilter !== 'all') query = query.eq('role', roleFilter);
@@ -142,7 +151,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [currentCompany, page, pageSize, searchTerm, roleFilter, departmentFilter, locationFilter, statusFilter, consultantId]);
+  }, [currentCompany, page, pageSize, appliedSearchTerm, roleFilter, departmentFilter, locationFilter, statusFilter, consultantId]);
 
   const fetchFilterOptions = React.useCallback(async () => {
     if (!currentCompany) {
@@ -203,7 +212,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, roleFilter, departmentFilter, locationFilter, statusFilter, consultantId]);
+  }, [appliedSearchTerm, roleFilter, departmentFilter, locationFilter, statusFilter, consultantId]);
   
   useEffect(() => {
     fetchFilterOptions();
@@ -379,7 +388,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
     );
   }
 
-  if (isLoading) {
+  if (isLoading && employees.length === 0) {
     return (
       <div className="flex items-center justify-center p-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -451,13 +460,14 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
           {/* Filters Section */}
           <div className="space-y-4">
             {/* Search Bar */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <div className="relative max-w-xl">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search employees by name, email, department, or position..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search by name, email, department, or position"
+                aria-label="Search employees"
+                className="pl-9"
               />
             </div>
 
@@ -465,7 +475,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
               {/* Consultant Filter */}
               <div className="space-y-1">
-                <label className="text-sm font-medium">Consultant</label>
+                <label className="text-sm font-medium">Employee</label>
                 <Popover open={consultantOpen} onOpenChange={setConsultantOpen}>
                   <PopoverTrigger asChild>
                     <Button variant="outline" role="combobox" aria-expanded={consultantOpen} className="w-full justify-between">

@@ -45,7 +45,8 @@ import {
   Sparkles,
   Upload,
   Book,
-  Key
+  Key,
+  CalendarHeart
   ,Contact
 } from 'lucide-react';
 import {
@@ -614,6 +615,18 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                     >
                       <UserCircle className="w-5 h-5" />
                       <span className="sidebar-label text-sm">Profile Management</span>
+                    </button>
+
+                    <button
+                      onClick={() => onTabChange('employee-anniversaries')}
+                      className={`w-full flex items-center space-x-3 px-4 py-2 rounded-md text-left transition-colors sidebar-nav-btn ${
+                        activeTab === 'employee-anniversaries'
+                          ? 'border-l-4 border-primary bg-[rgba(0,0,0,0.04)] font-semibold'
+                          : 'hover:bg-[rgba(0,0,0,0.02)]'
+                      }`}
+                    >
+                      <CalendarHeart className="w-5 h-5" />
+                      <span className="sidebar-label text-sm">Employee Anniversaries</span>
                     </button>
                   </div>
                 </div>
