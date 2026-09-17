@@ -42,7 +42,8 @@ import {
   MessageSquare,
   ChevronDown,
   ChevronUp,
-  Trash2
+  Trash2,
+  Upload
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -59,6 +60,7 @@ import { format } from 'date-fns';
 import { parseDateLocal } from '@/utils/dateUtils';
 import { formatLeaveDuration } from '@/utils/leaveDuration';
 import * as XLSX from 'xlsx';
+import BulkLeaveImportWizard from './BulkLeaveImportWizard';
 
 interface TeamMember {
   id: string;
@@ -119,6 +121,7 @@ const LeaveRequestManagement: React.FC = () => {
   // Notification and Settings states
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showBulkLeaveImport, setShowBulkLeaveImport] = useState(false);
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
     emailNotifications: true,
     pushNotifications: true,
@@ -846,6 +849,12 @@ const LeaveRequestManagement: React.FC = () => {
                   Team Leave Requests ({filteredRequests.length})
                 </div>
                 <div className="flex gap-2">
+                  {canReviseAnyRequest && (
+                    <Button variant="gradient" size="sm" onClick={() => setShowBulkLeaveImport(true)}>
+                      <Upload className="w-4 h-4 mr-1" />
+                      Bulk Import Leaves
+                    </Button>
+                  )}
                   <Button variant="outline" size="sm" onClick={() => exportRequests('xlsx')}>
                     <Download className="w-4 h-4 mr-1" />
                     Export Excel
@@ -1226,6 +1235,16 @@ const LeaveRequestManagement: React.FC = () => {
           </div>
         </TabsContent>
       </Tabs>
+
+      <BulkLeaveImportWizard
+        open={showBulkLeaveImport}
+        onOpenChange={setShowBulkLeaveImport}
+        companyId={currentCompany.id}
+        onImportComplete={async () => {
+          await fetchLeaveRequests();
+          await fetchTeamData();
+        }}
+      />
 
     </div>
   );

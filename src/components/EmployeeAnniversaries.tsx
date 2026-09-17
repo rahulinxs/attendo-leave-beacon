@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Cake, CalendarDays, Heart, Loader2, RefreshCw, Search, Save, BriefcaseBusiness, Check, ChevronsUpDown, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -46,8 +46,10 @@ const EmployeeAnniversaries: React.FC = () => {
   const { activeNames } = useCompanyLocations();
   const { toast } = useToast();
   const [employees, setEmployees] = useState<EmployeeRow[]>([]);
+  const [filterOptions, setFilterOptions] = useState<Pick<EmployeeRow, 'id' | 'name' | 'email' | 'role' | 'department'>[]>([]);
   const [drafts, setDrafts] = useState<Record<string, Partial<Record<EditableDateField, string>>>>({});
   const [searchTerm, setSearchTerm] = useState('');
+  const [appliedSearchTerm, setAppliedSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
@@ -56,21 +58,47 @@ const EmployeeAnniversaries: React.FC = () => {
   const [consultantOpen, setConsultantOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
+  const [totalEmployeeCount, setTotalEmployeeCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchEmployees = async () => {
+  useEffect(() => {
+    const debounceTimer = window.setTimeout(() => setAppliedSearchTerm(searchTerm), 300);
+    return () => window.clearTimeout(debounceTimer);
+  }, [searchTerm]);
+
+  const fetchEmployees = useCallback(async () => {
     if (!currentCompany?.id || !isAdminRole(user?.role)) return;
 
     setIsLoading(true);
     setError(null);
     try {
-      const { data: employeeData, error: employeeError } = await supabase
+      // Fetch only the visible employee page; profile dates are loaded only for those IDs below.
+      let employeeQuery = supabase
         .from('employees')
-        .select('id, name, email, role, department, work_location, is_active, hire_date')
+        .select('id, name, email, role, department, work_location, is_active, hire_date', { count: 'exact' })
         .eq('company_id', currentCompany.id)
         .order('name');
+
+      if (appliedSearchTerm.trim()) {
+        const search = appliedSearchTerm.trim();
+        employeeQuery = employeeQuery.or(`name.ilike.%${search}%,email.ilike.%${search}%,department.ilike.%${search}%,role.ilike.%${search}%`);
+      }
+      if (roleFilter !== 'all') employeeQuery = employeeQuery.eq('role', roleFilter);
+      if (departmentFilter !== 'all') employeeQuery = employeeQuery.eq('department', departmentFilter);
+      if (locationFilter === UNASSIGNED_LOCATION) {
+        employeeQuery = employeeQuery.is('work_location', null);
+      } else if (locationFilter !== 'all') {
+        employeeQuery = employeeQuery.eq('work_location', locationFilter);
+      }
+      if (statusFilter === 'active') employeeQuery = employeeQuery.eq('is_active', true);
+      if (statusFilter === 'inactive') employeeQuery = employeeQuery.eq('is_active', false);
+      if (consultantId !== 'all') employeeQuery = employeeQuery.eq('id', consultantId);
+
+      const start = (page - 1) * pageSize;
+      const { data: employeeData, count, error: employeeError } = await employeeQuery
+        .range(start, start + pageSize - 1);
 
       if (employeeError) throw employeeError;
 
@@ -96,53 +124,66 @@ const EmployeeAnniversaries: React.FC = () => {
           marriage_anniversary: profile?.marriage_anniversary || null,
         };
       }));
+      setTotalEmployeeCount(count || 0);
     } catch (fetchError) {
       console.error('Error loading employee anniversaries:', fetchError);
       setError('Unable to load employee anniversary details.');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [appliedSearchTerm, consultantId, currentCompany?.id, departmentFilter, locationFilter, page, pageSize, roleFilter, statusFilter, user?.role]);
 
   useEffect(() => {
     fetchEmployees();
+  }, [fetchEmployees]);
+
+  useEffect(() => {
+    if (!currentCompany?.id || !isAdminRole(user?.role)) {
+      setFilterOptions([]);
+      return;
+    }
+
+    const loadFilterOptions = async () => {
+      const { data, error: optionsError } = await supabase
+        .from('employees')
+        .select('id, name, email, role, department')
+        .eq('company_id', currentCompany.id)
+        .order('name')
+        .limit(500);
+
+      if (optionsError) {
+        console.error('Error loading anniversary filter options:', optionsError);
+        return;
+      }
+
+      // Cache the bounded, label-only list so filter changes do not repeat this read.
+      setFilterOptions(data || []);
+    };
+
+    loadFilterOptions();
   }, [currentCompany?.id, user?.role]);
 
   const filteredEmployees = useMemo(() => {
-    const search = searchTerm.trim().toLowerCase();
-    return employees.filter(employee =>
-      (!search || [employee.name, employee.email, employee.department || '', employee.role]
-        .some(value => value.toLowerCase().includes(search))) &&
-      (roleFilter === 'all' || employee.role === roleFilter) &&
-      (departmentFilter === 'all' || employee.department === departmentFilter) &&
-      (locationFilter === 'all' ||
-        (locationFilter === UNASSIGNED_LOCATION ? !employee.work_location : employee.work_location === locationFilter)) &&
-      (statusFilter === 'all' ||
-        (statusFilter === 'active' ? employee.is_active : !employee.is_active)) &&
-      (consultantId === 'all' || employee.id === consultantId)
-    );
-  }, [employees, searchTerm, roleFilter, departmentFilter, locationFilter, statusFilter, consultantId]);
+    return employees;
+  }, [employees]);
 
   const departments = useMemo(() =>
-    Array.from(new Set(employees.map(employee => employee.department).filter(Boolean))).sort(),
-  [employees]);
+    Array.from(new Set(filterOptions.map(employee => employee.department).filter(Boolean))).sort(),
+  [filterOptions]);
   const roles = useMemo(() =>
-    Array.from(new Set(employees.map(employee => employee.role))).sort(),
-  [employees]);
+    Array.from(new Set(filterOptions.map(employee => employee.role))).sort(),
+  [filterOptions]);
   const locationOptions = useMemo(() => [...activeNames].sort((a, b) => a.localeCompare(b)), [activeNames]);
   const selectedConsultant = useMemo(
-    () => employees.find(employee => employee.id === consultantId) || null,
-    [employees, consultantId]
+    () => filterOptions.find(employee => employee.id === consultantId) || null,
+    [filterOptions, consultantId]
   );
-  const totalPages = Math.max(1, Math.ceil(filteredEmployees.length / pageSize));
-  const paginatedEmployees = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filteredEmployees.slice(start, start + pageSize);
-  }, [filteredEmployees, page, pageSize]);
+  const totalPages = Math.max(1, Math.ceil(totalEmployeeCount / pageSize));
+  const paginatedEmployees = filteredEmployees;
 
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, roleFilter, departmentFilter, locationFilter, statusFilter, consultantId, pageSize]);
+  }, [appliedSearchTerm, roleFilter, departmentFilter, locationFilter, statusFilter, consultantId, pageSize]);
 
   const getValue = (employee: EmployeeRow, field: EditableDateField) =>
     drafts[employee.id]?.[field] ?? employee[field] ?? '';
@@ -271,7 +312,7 @@ const EmployeeAnniversaries: React.FC = () => {
                             <Check className={cn('mr-2 h-4 w-4', consultantId === 'all' ? 'opacity-100' : 'opacity-0')} />
                             All Consultants
                           </CommandItem>
-                          {employees.map(employee => (
+                          {filterOptions.map(employee => (
                             <CommandItem key={employee.id} value={`${employee.name} ${employee.email}`} onSelect={() => { setConsultantId(employee.id); setConsultantOpen(false); }}>
                               <Check className={cn('mr-2 h-4 w-4', consultantId === employee.id ? 'opacity-100' : 'opacity-0')} />
                               {employee.name} ({employee.email})
@@ -290,7 +331,7 @@ const EmployeeAnniversaries: React.FC = () => {
             </div>
             {(searchTerm || roleFilter !== 'all' || departmentFilter !== 'all' || locationFilter !== 'all' || statusFilter !== 'all' || consultantId !== 'all') && (
               <div className="flex items-center justify-between rounded-lg bg-blue-50 p-3">
-                <span className="text-sm text-blue-800">{filteredEmployees.length} employees match filters</span>
+                <span className="text-sm text-blue-800">{totalEmployeeCount} employees match filters</span>
                 <Button variant="gradient" size="sm" onClick={clearFilters}><X className="mr-2 h-4 w-4" />Clear Filters</Button>
               </div>
             )}
@@ -353,7 +394,7 @@ const EmployeeAnniversaries: React.FC = () => {
 
       {filteredEmployees.length > 0 && (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-muted-foreground">Page {page} of {totalPages} - Showing {paginatedEmployees.length} of {filteredEmployees.length} employees</div>
+          <div className="text-sm text-muted-foreground">Page {page} of {totalPages} - Showing {paginatedEmployees.length} of {totalEmployeeCount} employees</div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Rows per page:</span>
             <Select value={pageSize.toString()} onValueChange={value => setPageSize(Number(value))}>

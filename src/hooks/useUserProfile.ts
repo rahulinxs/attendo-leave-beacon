@@ -72,6 +72,9 @@ export interface FullUserProfile {
 
 const EMPLOYEE_ID_CARD_COLUMNS = 'id, name, position, avatar_url, work_location';
 const EMPLOYEE_ID_CARD_PROFILE_COLUMNS = 'employee_code, blood_group, emergency_contacts, designation, work_location';
+const PROFILE_EMPLOYEE_COLUMNS = 'id, name, email, role, company_id, team_id, reporting_manager_id, hire_date, is_active, department, position, work_location, avatar_url, created_at, updated_at';
+const PROFILE_COLUMNS = 'id, employee_id, date_of_birth, gender, marital_status, personal_email, phone_number, blood_group, marriage_anniversary, alternate_phone_number, current_address, permanent_address, house_type, residing_since, living_in_city_since, social_profiles, employee_code, date_of_joining, probation_period, employee_type, work_location, probation_status, work_experience_years, designation, job_title, department, sub_department, work_history, education_history, family_members, emergency_contacts, employment_status, last_working_day, exit_date, exit_reason, exit_interview_details, billing_status, contract_valid_upto, annual_ctc, aadhaar_number, pan_number, uan_number, pf_number, esi_number, bank_name, bank_branch, bank_city, ifsc_code, account_number';
+const DOCUMENT_COLUMNS = 'id, employee_id, document_type, file_url, uploaded_at';
 
 export const useUserProfile = (employeeId: string) => {
   const { user } = useAuth();
@@ -84,19 +87,19 @@ export const useUserProfile = (employeeId: string) => {
     // Fetch employee
     const { data: employee, error: empError } = await supabase
       .from('employees')
-      .select('*')
+      .select(PROFILE_EMPLOYEE_COLUMNS)
       .eq('id', employeeId)
       .maybeSingle();
     // Fetch profile
     const { data: profile, error: profError } = await supabase
       .from('employee_profiles')
-      .select('*')
+      .select(PROFILE_COLUMNS)
       .eq('employee_id', employeeId)
       .maybeSingle();
     // Fetch documents
     const { data: documents, error: docError } = await supabase
       .from('employee_documents')
-      .select('*')
+      .select(DOCUMENT_COLUMNS)
       .eq('employee_id', employeeId)
       .order('uploaded_at', { ascending: false });
     setProfileData({
@@ -200,23 +203,9 @@ export const useUserProfile = (employeeId: string) => {
         }
       }
     });
-    // Check if profile exists
-    const { data: existing, error: fetchError } = await supabase
+    const { error } = await supabase
       .from('employee_profiles')
-      .select('id')
-      .eq('employee_id', employeeId)
-      .maybeSingle();
-    let error;
-    if (existing) {
-      ({ error } = await supabase
-        .from('employee_profiles')
-        .update(update)
-        .eq('employee_id', employeeId));
-    } else {
-      ({ error } = await supabase
-        .from('employee_profiles')
-        .insert({ employee_id: employeeId, ...update }));
-    }
+      .upsert({ employee_id: employeeId, ...update }, { onConflict: 'employee_id' });
     if (error) {
       console.error('Error updating profile:', error);
     } else {
@@ -230,7 +219,17 @@ export const useUserProfile = (employeeId: string) => {
           await supabase.from('employees').update(employeePatch).eq('id', employeeId);
         }
       }
-      await fetchUserProfile();
+      // Keep the loaded profile cache current without downloading documents and unrelated fields again.
+      setProfileData(current => current ? {
+        ...current,
+        profile: current.profile ? { ...current.profile, ...update } : { id: '', employee_id: employeeId, ...update },
+        employee: current.employee ? { ...current.employee, ...(isHrAdmin ? {
+          ...(update.date_of_joining !== undefined ? { hire_date: update.date_of_joining } : {}),
+          ...(update.department !== undefined ? { department: update.department } : {}),
+          ...(update.designation !== undefined ? { position: update.designation } : {}),
+          ...(update.work_location !== undefined ? { work_location: update.work_location || null } : {}),
+        } : {}) } : current.employee,
+      } : current);
     }
     setLoading(false);
   };

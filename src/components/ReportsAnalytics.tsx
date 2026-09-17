@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
-import { Download, Users, Clock, TrendingUp, FileSpreadsheet, FileDown, CalendarIcon, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import { Download, Users, Clock, TrendingUp, FileSpreadsheet, FileDown, CalendarIcon, CheckCircle, AlertTriangle, XCircle, Columns3 } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -30,6 +30,14 @@ import { parseDateLocal } from '@/utils/dateUtils';
 import { formatLeaveDuration } from '@/utils/leaveDuration';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface DatabaseAttendanceRecord {
   id: string;
@@ -64,6 +72,13 @@ interface DatabaseLeaveRequest {
     id: string;
     name: string;
   };
+  employees?: {
+    name: string;
+    team_id: string | null;
+    email?: string;
+    position?: string;
+    role?: string;
+  } | null;
   profiles?: {
     name: string;
     team_id: string | null;
@@ -119,10 +134,21 @@ interface LeaveStats {
   
   // Top employees
   topEmployees: { name: string; days: number }[];
+
+  // Derived from the currently filtered leave records
+  durationByType: { name: string; days: number }[];
+  teamApprovalRates: { name: string; approved: number; pending: number; rejected: number }[];
 }
 
 interface DepartmentStats {
   team_id: string | null;
+  team_size: number;
+  recorded: number;
+  present: number;
+  late: number;
+  absent: number;
+  on_leave: number;
+  approved_leaves: number;
   attendance_rate: number;
   leave_rate: number;
 }
@@ -137,6 +163,18 @@ interface DailyAttendanceRecord {
   checkOut: string | null;
   leaveType?: string;
 }
+
+type LeaveTableColumn = 'employee' | 'team' | 'leaveType' | 'dates' | 'duration' | 'status' | 'reason';
+
+const LEAVE_TABLE_COLUMNS: Array<{ key: LeaveTableColumn; label: string }> = [
+  { key: 'employee', label: 'Employee' },
+  { key: 'team', label: 'Team' },
+  { key: 'leaveType', label: 'Leave Type' },
+  { key: 'dates', label: 'Dates' },
+  { key: 'duration', label: 'Total Days' },
+  { key: 'status', label: 'Status' },
+  { key: 'reason', label: 'Reason' },
+];
 
 interface EmployeeDetail {
   id: string;
@@ -155,7 +193,6 @@ interface EmployeeDetail {
 
 const ReportsAnalytics = () => {
   const { currentCompany } = useCompany();
-  console.log('[DEBUG] ReportsAnalytics render, currentCompany:', currentCompany);
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('attendance');
   const [timeRange, setTimeRange] = useState('month');
@@ -172,6 +209,16 @@ const ReportsAnalytics = () => {
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeDetail | null>(null);
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
   const [leaveTypeFilter, setLeaveTypeFilter] = useState<string>('all');
+  const [leaveStatusFilter, setLeaveStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [visibleLeaveColumns, setVisibleLeaveColumns] = useState<Record<LeaveTableColumn, boolean>>({
+    employee: true,
+    team: false,
+    leaveType: true,
+    dates: true,
+    duration: true,
+    status: true,
+    reason: false,
+  });
   const [leaveTypes, setLeaveTypes] = useState<{ id: string; name: string }[]>([]);
   const [leaveDateRange, setLeaveDateRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
   const [leaveSearch, setLeaveSearch] = useState('');
@@ -181,10 +228,6 @@ const ReportsAnalytics = () => {
   const filteredEmployees = team === 'all'
     ? rawData.employees
     : rawData.employees.filter(emp => emp.team_id === team);
-
-  console.log('[DEBUG] Selected team:', team);
-  console.log('[DEBUG] rawData.employees:', rawData.employees, rawData.employees.length);
-  console.log('[DEBUG] Available team IDs:', teams.map(t => t.id));
 
   useEffect(() => {
     if (!currentCompany || !currentCompany.id) return;
@@ -205,14 +248,15 @@ const ReportsAnalytics = () => {
       }
     };
     fetchLateMarkTime();
-  }, [activeTab, timeRange, team, selectedDate, currentCompany]);
+  }, [timeRange, team, selectedDate, currentCompany]);
 
   useEffect(() => {
     const fetchLeaveTypes = async () => {
       try {
         const { data, error } = await supabase
           .from('leave_types')
-          .select('*')
+          // Keep the report payload limited to fields used by charts, tables, and exports.
+          .select('id, employee_id, date, status, check_in_time, check_out_time')
           .eq('company_id', currentCompany?.id);
 
         if (!error && data) {
@@ -245,7 +289,6 @@ const ReportsAnalytics = () => {
       setIsLoading(true);
       await Promise.all([
         fetchAttendanceStats(),
-        fetchLeaveStats(),
         fetchDepartmentStats(),
         fetchRawData()
       ]);
@@ -262,9 +305,7 @@ const ReportsAnalytics = () => {
   };
 
   const fetchRawData = async () => {
-    console.log('[DEBUG] fetchRawData called', currentCompany);
     if (!currentCompany || !currentCompany.id) {
-      console.log('[DEBUG] fetchRawData: currentCompany not set', currentCompany);
       return;
     }
     
@@ -274,7 +315,7 @@ const ReportsAnalytics = () => {
       // Fetch attendance data
       const { data: attendanceData, error: attendanceError } = await supabase
         .from('attendance')
-        .select('*')
+        .select('id, employee_id, date, status, check_in_time, check_out_time')
         .eq('company_id', currentCompany.id)
         .gte('date', dateRange.start)
         .lte('date', dateRange.end);
@@ -282,9 +323,11 @@ const ReportsAnalytics = () => {
       // Fetch employee data separately for manual join
       const { data: employeeData, error: employeeError } = await supabase
         .from('employees')
-        .select('id, name, team_id, role')
+        .select('id, name, team_id, role, email, position')
         .eq('company_id', currentCompany.id)
         .eq('is_active', true);
+
+      if (employeeError) throw employeeError;
 
       // Manual join: attach employee info to attendance records
       const attendanceWithEmployees = attendanceData?.map(record => ({
@@ -300,10 +343,11 @@ const ReportsAnalytics = () => {
       // Fetch leave requests data
       const { data: leavesData, error: leavesError } = await supabase
         .from('leave_requests')
-        .select('*')
+        .select('id, employee_id, leave_type_id, start_date, end_date, total_days, duration_type, session, status, reason, admin_comments, approved_at, approved_by, created_at, updated_at')
         .eq('company_id', currentCompany.id)
-        .gte('start_date', dateRange.start)
-        .lte('end_date', dateRange.end);
+        // Include leaves that overlap the selected period, including multi-day leaves that started earlier.
+        .lte('start_date', dateRange.end)
+        .gte('end_date', dateRange.start);
 
       // Fetch leave types
       const { data: leaveTypesData, error: leaveTypesError } = await supabase
@@ -323,21 +367,6 @@ const ReportsAnalytics = () => {
         throw leavesError;
       }
 
-      // Fetch employees
-      const { data: employeesData, error: employeesError } = await supabase
-        .from('employees')
-        .select('id, name, email, team_id, position, role')
-        .eq('company_id', currentCompany.id)
-        .eq('is_active', true)
-        .order('name');
-
-      console.log('[DEBUG] fetchRawData: employeesData', employeesData, employeesError);
-
-      if (employeesError) {
-        console.error('Error fetching employees:', employeesError);
-        throw employeesError;
-      }
-
       // Filter by team if needed
       const filteredData: RawData = {
         attendance: (attendanceWithEmployees || []).filter(record => 
@@ -346,13 +375,12 @@ const ReportsAnalytics = () => {
         leaves: (leavesWithEmployees || []).filter(record =>
           team === 'all' || record.employees?.team_id === team
         ),
-        employees: (employeesData || []).filter(employee =>
+        employees: (employeeData || []).filter(employee =>
           team === 'all' || employee.team_id === team
         )
       };
 
       setRawData(filteredData);
-      console.log('[DEBUG] fetchRawData: setRawData', filteredData);
     } catch (error) {
       console.error('Error in fetchRawData:', error);
       toast({
@@ -370,7 +398,7 @@ const ReportsAnalytics = () => {
       // Fetch attendance data for selected date
       const { data: attendanceData, error: attendanceError } = await supabase
         .from('attendance')
-        .select('*')
+          .select('id, employee_id, date, status, check_in_time, check_out_time')
         .eq('company_id', currentCompany.id)
         .eq('date', selectedDate.toISOString().split('T')[0]);
 
@@ -415,59 +443,6 @@ const ReportsAnalytics = () => {
     }
   };
 
-  const fetchLeaveStats = async () => {
-    if (!currentCompany) return;
-    
-    try {
-      // Fetch leave requests data for selected date
-      const { data: leavesData, error: leavesError } = await supabase
-        .from('leave_requests')
-        .select('*')
-        .eq('company_id', currentCompany.id)
-        .eq('start_date', selectedDate.toISOString().split('T')[0]);
-
-      // Fetch leave types and employee data for manual join
-      const { data: leaveTypesData, error: leaveTypesError } = await supabase
-        .from('leave_types')
-        .select('id, name')
-        .eq('company_id', currentCompany.id);
-
-      const { data: employeeData, error: employeeError } = await supabase
-        .from('employees')
-        .select('id, team_id, role')
-        .eq('company_id', currentCompany.id)
-        .eq('is_active', true);
-
-      // Manual join: attach employee and leave type info to leave records
-      const data = leavesData?.map(record => ({
-        ...record,
-        employees: employeeData?.find(emp => emp.id === record.employee_id) || null,
-        leave_types: leaveTypesData?.find(type => type.id === record.leave_type_id) || null
-      })) || [];
-
-      if (leavesError) {
-        console.error('Error fetching leave stats:', leavesError);
-        throw leavesError;
-      }
-
-      // Filter by team first
-      const filteredData = (data || []).filter(record => 
-        team === 'all' || record.employees?.team_id === team
-      );
-
-      const stats = processLeaveData(filteredData);
-
-      setLeaveStats(stats);
-    } catch (error) {
-      console.error('Error in fetchLeaveStats:', error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch leave statistics",
-        variant: "destructive"
-      });
-    }
-  };
-
   const processLeaveData = (data: DatabaseLeaveRequest[]): LeaveStats => {
     const stats: LeaveStats = {
       annual: 0,
@@ -482,7 +457,9 @@ const ReportsAnalytics = () => {
       commonReasons: [],
       teamDistribution: [],
       monthlyTrends: [],
-      topEmployees: []
+      topEmployees: [],
+      durationByType: [],
+      teamApprovalRates: []
     };
 
     // Counters for different metrics
@@ -503,6 +480,8 @@ const ReportsAnalytics = () => {
     const teamCounts: Record<string, number> = {};
     const monthlyCounts: Record<string, number> = {};
     const employeeLeaveDays: Record<string, number> = {};
+    const durationByType: Record<string, number> = {};
+    const teamApprovalCounts: Record<string, { approved: number; pending: number; rejected: number }> = {};
     let totalDuration = 0;
     let totalLeaves = 0;
 
@@ -514,6 +493,8 @@ const ReportsAnalytics = () => {
       const month = leave.start_date ? new Date(leave.start_date).toLocaleString('default', { month: 'short' }) : '';
       const employeeName = leave.employees?.name || 'Unknown';
       const teamName = teams.find(t => t.id === (leave.employees?.team_id || ''))?.name || 'Unassigned';
+      durationByType[leave.leave_types.name] = (durationByType[leave.leave_types.name] || 0) + Number(leave.total_days || 0);
+      if (!teamApprovalCounts[teamName]) teamApprovalCounts[teamName] = { approved: 0, pending: 0, rejected: 0 };
       
       // Count by type
       if (type.includes('annual')) {
@@ -529,10 +510,13 @@ const ReportsAnalytics = () => {
       // Count by status
       if (status === 'approved') {
         statusCounts.approved++;
+        teamApprovalCounts[teamName].approved++;
       } else if (status === 'rejected') {
         statusCounts.rejected++;
+        teamApprovalCounts[teamName].rejected++;
       } else {
         statusCounts.pending++;
+        teamApprovalCounts[teamName].pending++;
       }
       
       // Track reasons
@@ -604,6 +588,13 @@ const ReportsAnalytics = () => {
       .slice(0, 5)
       .map(([name, days]) => ({ name, days }));
 
+    stats.durationByType = Object.entries(durationByType)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, days]) => ({ name, days }));
+    stats.teamApprovalRates = Object.entries(teamApprovalCounts)
+      .map(([name, counts]) => ({ name, ...counts }))
+      .sort((a, b) => (b.approved + b.pending + b.rejected) - (a.approved + a.pending + a.rejected));
+
     return stats;
   };
 
@@ -612,31 +603,35 @@ const ReportsAnalytics = () => {
     
     try {
       // Get unique teams and all employees
-      const { data: employeesData, error: employeesError } = await supabase
+      let employeeQuery = supabase
         .from('employees')
         .select('id, team_id')
         .eq('company_id', currentCompany.id)
         .not('team_id', 'is', null);
+      if (team !== 'all') employeeQuery = employeeQuery.eq('team_id', team);
+      const { data: employeesData, error: employeesError } = await employeeQuery;
       if (employeesError) throw employeesError;
       const teams = [...new Set(employeesData.map(d => d.team_id))];
+      const teamsToMeasure = team === 'all' ? teams : teams.filter(teamId => teamId === team);
 
       // Fetch all attendance and leave records for the company and date
       const { data: attendanceData, error: attendanceError } = await supabase
           .from('attendance')
-        .select('*')
+        .select('employee_id, status, date')
           .eq('company_id', currentCompany.id)
         .eq('date', selectedDate.toISOString().split('T')[0]);
       if (attendanceError) throw attendanceError;
 
       const { data: leaveData, error: leaveError } = await supabase
           .from('leave_requests')
-        .select('*')
+        .select('employee_id, status, start_date, end_date')
           .eq('company_id', currentCompany.id)
-        .eq('start_date', selectedDate.toISOString().split('T')[0]);
+        .lte('start_date', selectedDate.toISOString().split('T')[0])
+        .gte('end_date', selectedDate.toISOString().split('T')[0]);
       if (leaveError) throw leaveError;
 
       const stats: DepartmentStats[] = [];
-      for (const team of teams) {
+      for (const team of teamsToMeasure) {
         // Employees in this team
         const teamEmployees = employeesData.filter(emp => emp.team_id === team);
         const teamEmployeeIds = teamEmployees.map(emp => emp.id);
@@ -649,22 +644,32 @@ const ReportsAnalytics = () => {
           teamEmployeeIds.includes(record.employee_id)
         );
         // Debug logs for fetched data
-        console.log(`[DEBUG][Teams] Team: ${team}`);
-        console.log('[DEBUG][Teams] teamAttendance:', teamAttendance);
-        console.log('[DEBUG][Teams] teamLeaves:', teamLeaves);
-        const totalDays = teamAttendance.length;
+        const teamSize = teamEmployees.length;
+        const recorded = teamAttendance.length;
         const presentDays = teamAttendance.filter(a => a.status === 'present' || a.status === 'late' || a.status === 'half_day' || a.status === 'work_from_home').length;
-        const approvedLeaves = teamLeaves.filter(l => l.status === 'approved').length;
+        const lateDays = teamAttendance.filter(a => a.status === 'late').length;
+        const absentDays = teamEmployees.filter(employee => {
+          const attendance = teamAttendance.find(record => record.employee_id === employee.id);
+          const approvedLeave = teamLeaves.some(leave => leave.employee_id === employee.id && leave.status === 'approved');
+          return !attendance && !approvedLeave;
+        }).length;
+        const approvedLeaveIds = new Set(teamLeaves.filter(leave => leave.status === 'approved').map(leave => leave.employee_id));
+        const approvedLeaves = approvedLeaveIds.size;
         const stat = {
           team_id: team,
-          attendance_rate: totalDays ? (presentDays / totalDays) * 100 : 0,
-          leave_rate: totalDays ? (approvedLeaves / totalDays) * 100 : 0
+          team_size: teamSize,
+          recorded,
+          present: presentDays,
+          late: lateDays,
+          absent: absentDays,
+          on_leave: approvedLeaves,
+          approved_leaves: approvedLeaves,
+          attendance_rate: teamSize ? (presentDays / teamSize) * 100 : 0,
+          leave_rate: teamSize ? (approvedLeaves / teamSize) * 100 : 0
         };
-        console.log('[DEBUG][Teams] computed stat:', stat);
         stats.push(stat);
       }
       setDepartmentStats(stats);
-      console.log('[DEBUG] setDepartmentStats:', stats);
     } catch (error) {
       console.error('Error in fetchDepartmentStats:', error);
       toast({
@@ -681,12 +686,15 @@ const ReportsAnalytics = () => {
 
     try {
       // Fetch all employees for the company and selected team
-      const { data: employees, error: employeesError } = await supabase
+      let employeeQuery = supabase
         .from('employees')
         .select('id, name, email, team_id, position, role')
         .eq('company_id', currentCompany.id)
         .eq('is_active', true)
         .order('name');
+
+      if (team !== 'all') employeeQuery = employeeQuery.eq('team_id', team);
+      const { data: employees, error: employeesError } = await employeeQuery;
 
       if (employeesError) {
         console.error('Error fetching employees:', employeesError);
@@ -698,23 +706,21 @@ const ReportsAnalytics = () => {
       }
 
       // Filter by team if selected
-      const localFilteredEmployees = team === 'all' 
-        ? employees 
-        : employees.filter(emp => emp.team_id === team);
+      const localFilteredEmployees = employees;
 
       // Fetch attendance records for the selected date (no join)
       const { data: attendanceRecords } = await supabase
         .from('attendance')
-        .select('*')
+        .select('employee_id, check_in_time, check_out_time, status, date')
         .eq('company_id', currentCompany.id)
         .eq('date', selectedDate.toISOString().split('T')[0]);
 
-      console.log('[DEBUG] Attendance records fetched:', attendanceRecords, attendanceRecords ? attendanceRecords.length : 0);
 
       // Fetch leave requests for the selected date
       const { data: leaveRequests } = await supabase
         .from('leave_requests')
-        .select('*, leave_types(*), profiles(*)')
+        .select('employee_id, start_date, end_date, leave_types(name)')
+        .eq('company_id', currentCompany.id)
         .lte('start_date', selectedDate.toISOString().split('T')[0])
         .gte('end_date', selectedDate.toISOString().split('T')[0])
         .eq('status', 'approved');
@@ -771,9 +777,6 @@ const ReportsAnalytics = () => {
       setDailyAttendance(records);
       setAttendanceStats(stats);
 
-      console.log('[DEBUG] Employees fetched:', employees, employees?.length);
-      console.log('[DEBUG] Filtered employees for team', team, ':', localFilteredEmployees, localFilteredEmployees.length);
-      console.log('[DEBUG] Final attendance records for table:', records, records.length);
     } catch (error) {
       console.error('Error fetching attendance data:', error);
     } finally {
@@ -937,7 +940,7 @@ const ReportsAnalytics = () => {
       // Fetch leave records
       const { data: leaveHistory } = await supabase
         .from('leave_requests')
-        .select('*, leave_types(*)')
+        .select('start_date, end_date, leave_types(name)')
         .eq('company_id', currentCompany.id)
         .eq('employee_id', employeeId)
         .gte('start_date', thirtyDaysAgo.toISOString().split('T')[0])
@@ -992,13 +995,33 @@ const ReportsAnalytics = () => {
       // Filter by date range
       if (leaveDateRange.start && parseDateLocal(leave.start_date) < new Date(leaveDateRange.start)) return false;
       if (leaveDateRange.end && parseDateLocal(leave.end_date) > new Date(leaveDateRange.end)) return false;
+
+      if (leaveStatusFilter !== 'all' && leave.status !== leaveStatusFilter) return false;
       
       // Filter by search term
       if (leaveSearch && !leave.employees?.name?.toLowerCase().includes(leaveSearch.toLowerCase())) return false;
       
       return true;
     });
-  }, [rawData.leaves, leaveTypeFilter, leaveDateRange, leaveSearch]);
+  }, [rawData.leaves, leaveTypeFilter, leaveDateRange, leaveSearch, leaveStatusFilter]);
+
+  useEffect(() => {
+    setLeaveStats(processLeaveData(filteredLeaves));
+  }, [filteredLeaves, teams]);
+
+  const teamPerformanceRows = useMemo(() => departmentStats.map(stat => ({
+    ...stat,
+    teamName: teams.find(item => item.id === stat.team_id)?.name || 'Unassigned',
+  })), [departmentStats, teams]);
+
+  const teamPerformanceSummary = useMemo(() => ({
+    teams: teamPerformanceRows.length,
+    averageAttendance: teamPerformanceRows.length
+      ? teamPerformanceRows.reduce((sum, row) => sum + row.attendance_rate, 0) / teamPerformanceRows.length
+      : 0,
+    totalOnLeave: teamPerformanceRows.reduce((sum, row) => sum + row.on_leave, 0),
+    teamsNeedingAttention: teamPerformanceRows.filter(row => row.attendance_rate < 80 || row.leave_rate > 25).length,
+  }), [teamPerformanceRows]);
 
 
   const employees = useMemo(() => [
@@ -1011,15 +1034,18 @@ const ReportsAnalytics = () => {
   ], []);
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Reports & Analytics</h2>
-        <div className="flex items-center gap-4">
+    <div className="min-w-0 max-w-full space-y-6 overflow-x-hidden p-4 sm:p-6">
+      <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-2xl font-bold">Reports & Analytics</h2>
+          <p className="text-sm text-muted-foreground">Operational daily attendance, leave visibility, team snapshots, and employee drill-downs.</p>
+        </div>
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
-                className="min-w-[240px] justify-start text-left font-normal"
+                className="w-full justify-start text-left font-normal sm:min-w-[240px] sm:w-auto"
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
                 {format(selectedDate, 'PPP')}
@@ -1050,7 +1076,7 @@ const ReportsAnalytics = () => {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
+        <TabsList className="flex w-full max-w-full flex-wrap justify-start gap-1">
           <TabsTrigger value="attendance">
             <Clock className="w-4 h-4 mr-2" />
             Attendance
@@ -1074,7 +1100,7 @@ const ReportsAnalytics = () => {
             <>
               {attendanceStats && (
                 <>
-                  <div className="grid grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <Card 
                       className={`cursor-pointer transition-all hover:bg-gray-50 ${
                         statusFilter === 'present' ? 'ring-2 ring-green-500' : ''
@@ -1223,7 +1249,7 @@ const ReportsAnalytics = () => {
                   ) : (
                     <>
                       {filteredEmployees.length === 0 && (
-                        <div className="text-red-500 font-bold">[DEBUG] No employees found for this team.</div>
+                        <div className="text-muted-foreground">No employees found for this team.</div>
                       )}
                     <div className="rounded-md border">
                       <table className="min-w-full divide-y divide-gray-200">
@@ -1281,13 +1307,13 @@ const ReportsAnalytics = () => {
           )}
         </TabsContent>
 
-        <TabsContent value="leave" className="space-y-6">
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap gap-4 items-end">
+        <TabsContent value="leave" className="min-w-0 space-y-6">
+          <div className="min-w-0 space-y-4">
+            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Leave Type</label>
                 <Select value={leaveTypeFilter} onValueChange={setLeaveTypeFilter}>
-                  <SelectTrigger className="w-[180px]">
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="All Types" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1304,37 +1330,41 @@ const ReportsAnalytics = () => {
                   type="date" 
                   value={leaveDateRange.start} 
                   onChange={e => setLeaveDateRange(r => ({ ...r, start: e.target.value }))} 
-                  className="w-[140px]" 
+                  className="w-full"
                 />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">End Date</label>
-                <div className="flex gap-2">
-                  <Input 
-                    type="date" 
-                    value={leaveDateRange.end} 
-                    onChange={e => setLeaveDateRange(r => ({ ...r, end: e.target.value }))} 
-                    className="w-[140px]" 
-                  />
-                  <Button 
-                    variant="default" 
-                    size="sm" 
-                    onClick={() => fetchData()}
-                    className="h-9"
-                  >
-                    Apply
-                  </Button>
-                </div>
+                <Input
+                  type="date"
+                  value={leaveDateRange.end}
+                  onChange={e => setLeaveDateRange(r => ({ ...r, end: e.target.value }))}
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
+                <Select value={leaveStatusFilter} onValueChange={value => setLeaveStatusFilter(value as typeof leaveStatusFilter)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="approved">Approved</SelectItem>
+                    <SelectItem value="rejected">Rejected</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Employee</label>
-                <Input type="text" placeholder="Search name" value={leaveSearch} onChange={e => setLeaveSearch(e.target.value)} className="w-[180px]" />
+                <Input type="text" placeholder="Search name" value={leaveSearch} onChange={e => setLeaveSearch(e.target.value)} className="w-full" />
               </div>
-              <div className="ml-auto flex gap-2">
-                <Button variant="gradient" size="sm" onClick={() => handleExport('xlsx')}>
+              <div className="flex flex-wrap items-end gap-2 sm:col-span-2 lg:col-span-3 xl:col-span-1">
+                <Button variant="gradient" size="sm" className="flex-1" onClick={() => handleExport('xlsx')}>
                   <FileSpreadsheet className="w-4 h-4 mr-2" /> Export XLSX
                 </Button>
-                <Button variant="gradient" size="sm" onClick={() => handleExport('csv')}>
+                <Button variant="gradient" size="sm" className="flex-1" onClick={() => handleExport('csv')}>
                   <FileDown className="w-4 h-4 mr-2" /> Export CSV
                 </Button>
               </div>
@@ -1346,7 +1376,7 @@ const ReportsAnalytics = () => {
               onValueChange={setActiveLeaveTab}
               className="w-full"
             >
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-2 gap-1 md:grid-cols-4">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="trends">Trends</TabsTrigger>
                 <TabsTrigger value="teams">Team Analysis</TabsTrigger>
@@ -1422,13 +1452,13 @@ const ReportsAnalytics = () => {
                       </div>
                       
                       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <Card className="lg:col-span-2">
-                          <CardHeader>
+                        <Card className="min-w-0 max-w-full overflow-hidden lg:col-span-2">
+                          <CardHeader className="min-w-0">
                             <CardTitle>Leave Distribution by Type</CardTitle>
                           </CardHeader>
-                          <CardContent>
-                            <div className="h-[300px]">
-                              <ResponsiveContainer width="100%" height="100%">
+                          <CardContent className="min-w-0 overflow-hidden">
+                            <div className="h-[260px] min-w-0 max-w-full overflow-hidden sm:h-[300px]">
+                              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                                 <BarChart
                                   data={[
                                     { name: 'Annual', value: leaveStats.annual },
@@ -1453,13 +1483,13 @@ const ReportsAnalytics = () => {
                           </CardContent>
                         </Card>
                         
-                        <Card>
-                          <CardHeader>
+                        <Card className="min-w-0 max-w-full overflow-hidden">
+                          <CardHeader className="min-w-0">
                             <CardTitle>Leave Status</CardTitle>
                           </CardHeader>
-                          <CardContent>
-                            <div className="h-[300px]">
-                              <ResponsiveContainer width="100%" height="100%">
+                          <CardContent className="min-w-0 overflow-hidden">
+                            <div className="h-[260px] min-w-0 max-w-full overflow-hidden sm:h-[300px]">
+                              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                                 <PieChart>
                                   <Pie
                                     data={[
@@ -1613,12 +1643,7 @@ const ReportsAnalytics = () => {
                             <div className="h-[300px]">
                               <ResponsiveContainer width="100%" height="100%">
                                 <BarChart
-                                  data={[
-                                    { name: 'Annual', days: 5.2 },
-                                    { name: 'Sick', days: 2.1 },
-                                    { name: 'Unpaid', days: 3.5 },
-                                    { name: 'Other', days: 2.8 }
-                                  ]}
+                                  data={leaveStats.durationByType}
                                 >
                                   <CartesianGrid strokeDasharray="3 3" />
                                   <XAxis dataKey="name" />
@@ -1709,11 +1734,7 @@ const ReportsAnalytics = () => {
                               <ResponsiveContainer width="100%" height="100%">
                                 <BarChart
                                   data={[
-                                    { name: 'Engineering', approved: 85, pending: 10, rejected: 5 },
-                                    { name: 'Marketing', approved: 75, pending: 15, rejected: 10 },
-                                    { name: 'Sales', approved: 90, pending: 5, rejected: 5 },
-                                    { name: 'HR', approved: 80, pending: 10, rejected: 10 },
-                                    { name: 'Operations', approved: 70, pending: 20, rejected: 10 },
+                                    ...leaveStats.teamApprovalRates,
                                   ]}
                                 >
                                   <CartesianGrid strokeDasharray="3 3" />
@@ -1742,8 +1763,8 @@ const ReportsAnalytics = () => {
                           <p className="text-sm text-muted-foreground">Detailed view of all leave requests</p>
                         </CardHeader>
                         <CardContent>
-                          <div className="rounded-md border">
-                            <table className="min-w-full divide-y divide-gray-200">
+                          <div className="max-w-full overflow-x-auto rounded-md border">
+                            <table className="min-w-[760px] divide-y divide-gray-200">
                               <thead className="bg-gray-50">
                                 <tr>
                                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
@@ -1821,67 +1842,55 @@ const ReportsAnalytics = () => {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <Card>
                           <CardHeader>
-                            <CardTitle>Leave Balance Summary</CardTitle>
-                            <p className="text-sm text-muted-foreground">Remaining leave days by employee</p>
+                            <CardTitle>Highest Leave Usage</CardTitle>
+                            <p className="text-sm text-muted-foreground">Leave days in the selected report period</p>
                           </CardHeader>
                           <CardContent>
                             <div className="space-y-4">
-                              {employees.slice(0, 5).map((emp) => {
-                                const empLeaves = filteredLeaves.filter(l => l.employee_id === emp.id);
-                                const usedDays = empLeaves.reduce((sum, l) => sum + (l.total_days || 0), 0);
-                                const remainingDays = Math.max(0, 20 - usedDays); // Assuming 20 days annual leave
-                                
+                              {leaveStats.topEmployees.slice(0, 5).map((employee) => {
                                 return (
-                                  <div key={emp.id} className="space-y-2">
+                                  <div key={employee.name} className="space-y-2">
                                     <div className="flex justify-between">
                                       <div>
-                                        <p className="text-sm font-medium">{emp.name}</p>
-                                        <p className="text-xs text-muted-foreground">
-                                          {teams.find(t => t.id === emp.team_id)?.name || 'Unassigned'}
-                                        </p>
+                                        <p className="text-sm font-medium">{employee.name}</p>
                                       </div>
                                       <div className="text-right">
-                                        <p className="text-sm font-medium">{remainingDays} days</p>
-                                        <p className="text-xs text-muted-foreground">
-                                          {usedDays} days used
-                                        </p>
+                                        <p className="text-sm font-medium">{employee.days} days</p>
+                                        <p className="text-xs text-muted-foreground">in selected period</p>
                                       </div>
                                     </div>
                                     <div className="w-full bg-gray-200 rounded-full h-2">
                                       <div 
                                         className="bg-blue-600 h-2 rounded-full" 
                                         style={{ 
-                                          width: `${(usedDays / 20) * 100}%` 
+                                          width: `${(employee.days / (leaveStats.topEmployees[0]?.days || 1)) * 100}%`
                                         }}
                                       />
                                     </div>
                                   </div>
                                 );
                               })}
-                              <Button variant="ghost" size="sm" className="w-full mt-2">
-                                View All Employees
-                              </Button>
                             </div>
                           </CardContent>
                         </Card>
                         
                         <Card>
                           <CardHeader>
-                            <CardTitle>Leave Calendar</CardTitle>
-                            <p className="text-sm text-muted-foreground">Upcoming and ongoing leaves</p>
+                            <CardTitle>Upcoming & Ongoing Leave</CardTitle>
+                            <p className="text-sm text-muted-foreground">Requests overlapping the selected period</p>
                           </CardHeader>
                           <CardContent>
-                            <div className="h-[300px] flex items-center justify-center bg-gray-50 rounded-md">
-                              <div className="text-center">
-                                <CalendarIcon className="mx-auto h-12 w-12 text-gray-400" />
-                                <h3 className="mt-2 text-sm font-medium text-gray-900">Leave Calendar</h3>
-                                <p className="mt-1 text-sm text-gray-500">
-                                  View upcoming and ongoing leaves in a calendar view
-                                </p>
-                                <div className="mt-4">
-                                  <Button size="sm">View Calendar</Button>
+                            <div className="space-y-3">
+                              {filteredLeaves.slice(0, 6).map(leave => (
+                                <div key={leave.id} className="flex items-center justify-between rounded-md border p-3">
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-medium">{leave.employees?.name || 'Unknown employee'}</p>
+                                    <p className="text-xs text-muted-foreground">{leave.leave_types?.name || 'Leave'} · {format(parseDateLocal(leave.start_date), 'MMM d')} - {format(parseDateLocal(leave.end_date), 'MMM d')}</p>
+                                  </div>
+                                  <Badge variant={leave.status === 'approved' ? 'default' : leave.status === 'rejected' ? 'destructive' : 'secondary'}>{leave.status || 'pending'}</Badge>
                                 </div>
-                              </div>
+                              ))}
+                              {filteredLeaves.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No leaves match the current filters.</p>}
                             </div>
                           </CardContent>
                         </Card>
@@ -1899,46 +1908,63 @@ const ReportsAnalytics = () => {
                       <CalendarIcon className="w-5 h-5" />
                       <span>Leave Requests ({filteredLeaves.length})</span>
                     </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" aria-label="Choose visible leave columns">
+                          <Columns3 className="mr-2 h-4 w-4" />
+                          Columns
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-52">
+                        <DropdownMenuLabel>Visible columns</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {LEAVE_TABLE_COLUMNS.map(column => (
+                          <DropdownMenuCheckboxItem
+                            key={column.key}
+                            checked={visibleLeaveColumns[column.key]}
+                            onCheckedChange={checked => setVisibleLeaveColumns(current => ({ ...current, [column.key]: checked === true }))}
+                          >
+                            {column.label}
+                          </DropdownMenuCheckboxItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   {filteredLeaves.length > 0 ? (
-                    <div className="rounded-md border">
+                    <div className="max-w-full overflow-x-auto rounded-md border">
                       <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                           <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Leave Type</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Date</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Days</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reason</th>
+                            {visibleLeaveColumns.employee && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Employee</th>}
+                            {visibleLeaveColumns.team && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Team</th>}
+                            {visibleLeaveColumns.leaveType && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Leave Type</th>}
+                            {visibleLeaveColumns.dates && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Dates</th>}
+                            {visibleLeaveColumns.duration && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Total Days</th>}
+                            {visibleLeaveColumns.status && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Status</th>}
+                            {visibleLeaveColumns.reason && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Reason</th>}
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
                           {filteredLeaves.map((record, index) => (
                             <tr key={record.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              {visibleLeaveColumns.employee && <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                                 {record.employees?.name || 'Unknown'}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              </td>}
+                              {visibleLeaveColumns.team && <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                                 {teams.find(t => t.id === record.employees?.team_id)?.name || 'Unassigned'}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              </td>}
+                              {visibleLeaveColumns.leaveType && <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                                 {record.leave_types?.name || 'Unknown'}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {format(new Date(record.start_date), 'MMM dd, yyyy')}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {format(new Date(record.end_date), 'MMM dd, yyyy')}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              </td>}
+                              {visibleLeaveColumns.dates && <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {format(parseDateLocal(record.start_date), 'MMM dd, yyyy')} - {format(parseDateLocal(record.end_date), 'MMM dd, yyyy')}
+                              </td>}
+                              {visibleLeaveColumns.duration && <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                                 {formatLeaveDuration(record)}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              </td>}
+                              {visibleLeaveColumns.status && <td className="px-4 py-4 whitespace-nowrap text-sm">
                                 <Badge variant={
                                   record.status === 'approved' ? 'default' :
                                   record.status === 'pending' ? 'secondary' :
@@ -1946,10 +1972,10 @@ const ReportsAnalytics = () => {
                                 }>
                                   {record.status}
                                 </Badge>
-                              </td>
-                              <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                              </td>}
+                              {visibleLeaveColumns.reason && <td className="max-w-xs truncate px-4 py-4 text-sm text-gray-900">
                                 {record.reason || '-'}
-                              </td>
+                              </td>}
                             </tr>
                           ))}
                         </tbody>
@@ -1976,37 +2002,69 @@ const ReportsAnalytics = () => {
           ) : (
             <>
               {departmentStats.length > 0 ? (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Team Performance</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[400px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={departmentStats.map(stat => ({
-                            ...stat,
-                            teamName: teams.find(t => t.id === stat.team_id)?.name || 'Unassigned',
-                          }))}
-                          margin={{
-                            top: 20,
-                            right: 30,
-                            left: 20,
-                            bottom: 5,
-                          }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="teamName" />
-                          <YAxis />
-                          <Tooltip />
-                          <Legend />
-                          <Bar dataKey="attendance_rate" name="Attendance Rate (%)" fill="#8884d8" />
-                          <Bar dataKey="leave_rate" name="Leave Rate (%)" fill="#82ca9d" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </CardContent>
-                </Card>
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                    <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Teams in view</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{teamPerformanceSummary.teams}</div><p className="text-xs text-muted-foreground">Selected date</p></CardContent></Card>
+                    <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Average attendance</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{teamPerformanceSummary.averageAttendance.toFixed(1)}%</div><p className="text-xs text-muted-foreground">Present, including late</p></CardContent></Card>
+                    <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">On approved leave</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{teamPerformanceSummary.totalOnLeave}</div><p className="text-xs text-muted-foreground">Across teams in view</p></CardContent></Card>
+                    <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Needs attention</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-amber-600">{teamPerformanceSummary.teamsNeedingAttention}</div><p className="text-xs text-muted-foreground">Below 80% attendance or above 25% leave</p></CardContent></Card>
+                  </div>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Team Performance</CardTitle>
+                      <p className="text-sm text-muted-foreground">Headcount-based attendance and approved leave for {format(selectedDate, 'PPP')}.</p>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[360px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={teamPerformanceRows} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="teamName" />
+                            <YAxis domain={[0, 100]} unit="%" />
+                            <Tooltip formatter={(value: number) => `${value.toFixed(1)}%`} />
+                            <Legend />
+                            <Bar dataKey="attendance_rate" name="Attendance" fill="#2563eb" />
+                            <Bar dataKey="leave_rate" name="Approved leave" fill="#16a34a" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Team Detail</CardTitle>
+                      <p className="text-sm text-muted-foreground">Use the counts to understand what drives each team’s rate.</p>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto rounded-md border">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50"><tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Team</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">People</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Present</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Late</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Absent</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">On leave</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Attendance</th>
+                          </tr></thead>
+                          <tbody className="divide-y divide-gray-200 bg-white">{teamPerformanceRows.map(row => (
+                            <tr key={row.team_id || 'unassigned'}>
+                              <td className="whitespace-nowrap px-4 py-3 text-sm font-medium">{row.teamName}</td>
+                              <td className="px-4 py-3 text-sm">{row.team_size}</td>
+                              <td className="px-4 py-3 text-sm text-green-700">{row.present}</td>
+                              <td className="px-4 py-3 text-sm text-amber-700">{row.late}</td>
+                              <td className="px-4 py-3 text-sm text-red-700">{row.absent}</td>
+                              <td className="px-4 py-3 text-sm text-blue-700">{row.on_leave}</td>
+                              <td className="min-w-[170px] px-4 py-3 text-sm"><div className="flex items-center gap-2"><div className="h-2 flex-1 rounded-full bg-gray-200"><div className={`h-2 rounded-full ${row.attendance_rate < 80 ? 'bg-amber-500' : 'bg-blue-600'}`} style={{ width: `${Math.min(100, row.attendance_rate)}%` }} /></div><span className="w-12 text-right">{row.attendance_rate.toFixed(1)}%</span></div></td>
+                            </tr>
+                          ))}</tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
               ) : (
                 <div className="text-center py-8 text-gray-500">
                   <Users className="w-12 h-12 mx-auto mb-4 text-gray-300" />

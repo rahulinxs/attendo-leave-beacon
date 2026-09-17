@@ -335,7 +335,7 @@ const ReportsAnalytics2 = () => {
       const [employeeRes, teamsRes, leaveTypesRes] = await Promise.all([
         supabase
           .from('employees')
-          .select('*')
+          .select('id, name, email, position, role, team_id')
           .eq('company_id', currentCompany.id)
           .eq('is_active', true)
           .order('name'),
@@ -384,7 +384,7 @@ const ReportsAnalytics2 = () => {
       const [attendanceRes] = await Promise.all([
         supabase
           .from('attendance')
-          .select('*')
+          .select('id, employee_id, company_id, date, status, check_in_time, check_out_time')
           .eq('company_id', currentCompany.id)
           .gte('date', dates.start)
           .lte('date', dates.end)
@@ -421,7 +421,7 @@ const ReportsAnalytics2 = () => {
       const [leaveRes] = await Promise.all([
         supabase
           .from('leave_requests')
-          .select('*')
+          .select('id, employee_id, leave_type_id, start_date, end_date, total_days, duration_type, session, status, reason')
           .eq('company_id', currentCompany.id)
           .lte('start_date', dates.end)
           .gte('end_date', dates.start)
@@ -457,14 +457,14 @@ const ReportsAnalytics2 = () => {
       const [attendanceRes, leaveRes] = await Promise.all([
         supabase
           .from('attendance')
-          .select('*')
+          .select('id, employee_id, company_id, date, status, check_in_time, check_out_time')
           .eq('company_id', currentCompany.id)
           .gte('date', dates.start)
           .lte('date', dates.end),
 
         supabase
           .from('leave_requests')
-          .select('*')
+          .select('id, employee_id, leave_type_id, start_date, end_date, total_days, duration_type, session, status, reason')
           .eq('company_id', currentCompany.id)
           .lte('start_date', dates.end)
           .gte('end_date', dates.start)
@@ -513,25 +513,6 @@ const ReportsAnalytics2 = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-
-  // Tab-specific filter changes
-  useEffect(() => {
-    if (activeTab === 'attendance' && employees.length > 0) {
-      fetchAttendanceData();
-    }
-  }, [activeTab, fetchAttendanceData, employees.length]);
-
-  useEffect(() => {
-    if (activeTab === 'leave' && employees.length > 0) {
-      fetchLeaveData();
-    }
-  }, [activeTab, fetchLeaveData, employees.length]);
-
-  useEffect(() => {
-    if (activeTab === 'teams' && employees.length > 0) {
-      fetchTeamData();
-    }
-  }, [activeTab, fetchTeamData, employees.length]);
 
   // Pagination handlers
   const handleAttendancePageChange = (newPage: number) => {
@@ -1077,12 +1058,11 @@ const ReportsAnalytics2 = () => {
 
         <div>
           <h1 className="text-3xl font-bold">
-            Reports & Analytics
+            Reports & Analytics 2
           </h1>
 
           <p className="text-muted-foreground">
-            Advanced workforce intelligence &
-            trends
+            Period-based workforce trends, attendance, leave, and team performance.
           </p>
         </div>
       </div>
