@@ -33,6 +33,7 @@ import CommissionEngagements from '@/components/commission/CommissionEngagements
 import CommissionSplits from '@/components/commission/CommissionSplits';
 import CommissionReports from '@/components/commission/CommissionReports';
 import CommissionIndex from '@/components/commission/CommissionIndex';
+import OrganizationStructure from '@/components/OrganizationStructure';
 
 const Index = () => {
   const { user, isInitializing } = useAuth();
@@ -144,6 +145,9 @@ const Index = () => {
             <p className="text-gray-600">You don't have permission to access this section</p>
           </div>
         );
+
+      case 'organization-structure':
+        return <OrganizationStructure />;
       
       case 'reports-analytics':
         // Admins, super admins, and reporting managers can access Reports & Analytics

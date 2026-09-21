@@ -159,6 +159,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       requiresPermission: true
     },
     {
+      id: 'organization-structure',
+      label: 'Organization Structure',
+      icon: Network,
+      roles: ['employee', 'reporting_manager', 'admin', 'super_admin'],
+      requiresPermission: false
+    },
+    {
       id: 'employees',
       label: 'Employee Management',
       icon: Users,
