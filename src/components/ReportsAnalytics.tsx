@@ -232,7 +232,6 @@ const ReportsAnalytics = () => {
   useEffect(() => {
     if (!currentCompany || !currentCompany.id) return;
     fetchData();
-    fetchDailyAttendance();
     const fetchLateMarkTime = async () => {
       try {
         const { data, error } = await supabase
@@ -251,12 +250,18 @@ const ReportsAnalytics = () => {
   }, [timeRange, team, selectedDate, currentCompany]);
 
   useEffect(() => {
+    if (activeTab === 'attendance' && currentCompany?.id) {
+      fetchDailyAttendance();
+    }
+  }, [activeTab, currentCompany?.id, selectedDate, team]);
+
+  useEffect(() => {
     const fetchLeaveTypes = async () => {
       try {
         const { data, error } = await supabase
           .from('leave_types')
           // Keep the report payload limited to fields used by charts, tables, and exports.
-          .select('id, employee_id, date, status, check_in_time, check_out_time')
+          .select('id, name')
           .eq('company_id', currentCompany?.id);
 
         if (!error && data) {
@@ -288,7 +293,6 @@ const ReportsAnalytics = () => {
     try {
       setIsLoading(true);
       await Promise.all([
-        fetchAttendanceStats(),
         fetchDepartmentStats(),
         fetchRawData()
       ]);

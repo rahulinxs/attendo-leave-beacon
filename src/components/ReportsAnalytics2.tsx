@@ -230,6 +230,7 @@ const COLORS = {
 
 const ReportsAnalytics2 = () => {
   const { currentCompany } = useCompany();
+  const reportSupabase = supabase as any;
 
   const [activeTab, setActiveTab] = useState('attendance');
 
@@ -238,6 +239,7 @@ const ReportsAnalytics2 = () => {
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
+  const baseDataCompanyRef = React.useRef<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -266,18 +268,18 @@ const ReportsAnalytics2 = () => {
   const [attendanceTeam, setAttendanceTeam] = useState<string>('all');
   const [attendanceSearch, setAttendanceSearch] = useState('');
   const [attendancePage, setAttendancePage] = useState(1);
-  const [attendancePageSize, setAttendancePageSize] = useState(10);
+  const [attendancePageSize, setAttendancePageSize] = useState(20);
 
   // Leave Filters
   const [leaveTeam, setLeaveTeam] = useState<string>('all');
   const [leaveStatus, setLeaveStatus] = useState<string>('all');
   const [leaveSearch, setLeaveSearch] = useState('');
   const [leavePage, setLeavePage] = useState(1);
-  const [leavePageSize, setLeavePageSize] = useState(10);
+  const [leavePageSize, setLeavePageSize] = useState(20);
 
   // Team Filters
   const [teamPage, setTeamPage] = useState(1);
-  const [teamPageSize, setTeamPageSize] = useState(10);
+  const [teamPageSize, setTeamPageSize] = useState(20);
 
   const monthWeeks = useMemo(
     () => getWeeksOfMonth(reportYear, selectedMonth),
@@ -330,14 +332,14 @@ const ReportsAnalytics2 = () => {
   // Base data fetching (employees, teams, leave types - shared across tabs)
   const fetchBaseData = useCallback(async () => {
     if (!currentCompany?.id) return;
+    if (baseDataCompanyRef.current === currentCompany.id) return;
 
     try {
       const [employeeRes, teamsRes, leaveTypesRes] = await Promise.all([
-        supabase
-          .from('employees')
+        reportSupabase
+          .from('reports_analytics2_active_employees')
           .select('id, name, email, position, role, team_id')
           .eq('company_id', currentCompany.id)
-          .eq('is_active', true)
           .order('name'),
 
         supabase
@@ -360,6 +362,7 @@ const ReportsAnalytics2 = () => {
       setEmployees(employeeRes.data || []);
       setTeams(teamsRes.data || []);
       setLeaveTypes(leaveTypesRes.data || []);
+      baseDataCompanyRef.current = currentCompany.id;
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'Failed to load base data');
@@ -381,14 +384,16 @@ const ReportsAnalytics2 = () => {
 
       const dates = reportDates;
 
-      const [attendanceRes] = await Promise.all([
-        supabase
-          .from('attendance')
-          .select('id, employee_id, company_id, date, status, check_in_time, check_out_time')
-          .eq('company_id', currentCompany.id)
-          .gte('date', dates.start)
-          .lte('date', dates.end)
-      ]);
+      let attendanceQuery = reportSupabase
+        .from('reports_analytics2_attendance')
+        .select('id, employee_id, company_id, date, status, check_in_time, check_out_time')
+        .eq('company_id', currentCompany.id)
+        .gte('date', dates.start)
+        .lte('date', dates.end)
+        .order('date', { ascending: false });
+      if (attendanceTeam !== 'all') attendanceQuery = attendanceQuery.eq('team_id', attendanceTeam);
+      if (attendanceSearch.trim()) attendanceQuery = attendanceQuery.ilike('employee_name', `%${attendanceSearch.trim()}%`);
+      const attendanceRes = await attendanceQuery;
 
       if (attendanceRes.error) {
         throw new Error('Failed to fetch attendance data');
@@ -407,7 +412,7 @@ const ReportsAnalytics2 = () => {
     } finally {
       setAttendanceLoading(false);
     }
-  }, [currentCompany, reportDates]);
+  }, [attendanceSearch, attendanceTeam, currentCompany, reportDates]);
 
   const fetchLeaveData = useCallback(async () => {
     if (!currentCompany?.id) return;
@@ -418,14 +423,16 @@ const ReportsAnalytics2 = () => {
 
       const dates = reportDates;
 
-      const [leaveRes] = await Promise.all([
-        supabase
-          .from('leave_requests')
-          .select('id, employee_id, leave_type_id, start_date, end_date, total_days, duration_type, session, status, reason')
-          .eq('company_id', currentCompany.id)
-          .lte('start_date', dates.end)
-          .gte('end_date', dates.start)
-      ]);
+      let leaveQuery = reportSupabase
+        .from('reports_analytics2_leave')
+        .select('id, employee_id, leave_type_id, start_date, end_date, total_days, duration_type, session, status, reason')
+        .eq('company_id', currentCompany.id)
+        .lte('start_date', dates.end)
+        .gte('end_date', dates.start);
+      if (leaveTeam !== 'all') leaveQuery = leaveQuery.eq('team_id', leaveTeam);
+      if (leaveStatus !== 'all') leaveQuery = leaveQuery.eq('status', leaveStatus);
+      if (leaveSearch.trim()) leaveQuery = leaveQuery.ilike('employee_name', `%${leaveSearch.trim()}%`);
+      const leaveRes = await leaveQuery;
 
       if (leaveRes.error) {
         throw new Error('Failed to fetch leave data');
@@ -444,7 +451,7 @@ const ReportsAnalytics2 = () => {
     } finally {
       setLeaveLoading(false);
     }
-  }, [currentCompany, reportDates]);
+  }, [currentCompany, leaveSearch, leaveStatus, leaveTeam, reportDates]);
 
   const fetchTeamData = useCallback(async () => {
     if (!currentCompany?.id) return;
@@ -455,15 +462,15 @@ const ReportsAnalytics2 = () => {
 
       const dates = reportDates;
       const [attendanceRes, leaveRes] = await Promise.all([
-        supabase
-          .from('attendance')
+        reportSupabase
+          .from('reports_analytics2_attendance')
           .select('id, employee_id, company_id, date, status, check_in_time, check_out_time')
           .eq('company_id', currentCompany.id)
           .gte('date', dates.start)
           .lte('date', dates.end),
 
-        supabase
-          .from('leave_requests')
+        reportSupabase
+          .from('reports_analytics2_leave')
           .select('id, employee_id, leave_type_id, start_date, end_date, total_days, duration_type, session, status, reason')
           .eq('company_id', currentCompany.id)
           .lte('start_date', dates.end)

@@ -44,3 +44,14 @@ AttendEdge changes must preserve existing behavior while minimizing data transfe
 - The modules remain separate because their workflows and time horizons differ; labels and headers state the distinction directly.
 - Team Performance in Reports & Analytics now uses selected-day team headcount as the denominator and reports present, late, absent, approved-leave, and attention-needed metrics from real records rather than placeholder percentages.
 - The Reports & Analytics Leave tab contains its filters, nested tabs, and wide tables within responsive containers; table overflow is horizontal inside the card rather than expanding the page viewport.
+
+## Recent Egress Audit
+
+- Fixed the Reports & Analytics leave-type lookup to select only `id, name`; the previous payload requested unrelated attendance fields.
+- Removed the duplicate selected-day attendance stats request; the active Attendance loader already computes those stats.
+- Daily attendance data is now loaded only while the Attendance tab is active.
+- Bulk leave import now defers employee lookup until a file is selected and requests only uploaded employee names, rather than downloading the entire company roster before upload.
+- ReportsAnalytics2 still loads the selected period before client-side pagination because it synthesizes absent-day rows and team metrics. Replacing that with database aggregation should be a separately tested query/RPC change to preserve report parity.
+- ReportsAnalytics2 now caches company reference data for the module lifetime; switching report tabs reuses employees, teams, and leave types instead of repeating those reads.
+- ReportsAnalytics2 now uses security-invoker reporting views for active-employee attendance and non-rejected leave, with team, employee-search, and leave-status filters applied before rows cross the client boundary. Default detail pages use 20 rows; client-side absent-day synthesis remains for parity.
+- Employee Anniversaries now loads one bounded, filtered employee dataset for all four local views: Existing, Calendar, Table/List, and Event List. No view switch refetches Supabase; recurring date-only events are derived locally with leap-day handling.

@@ -133,14 +133,15 @@ const BulkLeaveImportWizard: React.FC<BulkLeaveImportWizardProps> = ({ open, onO
     const loadLookups = async () => {
       setLoadingLookups(true);
       // These narrow, company-scoped lookups are reused for every imported row.
-      const [{ data: employeeData, error: employeeError }, { data: leaveTypeData, error: leaveTypeError }] = await Promise.all([
-        supabase.from('employees').select('id, name, is_active').eq('company_id', companyId),
-        supabase.from('leave_types').select('id, name').eq('company_id', companyId).eq('is_active', true).order('name'),
-      ]);
-      if (employeeError || leaveTypeError) {
-        console.error('Error loading bulk leave import lookups:', employeeError || leaveTypeError);
+      const { data: leaveTypeData, error: leaveTypeError } = await supabase
+        .from('leave_types')
+        .select('id, name')
+        .eq('company_id', companyId)
+        .eq('is_active', true)
+        .order('name');
+      if (leaveTypeError) {
+        console.error('Error loading bulk leave import lookups:', leaveTypeError);
       }
-      setEmployees(employeeData || []);
       setLeaveTypes(leaveTypeData || []);
       setLoadingLookups(false);
     };
@@ -158,6 +159,21 @@ const BulkLeaveImportWizard: React.FC<BulkLeaveImportWizardProps> = ({ open, onO
     const worksheet = workbook.Sheets[workbook.SheetNames[0]];
     const importedRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: '' });
     const importedHeaders = importedRows.length ? Object.keys(importedRows[0]) : [];
+    const employeeNameHeader = autoMap(importedHeaders).employeeName;
+    const employeeNames = [...new Set(importedRows
+      .map(row => String(employeeNameHeader ? row[employeeNameHeader] ?? '' : '').trim())
+      .filter(Boolean))];
+    setLoadingLookups(true);
+    const { data: employeeData, error: employeeError } = employeeNames.length
+      ? await supabase
+          .from('employees')
+          .select('id, name, is_active')
+          .eq('company_id', companyId)
+          .in('name', employeeNames)
+      : { data: [], error: null };
+    if (employeeError) console.error('Error loading employees for bulk leave import:', employeeError);
+    setEmployees(employeeData || []);
+    setLoadingLookups(false);
     setHeaders(importedHeaders);
     setRawRows(importedRows);
     setMapping(autoMap(importedHeaders));

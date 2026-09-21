@@ -1489,11 +1489,11 @@ const Profile: React.FC<ProfileProps> = ({ employeeId, readOnly: readOnlyProp = 
                   <input type="date" name="contract_valid_upto" value={workForm.contract_valid_upto} onChange={handleWorkChange} className="w-full border rounded px-3 py-2" />
                 </div>
               </div>
-              {!profileData?.employee?.is_active && isHrAdmin && !readOnly && (
+              {isHrAdmin && !readOnly && (
                 <div className="space-y-4 rounded-lg border border-red-200 bg-red-50 p-4">
                   <div>
                     <label className="block text-sm font-medium">Offboarding Details</label>
-                    <p className="text-xs text-muted-foreground mt-1">These details are editable by Admin and Super Admin users for inactive employees.</p>
+                    <p className="text-xs text-muted-foreground mt-1">Editable by Admin and Super Admin users. Complete these details when an employee is leaving or has been offboarded.</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Exit Date</label>
