@@ -39,6 +39,7 @@ interface LeaveBalance {
     name: string;
     max_days_per_year: number;
     is_active: boolean;
+    deduct_from_total_leave_balance?: boolean;
   };
 }
 
@@ -48,6 +49,16 @@ interface LeaveType {
   max_days_per_year: number;
   is_active: boolean;
   company_id: string;
+  deduct_from_total_leave_balance?: boolean;
+}
+
+interface LeaveYearlyPolicy {
+  id: string;
+  company_id: string;
+  year: number;
+  total_allowed_leaves: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
@@ -197,19 +208,41 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
     }
   };
 
-  const fetchUserLeaveRequests = async () => {
+  const fetchYearlyPolicies = async (selectedYear?: number) => {
+    if (!currentCompany) return [];
+
+    try {
+      let query = supabase
+        .from('leave_yearly_policies')
+        .select('*')
+        .eq('company_id', currentCompany.id)
+        .order('year', { ascending: false });
+
+      if (selectedYear) {
+        query = query.eq('year', selectedYear);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching yearly leave policies:', error);
+      return [];
+    }
+  };
+
+  const fetchUserLeaveRequests = async (selectedYear: number = new Date().getFullYear()) => {
     if (!user || !currentCompany) return [];
     
     try {
-      const currentYear = new Date().getFullYear();
       const { data, error } = await supabase
         .from('leave_requests')
         .select('*, leave_types(*)')
         .eq('employee_id', user.id)
         .eq('company_id', currentCompany.id)
         .eq('status', 'approved')
-        .gte('start_date', `${currentYear}-01-01`)
-        .lte('end_date', `${currentYear}-12-31`);
+        .gte('start_date', `${selectedYear}-01-01`)
+        .lte('end_date', `${selectedYear}-12-31`);
       
       if (error) throw error;
       
@@ -220,18 +253,17 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
     }
   };
 
-  const calculateLeaveBalances = async () => {
+  const calculateLeaveBalances = async (selectedYear: number = new Date().getFullYear()) => {
     if (!user || !currentCompany) return;
 
     try {
       const [types, requests] = await Promise.all([
         fetchLeaveTypes(),
-        fetchUserLeaveRequests()
+        fetchUserLeaveRequests(selectedYear)
       ]);
 
-      // Calculate used days per leave type
       const usedDaysByType = new Map<string, number>();
-      
+
       requests.forEach((req: any) => {
         if (req.leave_type_id) {
           const current = usedDaysByType.get(req.leave_type_id) || 0;
@@ -239,11 +271,10 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
         }
       });
 
-      // Create leave balances based on active leave types
       const balances: LeaveBalance[] = types.map((type: any) => {
         const usedDays = usedDaysByType.get(type.id) || 0;
         const allocatedDays = type.max_days_per_year || 0;
-        
+
         return {
           leave_type_id: type.id,
           allocated_days: allocatedDays,
@@ -252,20 +283,20 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
           leave_types: {
             name: type.name,
             max_days_per_year: type.max_days_per_year,
-            is_active: type.is_active
+            is_active: type.is_active,
+            deduct_from_total_leave_balance: type.deduct_from_total_leave_balance !== false
           }
         };
       });
 
-      console.log('Calculated leave balances:', balances);
       setLeaveBalances(balances);
     } catch (error) {
       console.error('Error calculating leave balances:', error);
     }
   };
 
-  const fetchLeaveBalances = async () => {
-    await calculateLeaveBalances();
+  const fetchLeaveBalances = async (selectedYear: number = new Date().getFullYear()) => {
+    await calculateLeaveBalances(selectedYear);
   };
 
   const submitLeaveRequest = async (
@@ -483,6 +514,8 @@ export const useLeave = (mode: 'employee' | 'manager' = 'employee') => {
     rejectLeaveRequest,
     deleteLeaveRequest,
     fetchLeaveRequests,
-    fetchLeaveBalances
+    fetchLeaveBalances,
+    fetchLeaveTypes,
+    fetchYearlyPolicies
   };
 };

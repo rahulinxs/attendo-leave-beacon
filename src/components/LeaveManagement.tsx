@@ -63,7 +63,8 @@ interface LeaveType {
   name: string;
   max_days_per_year: number;
   is_active?: boolean;
-  company_id?: string; // Add this line
+  company_id?: string;
+  deduct_from_total_leave_balance?: boolean;
 }
 
 interface TeamMember {
@@ -97,6 +98,9 @@ const LeaveTypeCard = ({ leaveType, onEdit, onToggleActive }) => (
     </div>
     <div className="text-xs text-gray-600 mb-1">{leaveType.description || 'No description'}</div>
     <div className="text-xs text-gray-600">Quota: <span className="font-semibold">{leaveType.max_days_per_year}</span> days/year</div>
+    <div className="text-xs text-gray-600 mt-1">
+      Deduct from total: <span className="font-semibold">{leaveType.deduct_from_total_leave_balance === false ? 'No' : 'Yes'}</span>
+    </div>
     {!leaveType.is_active && <div className="absolute top-2 right-2 text-xs text-red-500">Inactive</div>}
   </div>
 );
@@ -145,13 +149,20 @@ const LeaveManagement: React.FC = () => {
 
   // Leave Type Management states
   const [allLeaveTypes, setAllLeaveTypes] = useState<any[]>([]);
+  const [yearlyPolicies, setYearlyPolicies] = useState<any[]>([]);
   const [showLeaveTypeModal, setShowLeaveTypeModal] = useState(false);
+  const [showYearlyPolicyModal, setShowYearlyPolicyModal] = useState(false);
   const [editingLeaveType, setEditingLeaveType] = useState<any>(null);
   const [leaveTypeForm, setLeaveTypeForm] = useState({
     name: '',
     description: '',
     max_days_per_year: 0,
-    is_active: true
+    is_active: true,
+    deduct_from_total_leave_balance: true
+  });
+  const [yearlyPolicyForm, setYearlyPolicyForm] = useState({
+    year: new Date().getFullYear(),
+    total_allowed_leaves: 0
   });
 
   const { currentCompany } = useCompany();
@@ -163,6 +174,7 @@ const LeaveManagement: React.FC = () => {
   useEffect(() => {
     if (canManageLeaveTypes && currentCompany?.id) {
       fetchAllLeaveTypes();
+      fetchYearlyPolicies();
     }
   }, [canManageLeaveTypes, currentCompany]);
 
@@ -179,13 +191,27 @@ const LeaveManagement: React.FC = () => {
     }
   };
 
+  const fetchYearlyPolicies = async () => {
+    if (!currentCompany?.id) return;
+    const { data, error } = await supabase
+      .from('leave_yearly_policies')
+      .select('*')
+      .eq('company_id', currentCompany.id)
+      .order('year', { ascending: false });
+
+    if (!error && data) {
+      setYearlyPolicies(data);
+    }
+  };
+
   const handleAddLeaveType = () => {
     setEditingLeaveType(null);
     setLeaveTypeForm({
       name: '',
       description: '',
       max_days_per_year: 0,
-      is_active: true
+      is_active: true,
+      deduct_from_total_leave_balance: true
     });
     setShowLeaveTypeModal(true);
   };
@@ -196,7 +222,8 @@ const LeaveManagement: React.FC = () => {
       name: leaveType.name,
       description: leaveType.description || '',
       max_days_per_year: leaveType.max_days_per_year,
-      is_active: leaveType.is_active !== false
+      is_active: leaveType.is_active !== false,
+      deduct_from_total_leave_balance: leaveType.deduct_from_total_leave_balance !== false
     });
     setShowLeaveTypeModal(true);
   };
@@ -261,6 +288,42 @@ const LeaveManagement: React.FC = () => {
         description: `Leave type ${leaveType.is_active ? 'deactivated' : 'activated'}`,
       });
       fetchAllLeaveTypes();
+    }
+  };
+
+  const handleSaveYearlyPolicy = async () => {
+    if (!currentCompany?.id || yearlyPolicyForm.total_allowed_leaves < 0) {
+      toast({
+        title: 'Error',
+        description: 'Please enter a valid yearly leave total.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const { error } = await supabase
+      .from('leave_yearly_policies')
+      .upsert({
+        company_id: currentCompany.id,
+        year: yearlyPolicyForm.year,
+        total_allowed_leaves: yearlyPolicyForm.total_allowed_leaves,
+      }, {
+        onConflict: 'company_id,year',
+      });
+
+    if (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to save yearly leave policy.',
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: 'Success',
+        description: `Yearly leave policy saved for ${yearlyPolicyForm.year}.`,
+      });
+      setShowYearlyPolicyModal(false);
+      fetchYearlyPolicies();
     }
   };
 
@@ -361,6 +424,30 @@ const LeaveManagement: React.FC = () => {
             </Button>
           </div>
 
+          <div className="rounded-xl border bg-card p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold">Annual Leave Policy</h3>
+                <p className="text-sm text-gray-600">Set the yearly total that counts toward an employee's leave balance.</p>
+              </div>
+              <Button size="sm" onClick={() => setShowYearlyPolicyModal(true)}>
+                <Settings className="w-4 h-4 mr-2" />
+                Configure Policy
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {yearlyPolicies.length > 0 ? yearlyPolicies.map((policy) => (
+                <div key={`${policy.company_id}-${policy.year}`} className="rounded-lg border bg-muted/30 p-3">
+                  <div className="text-sm text-gray-600">{policy.year}</div>
+                  <div className="text-2xl font-bold">{policy.total_allowed_leaves}</div>
+                  <div className="text-xs text-gray-500">allowed days</div>
+                </div>
+              )) : (
+                <div className="text-sm text-gray-500 col-span-full">No yearly leave policy configured yet.</div>
+              )}
+            </div>
+          </div>
+
           {/* Leave Types Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {allLeaveTypes.map((leaveType) => (
@@ -372,6 +459,43 @@ const LeaveManagement: React.FC = () => {
               />
             ))}
           </div>
+
+          <Dialog open={showYearlyPolicyModal} onOpenChange={setShowYearlyPolicyModal}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Annual Leave Policy</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="policyYear">Year</Label>
+                  <Select value={String(yearlyPolicyForm.year)} onValueChange={(value) => setYearlyPolicyForm({ ...yearlyPolicyForm, year: Number(value) })}>
+                    <SelectTrigger id="policyYear">
+                      <SelectValue placeholder="Select year" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[new Date().getFullYear(), new Date().getFullYear() + 1, new Date().getFullYear() - 1].map((year) => (
+                        <SelectItem key={year} value={String(year)}>{year}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="totalAllowedLeaves">Total Allowed Leaves</Label>
+                  <Input
+                    id="totalAllowedLeaves"
+                    type="number"
+                    min="0"
+                    value={yearlyPolicyForm.total_allowed_leaves}
+                    onChange={(e) => setYearlyPolicyForm({ ...yearlyPolicyForm, total_allowed_leaves: Number(e.target.value) || 0 })}
+                  />
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <Button className="flex-1" onClick={handleSaveYearlyPolicy}>Save Policy</Button>
+                  <Button variant="outline" onClick={() => setShowYearlyPolicyModal(false)}>Cancel</Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {/* Add/Edit Leave Type Modal */}
           <Dialog open={showLeaveTypeModal} onOpenChange={setShowLeaveTypeModal}>
@@ -418,6 +542,14 @@ const LeaveManagement: React.FC = () => {
                     onCheckedChange={(checked) => setLeaveTypeForm({...leaveTypeForm, is_active: checked})}
                   />
                   <Label htmlFor="is_active">Active</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="deduct_from_total_leave_balance"
+                    checked={leaveTypeForm.deduct_from_total_leave_balance}
+                    onCheckedChange={(checked) => setLeaveTypeForm({...leaveTypeForm, deduct_from_total_leave_balance: checked})}
+                  />
+                  <Label htmlFor="deduct_from_total_leave_balance">Deduct from Total Leave Balance</Label>
                 </div>
                 <div className="flex gap-2 pt-4">
                   <Button onClick={handleSaveLeaveType} className="flex-1">
@@ -991,13 +1123,16 @@ const EmployeeLeaveView: React.FC = () => {
     leaveBalances, 
     pendingRequests, 
     isLoading,
-    fetchLeaveRequests 
+    fetchLeaveRequests,
+    fetchLeaveBalances
   } = useLeave('employee'); // Explicitly use employee mode to get only own requests
   const { recentAttendance } = useAttendance();
   const { currentCompany } = useCompany();
 
   const [showRequestForm, setShowRequestForm] = useState(false);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
+  const [yearlyPolicies, setYearlyPolicies] = useState<any[]>([]);
+  const [balanceYear, setBalanceYear] = useState<number>(new Date().getFullYear());
   const [activeTab, setActiveTab] = useState('requests');
   const [formData, setFormData] = useState({
     leaveTypeId: '',
@@ -1010,7 +1145,14 @@ const EmployeeLeaveView: React.FC = () => {
 
   useEffect(() => {
     fetchLeaveTypes();
+    fetchYearlyPolicies();
   }, [currentCompany]);
+
+  useEffect(() => {
+    if (user) {
+      fetchLeaveBalances(balanceYear);
+    }
+  }, [user, balanceYear]);
 
   const fetchLeaveTypes = async () => {
     if (!currentCompany) return;
@@ -1020,6 +1162,18 @@ const EmployeeLeaveView: React.FC = () => {
       .eq('company_id', currentCompany.id);
     if (!error && data) {
       setLeaveTypes(data);
+    }
+  };
+
+  const fetchYearlyPolicies = async () => {
+    if (!currentCompany) return;
+    const { data, error } = await supabase
+      .from('leave_yearly_policies')
+      .select('*')
+      .eq('company_id', currentCompany.id);
+
+    if (!error && data) {
+      setYearlyPolicies(data);
     }
   };
 
@@ -1135,6 +1289,11 @@ const EmployeeLeaveView: React.FC = () => {
   };
 
   const myRequests = leaveRequests.filter(req => req.employee_id === user?.id);
+  const yearFilteredRequests = myRequests.filter((request) => {
+    const startYear = Number(request.start_date?.slice(0, 4));
+    const endYear = Number(request.end_date?.slice(0, 4));
+    return Number.isFinite(startYear) && Number.isFinite(endYear) && startYear <= balanceYear && endYear >= balanceYear;
+  });
 
   return (
     <div className="space-y-6">
@@ -1280,18 +1439,47 @@ const EmployeeLeaveView: React.FC = () => {
           {/* My Leave Balances */}
             <Card>
               <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="w-5 h-5" />
-                My Leave Balances
+                <CardTitle className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-5 h-5" />
+                    My Leave Balances
+                  </div>
+                  <div className="w-40">
+                    <Select value={String(balanceYear)} onValueChange={(value) => setBalanceYear(Number(value))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select year" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from(new Set([
+                          new Date().getFullYear(),
+                          new Date().getFullYear() - 1,
+                          ...leaveRequests.flatMap((req) => [
+                            Number(req.start_date?.slice(0, 4)),
+                            Number(req.end_date?.slice(0, 4)),
+                          ]).filter((year) => Number.isFinite(year) && year > 2000)
+                        ])).sort((a, b) => Number(b) - Number(a)).map((year) => (
+                          <SelectItem key={year} value={String(year)}>{year}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </CardTitle>
               </CardHeader>
               <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {leaveTypes.filter(type => type.is_active).map(type => {
                   const used = leaveRequests
-                    .filter(req => req.leave_type_id === type.id && ['approved', 'pending'].includes(req.status))
+                    .filter(req => req.leave_type_id === type.id && ['approved', 'pending'].includes(req.status) && req.start_date && req.end_date)
+                    .filter(req => {
+                      const year = Number(req.start_date?.slice(0, 4));
+                      const endYear = Number(req.end_date?.slice(0, 4));
+                      return Number.isFinite(year) && Number.isFinite(endYear) && year <= balanceYear && endYear >= balanceYear;
+                    })
                     .reduce((sum, req) => sum + (req.total_days || 0), 0);
-                  const remaining = type.max_days_per_year - used;
+                  const activePolicyYear = yearlyPolicies.find(policy => policy.year === balanceYear);
+                  const totalAllowed = activePolicyYear?.total_allowed_leaves ?? type.max_days_per_year;
+                  const isDeductible = type.deduct_from_total_leave_balance !== false;
+                  const remaining = isDeductible ? Math.max(0, totalAllowed - used) : Math.max(0, totalAllowed);
                   return (
                     <div key={type.id} className="p-4 bg-gray-50 rounded-lg">
                       <div className="flex justify-between items-center">
@@ -1299,7 +1487,7 @@ const EmployeeLeaveView: React.FC = () => {
                           <p className="font-medium">{type.name}</p>
                           <p className="text-xs text-gray-500">Company: {type.company_id}</p>
                           <p className="text-sm text-gray-600">
-                            {used} of {type.max_days_per_year} days used
+                            {used} of {totalAllowed} days used {isDeductible ? '' : '(not deducted from total)'}
                           </p>
                         </div>
                         <div className="text-right">
@@ -1313,7 +1501,7 @@ const EmployeeLeaveView: React.FC = () => {
                         <div className="w-full bg-gray-200 rounded-full h-2">
                           <div 
                             className="bg-blue-600 h-2 rounded-full" 
-                            style={{ width: `${(used / type.max_days_per_year) * 100}%` }}
+                            style={{ width: `${isDeductible ? ((used / Math.max(totalAllowed, 1)) * 100) : 0}%` }}
                           ></div>
                         </div>
                       </div>
@@ -1331,13 +1519,13 @@ const EmployeeLeaveView: React.FC = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="w-5 h-5" />
-                My Leave History ({myRequests.length})
+                My Leave History ({yearFilteredRequests.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {myRequests.length > 0 ? (
-                  myRequests.map((request) => (
+                {yearFilteredRequests.length > 0 ? (
+                  yearFilteredRequests.map((request) => (
                   <div key={request.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                       <div>
                         <p className="font-medium">{request.leave_types?.name}</p>

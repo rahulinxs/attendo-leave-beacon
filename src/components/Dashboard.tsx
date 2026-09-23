@@ -50,6 +50,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const { theme } = useTheme();
   const themeClass = THEME_OPTIONS.find(t => t.key === theme)?.className || '';
   const { showTimeoutWarning, setShowTimeoutWarning } = useSession();
+  const [yearlyPolicy, setYearlyPolicy] = useState<any | null>(null);
   
   // Debug log leave balances
   useEffect(() => {
@@ -66,11 +67,42 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     }
   }, [leaveBalances]);
 
-  // Calculate total leave balance (sum of all leave types' remaining days)
-  const totalLeaveBalance = leaveBalances?.reduce((total, balance) => {
-    return total + (balance.remaining_days || 0);
-  }, 0) || 0;
-  
+useEffect(() => {
+    const fetchYearlyPolicy = async () => {
+      if (!currentCompany) {
+        setYearlyPolicy(null);
+        return;
+      }
+
+      const year = new Date().getFullYear();
+      const { data, error } = await supabase
+        .from('leave_yearly_policies')
+        .select('*')
+        .eq('company_id', currentCompany.id)
+        .eq('year', year)
+        .maybeSingle();
+
+      if (!error) {
+        setYearlyPolicy(data);
+      }
+    };
+
+    fetchYearlyPolicy();
+  }, [currentCompany]);
+
+  const deductibleUsedDays = leaveBalances?.filter(balance => balance.leave_types?.deduct_from_total_leave_balance !== false)
+    .reduce((total, balance) => total + (balance.used_days || 0), 0) || 0;
+
+  const annualAllowedLeaves = yearlyPolicy?.total_allowed_leaves ??
+    (leaveBalances?.reduce((total, balance) => {
+      if (balance.leave_types?.deduct_from_total_leave_balance !== false) {
+        return total + (balance.allocated_days || 0);
+      }
+      return total;
+    }, 0) || 0);
+
+  const totalLeaveBalance = Math.max(0, annualAllowedLeaves - deductibleUsedDays);
+
   // Calculate total allocated days (sum of max_days_per_year for active leave types)
   const totalAllocatedDays = leaveBalances?.reduce((total, balance) => {
     return total + (balance.allocated_days || 0);
@@ -268,7 +300,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
               {/* Line 1 */}
               <div className="w-full flex justify-center lg:justify-end">
-                <GlassTimeCard checkInTime={todayAttendance?.check_in_time} />
+                <GlassTimeCard />
               </div> 
 
               {/* Line 2 */}
@@ -404,7 +436,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                     </Badge>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    {totalUsedDays} of {totalAllocatedDays} days used
+                    {totalUsedDays} of {annualAllowedLeaves} days used
                   </p>
                 </div>
               </div>

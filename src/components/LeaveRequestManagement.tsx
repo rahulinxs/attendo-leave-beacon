@@ -116,6 +116,7 @@ const LeaveRequestManagement: React.FC = () => {
     leaveType: 'all',
     status: 'all',
   });
+  const [balanceYear, setBalanceYear] = useState<number>(new Date().getFullYear());
   const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
 
   // Notification and Settings states
@@ -144,9 +145,9 @@ const LeaveRequestManagement: React.FC = () => {
 
   useEffect(() => {
     if (user) {
-      fetchLeaveBalances();
+      fetchLeaveBalances(balanceYear);
     }
-  }, [user]);
+  }, [user, balanceYear]);
 
   // Fetch departments from the departments table
   useEffect(() => {
@@ -793,9 +794,23 @@ const LeaveRequestManagement: React.FC = () => {
           {/* My Leave Balances Card */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="w-5 h-5" />
-                My Leave Balances
+              <CardTitle className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-5 h-5" />
+                  My Leave Balances
+                </div>
+                <div className="w-40">
+                  <Select value={String(balanceYear)} onValueChange={(value) => setBalanceYear(Number(value))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select year" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {yearOptions.map((year) => (
+                        <SelectItem key={year} value={String(year)}>{year}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </CardTitle>
             </CardHeader>
             <CardContent>
